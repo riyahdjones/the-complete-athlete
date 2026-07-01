@@ -225,6 +225,16 @@ function loadCoachSessions() {
   }
 }
 
+function coachSessionFromSupabase(row) {
+  return {
+    id: row.id,
+    title: row.title || 'Coach conversation',
+    date: row.session_date || todayKey(),
+    time: row.session_time || '',
+    messages: Array.isArray(row.messages) ? row.messages : []
+  };
+}
+
 const lessons = [
   {
     id: 1,
@@ -760,6 +770,34 @@ function App() {
       cancelled = true;
     };
   }, [authSession?.id, authSession?.name, authSession?.role]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete') return;
+    let cancelled = false;
+
+    async function loadCoachData() {
+      const { data, error } = await supabase
+        .from('coach_sessions')
+        .select('id, title, session_date, session_time, messages, updated_at')
+        .eq('athlete_user_id', authSession.id)
+        .order('updated_at', { ascending: false })
+        .limit(30);
+
+      if (cancelled || error || !Array.isArray(data)) return;
+      const sessions = data.map(coachSessionFromSupabase);
+      setCoachSessions(sessions);
+      if (sessions.length && !activeCoachSessionId && messages.length === 0) {
+        setActiveCoachSessionId(sessions[0].id);
+        setMessages(sessions[0].messages);
+      }
+    }
+
+    loadCoachData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authSession?.id, authSession?.role]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !authSession) {
@@ -1464,8 +1502,12 @@ function App() {
       coach: (
         <CoachScreen
           activeCoachSessionId={activeCoachSessionId}
+          athleteProfile={athleteProfile}
+          authSession={authSession}
           coachSessions={coachSessions}
+          goals={goals}
           messages={messages}
+          standards={standards}
           setActiveCoachSessionId={setActiveCoachSessionId}
           setCoachSessions={setCoachSessions}
           setMessages={setMessages}
@@ -2596,16 +2638,27 @@ function JournalScreen({
 
 function CoachScreen({
   activeCoachSessionId,
+  athleteProfile,
+  authSession,
   coachSessions,
+  goals,
   messages,
   messageDraft,
+  standards,
   setActiveCoachSessionId,
   setCoachSessions,
   setMessages,
   setMessageDraft
 }) {
+  const [coachStatus, setCoachStatus] = useState('');
+  const [coachThinking, setCoachThinking] = useState(false);
+
   function coachReply(text) {
     const lower = text.toLowerCase();
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    if (words.length < 12) {
+      return 'I hear you. Before I coach it too hard, help me understand the moment: what happened, and what part of it is sticking with you right now?';
+    }
     const hasExcuse =
       lower.includes('not my fault') ||
       lower.includes('unfair') ||
@@ -2628,28 +2681,14 @@ function CoachScreen({
                 : lower.includes('identity') || lower.includes('perform')
                   ? 'identity'
                   : 'pressure';
-    const challenge = hasExcuse
-      ? 'I am going to challenge you here: even if the situation is unfair, blaming it does not make you better. Own your response.'
-      : 'I am not here to just agree with you. I am here to help you tell the truth and choose a stronger response.';
+    if (hasExcuse) {
+      return `I get why that feels frustrating. I am still going to challenge you: even if part of this is unfair, the useful question is what you can own next. Tell me the exact ${topic} moment and what you did right after it, then we can choose the response you want to train.`;
+    }
 
-    return `${challenge} This sounds like ${topic}. Your emotion is real, but it does not get to run the show. Your performance gives information; it does not define your identity. Reframe it this way: what is this demanding from you right now? Control one thing today: your preparation, your response, your communication, or your next rep. Reflection: what part of this are you avoiding? Action step: write one standard, do it before the day ends, and bring me the evidence.`;
+    return `That sounds like a real ${topic} moment, but I do not want to guess at the whole story. What happened right before you felt this, and what do you wish you had done differently? Once I know that, we can turn it into one clear standard for today.`;
   }
 
-  function sendMessage() {
-    const clean = messageDraft.trim();
-    if (!clean) return;
-    const coachMessage = {
-      role: 'coach',
-      text: coachReply(clean)
-    };
-    const nextMessages = [
-      ...messages,
-      { role: 'athlete', text: clean },
-      coachMessage
-    ];
-    const sessionId = activeCoachSessionId ?? Date.now();
-    const sessionTitle = clean.length > 42 ? `${clean.slice(0, 42)}...` : clean;
-
+  function saveCoachSession(sessionId, sessionTitle, nextMessages) {
     setMessages(nextMessages);
     setActiveCoachSessionId(sessionId);
     setCoachSessions((current) => {
@@ -2663,7 +2702,72 @@ function CoachScreen({
       };
       return [nextSession, ...current.filter((session) => session.id !== sessionId)].slice(0, 30);
     });
+  }
+
+  async function requestCoachReply(clean, nextMessages, sessionId, sessionTitle) {
+    const headers = { 'Content-Type': 'application/json' };
+
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        headers.Authorization = `Bearer ${data.session.access_token}`;
+      }
+    }
+
+    const response = await fetch('/api/coach', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        message: clean,
+        sessionId: String(sessionId),
+        sessionTitle,
+        history: nextMessages.slice(-12),
+        athlete: {
+          name: athleteProfile?.name || authSession?.name || '',
+          sport: athleteProfile?.sport || '',
+          age: athleteProfile?.age || '',
+          location: athleteProfile?.location || '',
+          goals: goals.map((goal) => `${goal.label}: ${goal.value}`),
+          standards: standards.filter((standard) => standard.active !== false).map((standard) => standard.label)
+        }
+      })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Coach backend unavailable.');
+    }
+    if (!payload.reply) {
+      throw new Error('Coach backend returned an empty reply.');
+    }
+    return payload.reply;
+  }
+
+  async function sendMessage() {
+    const clean = messageDraft.trim();
+    if (!clean || coachThinking) return;
+    const nextMessages = [
+      ...messages,
+      { role: 'athlete', text: clean }
+    ];
+    const sessionId = activeCoachSessionId ?? String(Date.now());
+    const sessionTitle = clean.length > 42 ? `${clean.slice(0, 42)}...` : clean;
+
     setMessageDraft('');
+    setCoachStatus('');
+    setCoachThinking(true);
+    saveCoachSession(sessionId, sessionTitle, nextMessages);
+
+    try {
+      const reply = await requestCoachReply(clean, nextMessages, sessionId, sessionTitle);
+      saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
+    } catch (error) {
+      const reply = coachReply(clean);
+      setCoachStatus('Backend coach is not configured yet, so this chat used the prototype coach.');
+      saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
+    } finally {
+      setCoachThinking(false);
+    }
   }
 
   function useTopic(prompt) {
@@ -2674,12 +2778,14 @@ function CoachScreen({
     setActiveCoachSessionId(null);
     setMessages([]);
     setMessageDraft('');
+    setCoachStatus('');
   }
 
   function openCoachSession(session) {
     setActiveCoachSessionId(session.id);
     setMessages(session.messages);
     setMessageDraft('');
+    setCoachStatus('');
   }
 
   function removeCoachSession(id) {
@@ -2752,7 +2858,9 @@ function CoachScreen({
             {message.text}
           </div>
         ))}
+        {coachThinking && <div className="bubble coach">Thinking it through...</div>}
       </section>
+      {coachStatus && <p className="coach-status">{coachStatus}</p>}
       <div className="composer">
         <input
           value={messageDraft}
@@ -2760,9 +2868,10 @@ function CoachScreen({
           onKeyDown={(event) => {
             if (event.key === 'Enter') sendMessage();
           }}
+          disabled={coachThinking}
           placeholder="Ask about mindset, training, pressure, team, injury..."
         />
-        <button className="icon-button dark" onClick={sendMessage} aria-label="Send message">
+        <button className="icon-button dark" onClick={sendMessage} aria-label="Send message" disabled={coachThinking}>
           <Send size={18} />
         </button>
       </div>
