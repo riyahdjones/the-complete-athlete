@@ -15,6 +15,16 @@ begin
     set role = excluded.role,
         full_name = excluded.full_name;
 
+  if coalesce(new.raw_user_meta_data->>'role', 'athlete') = 'athlete' then
+    insert into public.athlete_profiles (user_id)
+    values (new.id)
+    on conflict (user_id) do nothing;
+
+    insert into public.athlete_privacy_settings (athlete_user_id)
+    values (new.id)
+    on conflict (athlete_user_id) do nothing;
+  end if;
+
   return new;
 end;
 $$;

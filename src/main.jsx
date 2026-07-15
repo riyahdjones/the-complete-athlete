@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  Activity,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -10,6 +9,7 @@ import {
   CalendarDays,
   Camera,
   Check,
+  CircleHelp,
   Copy,
   Goal,
   Home,
@@ -26,16 +26,18 @@ import {
   Trash2,
   Trophy,
   UserRound,
-  Users
+  Users,
+  X
 } from 'lucide-react';
+import { createPerformancePlanSeeds } from './performancePlans';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import './styles.css';
 
 const standardsSeed = [
   { id: 1, label: 'Quality training session', done: false, goalId: 2 },
-  { id: 2, label: 'Write down goals', done: false, goalId: 3 },
-  { id: 3, label: '50 extra catches', done: false, goalId: 1 },
-  { id: 4, label: 'Visualize for 5 mins', done: false, goalId: 4 }
+  { id: 2, label: 'Recovery routine', done: false, goalId: 4 },
+  { id: 3, label: 'Extra skill work', done: false, goalId: 1 },
+  { id: 4, label: 'Schoolwork handled', done: false, goalId: 3 }
 ];
 
 const retiredDefaultStandards = new Set([
@@ -60,13 +62,32 @@ const lessonStorageKey = 'the-ninety-percent-lessons';
 const athleteProfileStorageKey = 'the-ninety-percent-athlete-profile';
 const goalsStorageKey = 'the-ninety-percent-goals';
 const plansStorageKey = 'the-ninety-percent-performance-plans';
+const planProgressStorageKey = 'the-ninety-percent-performance-plan-progress';
+const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
 const prototypeBypassLogin = false;
 
+const pointValues = {
+  standardsCompleted: 25,
+  journalSaved: 15,
+  goalAdded: 10,
+  goalCompleted: 150,
+  planLessonCompleted: 10,
+  planSeriesCompleted: 100,
+  streakBonusPerDay: 5,
+  streakBonusCap: 25
+};
+
 function todayKey() {
   return new Date().toLocaleDateString('en-CA');
+}
+
+function timeBasedGreeting(name) {
+  const cleanName = String(name ?? '').trim() || 'Athlete';
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : 'Hello';
+  return `${greeting}, ${cleanName}`;
 }
 
 function normalizeEmail(email) {
@@ -242,6 +263,7 @@ const lessons = [
     time: '4 min',
     status: 'Scheduled',
     sendDate: todayKey(),
+    focusQuestion: 'What identity do I need to train today, no matter what the scoreboard says?',
     body:
       'Your scoreboard changes. Your identity is trained. Today, separate how you played from who you are becoming.'
   },
@@ -251,6 +273,7 @@ const lessons = [
     time: '6 min',
     status: 'Draft',
     sendDate: addDays(todayKey(), 1),
+    focusQuestion: 'What pressure can I treat as information instead of a threat today?',
     body:
       'Pressure points to something you care about. Slow down, name it, and choose the next controllable action.'
   },
@@ -260,10 +283,104 @@ const lessons = [
     time: '3 min',
     status: 'Ready',
     sendDate: addDays(todayKey(), 2),
+    focusQuestion: 'What proof can I collect today that I am becoming the athlete I say I am?',
     body:
       'Confidence grows when you keep proof. Capture one moment today where effort, discipline, or courage showed up.'
   }
 ];
+
+function lessonFocusQuestion(lesson) {
+  if (lesson?.focusQuestion) return lesson.focusQuestion;
+
+  const title = String(lesson?.title ?? '').toLowerCase();
+  if (title.includes('identity')) {
+    return 'What identity do I need to train today, no matter what the scoreboard says?';
+  }
+  if (title.includes('pressure')) {
+    return 'What pressure can I treat as information instead of a threat today?';
+  }
+  if (title.includes('confidence')) {
+    return 'What proof can I collect today that I am becoming the athlete I say I am?';
+  }
+  return 'What is the one idea from today’s Daily Deposit that I need to carry into my next rep?';
+}
+
+function dailyLessonId(library, date = todayKey()) {
+  const available = Array.isArray(library) && library.length ? library : lessons;
+  const released = available
+    .filter((lesson) => !lesson.sendDate || lesson.sendDate <= date)
+    .sort((a, b) => String(b.sendDate ?? '').localeCompare(String(a.sendDate ?? '')));
+  return (released[0] ?? available[0])?.id;
+}
+
+function planCurrentDay(plan, date = todayKey()) {
+  const start = new Date(`${plan?.releaseDate || date}T00:00:00`);
+  const current = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(current.getTime())) return 1;
+  const diffDays = Math.floor((current.getTime() - start.getTime()) / 86400000) + 1;
+  const length = Number(plan?.challengeLength) || 7;
+  return Math.min(Math.max(diffDays, 1), length);
+}
+
+function planDayNumber(plan) {
+  const match = String(plan?.challengeDay ?? '').match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function sequencedPlanAccess(plans, planProgress, date = todayKey()) {
+  const seriesStartDates = new Map();
+  plans.forEach((plan) => {
+    const series = planSeriesTitle(plan);
+    const current = seriesStartDates.get(series);
+    const releaseDate = plan.releaseDate || '';
+    if (!current || (releaseDate && releaseDate < current)) {
+      seriesStartDates.set(series, releaseDate);
+    }
+  });
+
+  const sortedPlans = [...plans]
+    .sort((first, second) => {
+      const firstSeries = planSeriesTitle(first);
+      const secondSeries = planSeriesTitle(second);
+      const seriesDateSort = (seriesStartDates.get(firstSeries) || '').localeCompare(seriesStartDates.get(secondSeries) || '');
+      const seriesSort = firstSeries.localeCompare(secondSeries);
+      return seriesDateSort || seriesSort || planDayNumber(first) - planDayNumber(second) || String(first.title).localeCompare(String(second.title));
+    });
+
+  const previousBySeries = new Map();
+  const localReviewUnlock =
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+  return sortedPlans.map((plan) => {
+    const series = planSeriesTitle(plan);
+    const previousPlan = previousBySeries.get(series);
+    const previousCompletedAt = previousPlan ? planProgress[String(previousPlan.id)] : '';
+    const completedAt = planProgress[String(plan.id)] || '';
+    const released = !plan.releaseDate || plan.releaseDate <= date;
+    const sequenceUnlocked = !previousPlan || localReviewUnlock || Boolean(previousCompletedAt && addDays(previousCompletedAt, 1) <= date);
+    const unlocked = released && sequenceUnlocked;
+    const unlockDate = !previousPlan ? plan.releaseDate : previousCompletedAt ? addDays(previousCompletedAt, 1) : plan.releaseDate;
+    previousBySeries.set(series, plan);
+    return { ...plan, completedAt, unlocked, unlockDate };
+  });
+}
+
+function planSeriesCompletion(plans, planProgress) {
+  const series = new Map();
+  plans.forEach((plan) => {
+    const title = planSeriesTitle(plan);
+    if (!series.has(title)) series.set(title, []);
+    series.get(title).push(plan);
+  });
+
+  const total = series.size;
+  const completed = Array.from(series.values()).filter((seriesPlans) =>
+    seriesPlans.length > 0 && seriesPlans.every((plan) => Boolean(planProgress[String(plan.id)]))
+  ).length;
+
+  return { completed, total };
+}
 
 function loadLessons() {
   try {
@@ -303,27 +420,10 @@ const goalsSeed = [
   { id: 1, label: 'Dream Goal', value: 'Earn a varsity leadership role', progress: 42 },
   { id: 2, label: 'Season Goal', value: 'Become a dependable fourth-quarter player', progress: 64 },
   { id: 3, label: 'Monthly Goal', value: 'Complete 22 of 30 Daily Deposit sessions', progress: 73 },
-  { id: 4, label: 'Daily Standards', value: 'Win today through controllables', progress: 50 }
+  { id: 4, label: 'Today’s Productivity', value: 'Win today through controllables', progress: 50 }
 ];
 
-const plansSeed = [
-  {
-    id: 1,
-    title: 'Game Day Calm',
-    subject: 'Breathe, see the first play, trust the work.',
-    releaseDate: todayKey(),
-    challengeDay: 'Day 1',
-    steps: ['Settle your breathing', 'Picture one strong start', 'Choose one controllable']
-  },
-  {
-    id: 2,
-    title: 'Practice Lock In',
-    subject: 'Arrive with one clear job and attack it.',
-    releaseDate: addDays(todayKey(), 1),
-    challengeDay: 'Day 2',
-    steps: ['Name today’s skill', 'Visualize the first rep', 'Bring full effort early']
-  }
-];
+const plansSeed = createPerformancePlanSeeds(todayKey);
 
 function normalizePlan(plan) {
   return {
@@ -453,6 +553,32 @@ function journalToSupabase(entry, athleteUserId) {
   return payload;
 }
 
+function pointEventFromSupabase(row) {
+  return {
+    id: row.id,
+    uniqueKey: row.event_key,
+    type: row.event_type,
+    points: Number(row.points) || 0,
+    label: row.label ?? 'Points earned',
+    metadata: row.metadata ?? {},
+    date: row.entry_date ?? todayKey(),
+    createdAt: row.created_at ?? new Date().toISOString()
+  };
+}
+
+function pointEventToSupabase(entry, athleteUserId) {
+  return {
+    athlete_user_id: athleteUserId,
+    event_key: entry.uniqueKey,
+    event_type: entry.type,
+    points: Number(entry.points) || 0,
+    label: entry.label ?? 'Points earned',
+    metadata: entry.metadata ?? {},
+    entry_date: entry.date ?? todayKey(),
+    created_at: entry.createdAt ?? new Date().toISOString()
+  };
+}
+
 function lessonFromSupabase(row) {
   return {
     id: row.id,
@@ -460,6 +586,7 @@ function lessonFromSupabase(row) {
     time: '5 min',
     status: row.status === 'posted' ? 'Posted' : row.status === 'scheduled' ? 'Scheduled' : 'Draft',
     sendDate: row.release_date ?? todayKey(),
+    focusQuestion: row.focus_question ?? '',
     body: row.body ?? ''
   };
 }
@@ -490,10 +617,56 @@ function parentMessageFromSupabase(row) {
 function loadPlans() {
   try {
     const saved = JSON.parse(localStorage.getItem(plansStorageKey) ?? '[]');
-    return Array.isArray(saved) && saved.length ? saved.map(normalizePlan) : plansSeed.map(normalizePlan);
+    const savedPlans = Array.isArray(saved) ? saved.map(normalizePlan) : [];
+    const hasCurrentNinetyPlan = savedPlans.some((plan) => String(plan.id).startsWith('ninety-percent-day-'));
+    const hasDocumentStructuredNinetyPlan = savedPlans.some((plan) =>
+      String(plan.id).startsWith('ninety-percent-day-') &&
+      plan.steps.some((step) => String(step).includes('This Chapter Will Help You'))
+    );
+    const hasCurrentSlumpPlan = savedPlans.some((plan) =>
+      (String(plan.id).startsWith('slump-series-day-') || String(plan.subject).includes("I'm In A Slump")) &&
+      plan.steps.some((step) => String(step).includes('Final Complete Athlete Principle') || String(step).includes('The Second Opponent'))
+    );
+    return savedPlans.length && (!hasCurrentNinetyPlan || hasDocumentStructuredNinetyPlan) && hasCurrentSlumpPlan
+      ? savedPlans
+      : plansSeed.map(normalizePlan);
   } catch {
     return plansSeed.map(normalizePlan);
   }
+}
+
+function loadPlanProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(planProgressStorageKey) ?? '{}');
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function loadPointsLedger() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(pointsLedgerStorageKey) ?? '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function pointsTotal(ledger) {
+  return ledger.reduce((total, entry) => total + Number(entry.points || 0), 0);
+}
+
+function pointsToday(ledger, date = todayKey()) {
+  return ledger
+    .filter((entry) => entry.date === date)
+    .reduce((total, entry) => total + Number(entry.points || 0), 0);
+}
+
+function latestPointEvents(ledger, count = 3) {
+  return [...ledger]
+    .sort((first, second) => String(second.createdAt).localeCompare(String(first.createdAt)))
+    .slice(0, count);
 }
 
 const coachTopics = [
@@ -532,8 +705,8 @@ const coachTopics = [
 ];
 
 const parentMessageSeed = {
-  title: 'Coach the standard, not the scoreboard.',
-  body: 'Your athlete is learning to separate identity from performance. Reinforce the standard they are building, not only the result they produced.',
+  title: 'Coach the daily work, not the scoreboard.',
+  body: 'Your athlete is learning to separate identity from performance. Reinforce the work they are building, not only the result they produced.',
   conversationCue: 'Ask tonight: “What did you control today?”',
   avoid: 'Avoid leading with stats, mistakes, or playing time.',
   sendDate: todayKey(),
@@ -574,17 +747,24 @@ function App() {
   const [goals, setGoals] = useState(loadGoals);
   const [goalDraft, setGoalDraft] = useState({ label: '', value: '' });
   const [plans, setPlans] = useState(loadPlans);
+  const [planProgress, setPlanProgress] = useState(loadPlanProgress);
+  const [pointsLedger, setPointsLedger] = useState(loadPointsLedger);
   const [messages, setMessages] = useState([]);
   const [coachSessions, setCoachSessions] = useState(loadCoachSessions);
   const [activeCoachSessionId, setActiveCoachSessionId] = useState(null);
   const [messageDraft, setMessageDraft] = useState('');
   const [parentMessage, setParentMessage] = useState(parentMessageSeed);
+  const [parentAccessDraft, setParentAccessDraft] = useState('');
+  const [parentLinkFeedback, setParentLinkFeedback] = useState('');
+  const [parentLinkChecked, setParentLinkChecked] = useState(false);
+  const [linkedAthleteId, setLinkedAthleteId] = useState(null);
+  const [parentLinkRefreshKey, setParentLinkRefreshKey] = useState(0);
   const [privacySettings, setPrivacySettings] = useState(privacySeed);
   const [athleteProfile, setAthleteProfile] = useState(loadAthleteProfile);
   const [supabaseAthleteDataReady, setSupabaseAthleteDataReady] = useState(false);
   const [celebration, setCelebration] = useState('');
   const [lessonLibrary, setLessonLibrary] = useState(loadLessons);
-  const [selectedLessonId, setSelectedLessonId] = useState(() => loadLessons()[0]?.id ?? lessons[0].id);
+  const [selectedLessonId, setSelectedLessonId] = useState(() => dailyLessonId(loadLessons(), todayKey()));
 
   const activeLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
   const effectiveSession = authSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
@@ -598,6 +778,9 @@ function App() {
   const confidenceAverage = Math.round(
     (scores.confidence + scores.energy + scores.mood + scores.belief) / 4
   );
+  const athleteScore = pointsTotal(pointsLedger);
+  const todayPoints = pointsToday(pointsLedger, dailyDate);
+  const recentPointEvents = latestPointEvents(pointsLedger);
 
   useEffect(() => {
     localStorage.setItem(
@@ -641,6 +824,14 @@ function App() {
   }, [plans]);
 
   useEffect(() => {
+    localStorage.setItem(planProgressStorageKey, JSON.stringify(planProgress));
+  }, [planProgress]);
+
+  useEffect(() => {
+    localStorage.setItem(pointsLedgerStorageKey, JSON.stringify(pointsLedger));
+  }, [pointsLedger]);
+
+  useEffect(() => {
     localStorage.setItem(authUsersStorageKey, JSON.stringify(authUsers));
   }, [authUsers]);
 
@@ -668,6 +859,8 @@ function App() {
         standardsHistoryResult,
         readinessResult,
         journalResult,
+        planProgressResult,
+        pointsLedgerResult,
         privacyResult
       ] = await Promise.all([
         supabase
@@ -699,6 +892,15 @@ function App() {
         supabase
           .from('journal_entries')
           .select('id, goal_id, entry_type, body, created_at')
+          .eq('athlete_user_id', authSession.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('performance_plan_progress')
+          .select('plan_id, completed_at')
+          .eq('athlete_user_id', authSession.id),
+        supabase
+          .from('athlete_points_ledger')
+          .select('id, event_key, event_type, points, label, metadata, entry_date, created_at')
           .eq('athlete_user_id', authSession.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -751,6 +953,16 @@ function App() {
         setJournalEntries(journalResult.data.map(journalFromSupabase));
       }
 
+      if (!planProgressResult.error && Array.isArray(planProgressResult.data)) {
+        setPlanProgress(Object.fromEntries(
+          planProgressResult.data.map((entry) => [String(entry.plan_id), entry.completed_at])
+        ));
+      }
+
+      if (!pointsLedgerResult.error && Array.isArray(pointsLedgerResult.data)) {
+        setPointsLedger(pointsLedgerResult.data.map(pointEventFromSupabase));
+      }
+
       if (!privacyResult.error && privacyResult.data) {
         setPrivacySettings({
           readinessVisible: Boolean(privacyResult.data.readiness_visible),
@@ -797,7 +1009,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [authSession?.id, authSession?.role]);
+  }, [authSession?.id, authSession?.role, dailyDate]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !authSession) {
@@ -810,7 +1022,7 @@ function App() {
       const [lessonsResult, plansResult, parentMessageResult] = await Promise.all([
         supabase
           .from('daily_deposits')
-          .select('id, title, body, release_date, status')
+          .select('id, title, body, focus_question, release_date, status')
           .order('release_date', { ascending: false }),
         supabase
           .from('performance_plans')
@@ -829,7 +1041,7 @@ function App() {
       if (!lessonsResult.error && Array.isArray(lessonsResult.data) && lessonsResult.data.length) {
         const nextLessons = lessonsResult.data.map(lessonFromSupabase);
         setLessonLibrary(nextLessons);
-        setSelectedLessonId((current) => nextLessons.some((lesson) => lesson.id === current) ? current : nextLessons[0].id);
+        setSelectedLessonId(dailyLessonId(nextLessons, dailyDate));
       }
 
       if (!plansResult.error && Array.isArray(plansResult.data) && plansResult.data.length) {
@@ -850,8 +1062,17 @@ function App() {
   }, [authSession?.id, authSession?.role]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || authSession?.role !== 'parent') return;
+    setSelectedLessonId(dailyLessonId(lessonLibrary, dailyDate));
+  }, [dailyDate, lessonLibrary]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || authSession?.role !== 'parent') {
+      setParentLinkChecked(false);
+      setLinkedAthleteId(null);
+      return;
+    }
     let cancelled = false;
+    setParentLinkChecked(false);
 
     async function loadLinkedAthleteData() {
       const { data: links, error: linksError } = await supabase
@@ -861,9 +1082,14 @@ function App() {
         .limit(1);
 
       const athleteUserId = links?.[0]?.athlete_user_id;
-      if (linksError || !athleteUserId || cancelled) return;
+      if (linksError || !athleteUserId || cancelled) {
+        setLinkedAthleteId(null);
+        setParentLinkChecked(true);
+        return;
+      }
+      setLinkedAthleteId(athleteUserId);
 
-      const [profileResult, goalsResult, standardsHistoryResult, readinessResult, journalResult, privacyResult] = await Promise.all([
+      const [profileResult, goalsResult, standardsHistoryResult, readinessResult, journalResult, privacyResult, planProgressResult, pointsLedgerResult] = await Promise.all([
         supabase
           .from('athlete_profiles')
           .select('sport, age, location, photo_url, parent_contact, parent_access_code')
@@ -893,7 +1119,16 @@ function App() {
           .from('athlete_privacy_settings')
           .select('readiness_visible, standards_visible, goals_visible, journal_private, coach_private')
           .eq('athlete_user_id', athleteUserId)
-          .maybeSingle()
+          .maybeSingle(),
+        supabase
+          .from('performance_plan_progress')
+          .select('plan_id, completed_at')
+          .eq('athlete_user_id', athleteUserId),
+        supabase
+          .from('athlete_points_ledger')
+          .select('id, event_key, event_type, points, label, metadata, entry_date, created_at')
+          .eq('athlete_user_id', athleteUserId)
+          .order('created_at', { ascending: false })
       ]);
 
       if (cancelled) return;
@@ -905,6 +1140,16 @@ function App() {
       if (!standardsHistoryResult.error) setStandardsHistory(standardsHistoryFromSupabase(standardsHistoryResult.data));
       if (!readinessResult.error) setReadinessHistory(readinessFromSupabase(readinessResult.data));
       if (!journalResult.error) setJournalEntries((journalResult.data ?? []).map(journalFromSupabase));
+      if (!planProgressResult.error && Array.isArray(planProgressResult.data)) {
+        setPlanProgress(Object.fromEntries(
+          planProgressResult.data.map((entry) => [String(entry.plan_id), entry.completed_at])
+        ));
+      }
+      if (!pointsLedgerResult.error && Array.isArray(pointsLedgerResult.data)) {
+        setPointsLedger(pointsLedgerResult.data.map(pointEventFromSupabase));
+      } else {
+        setPointsLedger([]);
+      }
       if (!privacyResult.error && privacyResult.data) {
         setPrivacySettings({
           readinessVisible: Boolean(privacyResult.data.readiness_visible),
@@ -914,6 +1159,7 @@ function App() {
           coachPrivate: Boolean(privacyResult.data.coach_private)
         });
       }
+      setParentLinkChecked(true);
     }
 
     loadLinkedAthleteData();
@@ -921,7 +1167,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [authSession?.id, authSession?.role]);
+  }, [authSession?.id, authSession?.role, parentLinkRefreshKey]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !supabaseAthleteDataReady) return;
@@ -1172,6 +1418,36 @@ function App() {
     };
   }, [authSession?.id, authSession?.role, journalEntries, supabaseAthleteDataReady]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !supabaseAthleteDataReady) return;
+
+    const entries = Object.entries(planProgress).filter(([, completedAt]) => completedAt);
+    if (!entries.length) return;
+
+    supabase
+      .from('performance_plan_progress')
+      .upsert(
+        entries.map(([planId, completedAt]) => ({
+          athlete_user_id: authSession.id,
+          plan_id: String(planId),
+          completed_at: completedAt,
+          updated_at: new Date().toISOString()
+        })),
+        { onConflict: 'athlete_user_id,plan_id' }
+      );
+  }, [authSession?.id, authSession?.role, planProgress, supabaseAthleteDataReady]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !supabaseAthleteDataReady || !pointsLedger.length) return;
+
+    supabase
+      .from('athlete_points_ledger')
+      .upsert(
+        pointsLedger.map((entry) => pointEventToSupabase(entry, authSession.id)),
+        { onConflict: 'athlete_user_id,event_key' }
+      );
+  }, [authSession?.id, authSession?.role, pointsLedger, supabaseAthleteDataReady]);
+
   async function signupUser({ role, name, email, password, parentCode }) {
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) {
@@ -1184,10 +1460,6 @@ function App() {
 
     if (role === 'admin') {
       return 'Admin access has moved outside the athlete app.';
-    }
-
-    if (role === 'parent' && parentCode && parentCode !== athleteProfile.parentAccessCode) {
-      return 'Parent access code does not match.';
     }
 
     if (isSupabaseConfigured) {
@@ -1266,9 +1538,6 @@ function App() {
         name: profile.full_name || profile.role,
         email: cleanEmail
       });
-      if (role === 'parent' && athleteProfile.parentAccessCode) {
-        await supabase.rpc('link_parent_to_athlete', { access_code: athleteProfile.parentAccessCode });
-      }
       setView(role === 'parent' ? 'parent' : 'athlete');
       window.history.replaceState({}, '', window.location.pathname);
       return '';
@@ -1283,6 +1552,42 @@ function App() {
     return '';
   }
 
+  async function requestPasswordReset(email) {
+    const cleanEmail = normalizeEmail(email);
+    if (!cleanEmail) return 'Enter your email first.';
+    if (!isSupabaseConfigured) return 'Password reset is available when the live backend is connected.';
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}/`
+    });
+    if (error) return error.message;
+    return 'Password reset email sent. Check your inbox.';
+  }
+
+  async function deleteAccount() {
+    if (!isSupabaseConfigured) return 'Account deletion is available when the live backend is connected.';
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return 'Sign in again before deleting your account.';
+
+    const response = await fetch('/api/delete-account', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return payload.error || 'Account deletion failed. Contact support.';
+
+    await supabase.auth.signOut();
+    setAuthSession(null);
+    setNotificationsOpen(false);
+    setView('athlete');
+    setTab('home');
+    return '';
+  }
+
   async function logoutUser() {
     if (isSupabaseConfigured) {
       await supabase.auth.signOut();
@@ -1291,6 +1596,33 @@ function App() {
     setNotificationsOpen(false);
     setView('athlete');
     setTab('home');
+    setParentAccessDraft('');
+    setParentLinkFeedback('');
+    setParentLinkChecked(false);
+    setLinkedAthleteId(null);
+  }
+
+  async function linkParentAccessCode(event) {
+    event?.preventDefault();
+    const accessCode = parentAccessDraft.trim();
+    if (!accessCode) {
+      setParentLinkFeedback('Enter the parent access code from your athlete.');
+      return;
+    }
+    if (!isSupabaseConfigured || authSession?.role !== 'parent') {
+      setParentLinkFeedback('Log in as a parent before linking an athlete.');
+      return;
+    }
+
+    const { error } = await supabase.rpc('link_parent_to_athlete', { access_code: accessCode });
+    if (error) {
+      setParentLinkFeedback('That code did not link. Check the code and try again.');
+      return;
+    }
+
+    setParentAccessDraft('');
+    setParentLinkFeedback('Athlete linked. Loading parent dashboard...');
+    setParentLinkRefreshKey((value) => value + 1);
   }
 
   useEffect(() => {
@@ -1339,6 +1671,53 @@ function App() {
   function requestBrowserNotifications() {
     if (!('Notification' in window)) return;
     Notification.requestPermission();
+  }
+
+  function awardPoints({ type, points, label, uniqueKey, metadata = {} }) {
+    const cleanKey = uniqueKey || `${type}-${Date.now()}`;
+    const cleanPoints = Number(points) || 0;
+    if (cleanPoints <= 0) return false;
+    if (pointsLedger.some((entry) => entry.uniqueKey === cleanKey)) return false;
+    const pointEvent = {
+      id: `${cleanKey}-${Date.now()}`,
+      uniqueKey: cleanKey,
+      type,
+      points: cleanPoints,
+      label,
+      metadata,
+      date: todayKey(),
+      createdAt: new Date().toISOString()
+    };
+
+    setPointsLedger((current) => {
+      if (current.some((entry) => entry.uniqueKey === cleanKey)) return current;
+      return [pointEvent, ...current];
+    });
+
+    persistPointEvent(pointEvent);
+    notifyUser('Points earned', `+${cleanPoints} points · ${label}`, 'success');
+    return true;
+  }
+
+  async function persistPointEvent(entry) {
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !authSession.id) return;
+
+    await supabase
+      .from('athlete_points_ledger')
+      .upsert(pointEventToSupabase(entry, authSession.id), { onConflict: 'athlete_user_id,event_key' });
+  }
+
+  async function persistPlanCompletion(planId, completedAt) {
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !authSession.id) return;
+
+    await supabase
+      .from('performance_plan_progress')
+      .upsert({
+        athlete_user_id: authSession.id,
+        plan_id: String(planId),
+        completed_at: completedAt,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'athlete_user_id,plan_id' });
   }
 
   function celebrate(message) {
@@ -1414,7 +1793,7 @@ function App() {
 
     notifyUser(
       `${streakCount}-day streak on the line`,
-      'Check off your Daily Standards and submit them today to keep your streak alive.',
+      'Check off today’s productivity list and lock in your day to keep your streak alive.',
       'warning'
     );
     setLastReminderDate(dailyDate);
@@ -1430,17 +1809,21 @@ function App() {
     if (view === 'parent') {
       return (
         <ParentDashboard
-          completion={completion}
-          confidenceAverage={confidenceAverage}
+          athleteScore={athleteScore}
           standardsCompleted={standardsCompleted}
-          standardsHistory={standardsHistory}
           standardsTotal={standards.length}
-          readinessScores={lastSevenReadinessScores(readinessHistory, dailyDate)}
+          linkedAthleteId={linkedAthleteId}
+          linkParentAccessCode={linkParentAccessCode}
+          parentAccessDraft={parentAccessDraft}
+          parentLinkChecked={parentLinkChecked}
+          parentLinkFeedback={parentLinkFeedback}
           parentMessage={parentMessage}
-          submittedToday={submittedToday}
+          planProgress={planProgress}
+          plans={plans}
+          setParentAccessDraft={setParentAccessDraft}
+          setParentLinkFeedback={setParentLinkFeedback}
           privacySettings={privacySettings}
           goals={goals}
-          journalEntries={journalEntries}
           lesson={activeLesson}
         />
       );
@@ -1448,6 +1831,8 @@ function App() {
     const screens = {
       home: (
         <HomeScreen
+          athleteScore={athleteScore}
+          awardPoints={awardPoints}
           completion={completion}
           confidenceAverage={confidenceAverage}
           scores={scores}
@@ -1471,18 +1856,27 @@ function App() {
           celebrate={celebrate}
           lastSubmittedDate={lastSubmittedDate}
           lesson={activeLesson}
+          planProgress={planProgress}
+          plans={plans}
+          recentPointEvents={recentPointEvents}
           standardsHistory={standardsHistory}
           streakCount={streakCount}
           submittedToday={submittedToday}
+          todayPoints={todayPoints}
         />
       ),
       plans: (
         <PlansScreen
           plans={plans}
+          planProgress={planProgress}
+          setPlanProgress={setPlanProgress}
+          awardPoints={awardPoints}
+          persistPlanCompletion={persistPlanCompletion}
         />
       ),
       journal: (
         <JournalScreen
+          awardPoints={awardPoints}
           celebrate={celebrate}
           journal={journal}
           journalEntries={journalEntries}
@@ -1505,8 +1899,11 @@ function App() {
           athleteProfile={athleteProfile}
           authSession={authSession}
           coachSessions={coachSessions}
+          lesson={activeLesson}
           goals={goals}
           messages={messages}
+          planProgress={planProgress}
+          plans={plans}
           standards={standards}
           setActiveCoachSessionId={setActiveCoachSessionId}
           setCoachSessions={setCoachSessions}
@@ -1528,6 +1925,8 @@ function App() {
     return screens[tab];
   }, [
     activeLesson,
+    athleteScore,
+    awardPoints,
     completion,
     confidenceAverage,
     goalDraft,
@@ -1544,7 +1943,9 @@ function App() {
     messageDraft,
     messages,
     parentMessage,
+    planProgress,
     plans,
+    recentPointEvents,
     privacySettings,
     readinessHistory,
     scores,
@@ -1557,6 +1958,7 @@ function App() {
     streakCount,
     submittedToday,
     tab,
+    todayPoints,
     view
   ]);
 
@@ -1564,6 +1966,7 @@ function App() {
     return (
       <AuthScreen
         loginUser={loginUser}
+        requestPasswordReset={requestPasswordReset}
         signupUser={signupUser}
         parentAccessCode={athleteProfile.parentAccessCode}
       />
@@ -1601,7 +2004,7 @@ function App() {
       <main className="phone-frame" aria-label="The Complete Athlete app prototype">
         <header className="topbar">
           <div>
-            <p className="eyebrow">The Complete Athlete</p>
+            <p className="top-greeting">{timeBasedGreeting(effectiveSession.name)}</p>
             {view === 'athlete' && tab === 'home' ? null : (
               <h1>{view === 'athlete' ? screenTitles[tab] : 'Parent Dashboard'}</h1>
             )}
@@ -1631,18 +2034,19 @@ function App() {
 
 const screenTitles = {
   home: 'Daily Deposit',
-  plans: 'Plans',
-  journal: 'Reflect',
+  plans: 'Performance Plans',
+  journal: 'My Goals',
   coach: 'My Mindset Coach',
   profile: 'My Profile'
 };
 
-function AuthScreen({ loginUser, signupUser, parentAccessCode }) {
+function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessCode }) {
   const inviteParams = new URLSearchParams(window.location.search);
   const invitedRole = inviteParams.get('role');
   const invitedCode = inviteParams.get('parentCode') ?? '';
+  const invitedAsParent = invitedRole === 'parent' && invitedCode;
   const [mode, setMode] = useState(invitedRole === 'parent' && invitedCode ? 'signup' : 'login');
-  const [role, setRole] = useState(invitedRole === 'parent' && invitedCode ? 'parent' : 'athlete');
+  const [role, setRole] = useState(invitedAsParent ? 'parent' : '');
   const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode });
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1654,6 +2058,10 @@ function AuthScreen({ loginUser, signupUser, parentAccessCode }) {
 
   async function submitAuth(event) {
     event.preventDefault();
+    if (!role) {
+      setMessage('Choose athlete or parent to continue.');
+      return;
+    }
     setIsSubmitting(true);
     const error = mode === 'login'
       ? loginUser({ role, email: form.email, password: form.password })
@@ -1662,11 +2070,52 @@ function AuthScreen({ loginUser, signupUser, parentAccessCode }) {
     setIsSubmitting(false);
   }
 
+  async function sendPasswordReset() {
+    setIsSubmitting(true);
+    setMessage(await requestPasswordReset(form.email));
+    setIsSubmitting(false);
+  }
+
+  function chooseRole(nextRole) {
+    setRole(nextRole);
+    setMessage('');
+    if (nextRole === 'parent' && invitedCode) setMode('signup');
+  }
+
+  if (!role) {
+    return (
+      <main className="auth-shell role-gate-shell" aria-label="Choose The Complete Athlete role">
+        <section className="auth-brand-panel">
+          <p className="eyebrow">The Complete Athlete</p>
+          <h1>How are you using the app?</h1>
+          <p>Choose the experience that fits you. Athletes build the day. Parents support the process.</p>
+        </section>
+
+        <section className="auth-card role-choice-card">
+          <button className="role-choice-button" onClick={() => chooseRole('athlete')} type="button">
+            <span><Trophy size={18} /> Athlete</span>
+            <strong>I’m an Athlete</strong>
+            <em>Build goals, productivity habits, plans, journals, and mindset coaching.</em>
+          </button>
+          <button className="role-choice-button" onClick={() => chooseRole('parent')} type="button">
+            <span><Users size={18} /> Parent</span>
+            <strong>I’m a Parent</strong>
+            <em>Follow your athlete’s progress and support the same performance plans.</em>
+          </button>
+          <div className="auth-legal-links role-gate-links">
+            <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
+            <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="auth-shell" aria-label="The Complete Athlete login">
       <section className="auth-brand-panel">
         <p className="eyebrow">The Complete Athlete</p>
-        <h1>Access the right side of the standard.</h1>
+        <h1>Access the side built for you.</h1>
         <p>Athletes build the day. Parents support the day.</p>
         <div className="auth-role-summary">
           <span><Trophy size={16} /> Athlete</span>
@@ -1675,6 +2124,11 @@ function AuthScreen({ loginUser, signupUser, parentAccessCode }) {
       </section>
 
       <section className="auth-card">
+        {!invitedAsParent && (
+          <button className="plan-back-button auth-back-button" onClick={() => setRole('')} type="button">
+            Change role
+          </button>
+        )}
         <div className="auth-mode">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">
             Login
@@ -1744,7 +2198,17 @@ function AuthScreen({ loginUser, signupUser, parentAccessCode }) {
             <LockKeyhole size={18} />
             {isSubmitting ? 'Working...' : mode === 'login' ? 'Log In' : 'Create Account'}
           </button>
+          {mode === 'login' && (
+            <button className="ghost-action full" disabled={isSubmitting} onClick={sendPasswordReset} type="button">
+              Reset Password
+            </button>
+          )}
         </form>
+        <div className="auth-legal-links">
+          <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy</a>
+          <a href="/terms.html" target="_blank" rel="noreferrer">Terms</a>
+          <a href="/support.html" target="_blank" rel="noreferrer">Support</a>
+        </div>
       </section>
     </main>
   );
@@ -1805,7 +2269,7 @@ function OnboardingScreen({ completeOnboarding }) {
     }
 
     if (cleanSetup.standards.length === 0) {
-      setMessage('Set at least one daily standard.');
+      setMessage('Add at least one daily productivity item.');
       return;
     }
 
@@ -1816,7 +2280,7 @@ function OnboardingScreen({ completeOnboarding }) {
     <main className="onboarding-shell" aria-label="The Complete Athlete onboarding">
       <section className="onboarding-hero">
         <p className="eyebrow">The Complete Athlete</p>
-        <h1>Set the standard before the day starts.</h1>
+        <h1>Build the day before it starts.</h1>
         <p>Build the first version of the athlete experience: who they are, what they are chasing, and what they can prove today.</p>
       </section>
 
@@ -1894,7 +2358,7 @@ function OnboardingScreen({ completeOnboarding }) {
         </section>
 
         <section className="panel onboarding-panel">
-          <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Standards" action={`${setup.standards.filter(Boolean).length} tasks`} />
+          <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Productivity" action={`${setup.standards.filter(Boolean).length} tasks`} />
           <div className="onboarding-list">
             {setup.standards.map((standard, index) => (
               <label key={`standard-${index}`}>
@@ -1946,6 +2410,8 @@ function OnboardingScreen({ completeOnboarding }) {
 }
 
 function HomeScreen({
+  athleteScore,
+  awardPoints,
   celebrate,
   completion,
   confidenceAverage,
@@ -1969,19 +2435,26 @@ function HomeScreen({
   notifyUser,
   lastSubmittedDate,
   lesson,
+  planProgress,
+  plans,
+  recentPointEvents,
   standardsHistory,
   streakCount,
-  submittedToday
+  submittedToday,
+  todayPoints
 }) {
   const [standardsFeedback, setStandardsFeedback] = useState('');
+  const [standardsHistoryOpen, setStandardsHistoryOpen] = useState(false);
+  const [scoreInfoOpen, setScoreInfoOpen] = useState(false);
   const completedStandards = standards.filter((standard) => standard.done);
+  const allStandardsCompleted = standards.length > 0 && completedStandards.length === standards.length;
   const recentStandardsHistory = [...standardsHistory].reverse().slice(0, 7);
-  const standardsTrend = standardsHistory.slice(-7);
   const averageGoalProgress = goals.length
     ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress), 0) / goals.length)
     : 0;
-  const linkedStandardsCount = standards.filter((standard) => standard.goalId).length;
+  const planSeriesStats = planSeriesCompletion(plans, planProgress);
   const focusGoal = goals.find((goal) => Number(goal.progress) < 100) ?? goals[0];
+  const todaysFocus = lessonFocusQuestion(lesson);
 
   function addStandard(event) {
     event.preventDefault();
@@ -1994,7 +2467,7 @@ function HomeScreen({
     setStandardDraft('');
     setStandardGoalId('');
     setStandardsFeedback('');
-    celebrate('Standard added. Now prove it today.');
+    celebrate('Added to today. Check it off when it is done.');
   }
 
   function removeStandard(id) {
@@ -2012,17 +2485,17 @@ function HomeScreen({
 
   function submitStandards() {
     if (standards.length === 0) {
-      setStandardsFeedback('Start by setting one standard for today.');
+      setStandardsFeedback('Start by adding one thing you need to handle today.');
       return;
     }
 
-    if (standards.some((standard) => !standard.done)) {
-      setStandardsFeedback('Finish your standards before locking in today.');
+    if (!allStandardsCompleted) {
+      setStandardsFeedback('Finish today’s productivity list before locking in your day.');
       return;
     }
 
     if (submittedToday) {
-      setStandardsFeedback('You are locked in for today. Do it again tomorrow.');
+      setStandardsFeedback('Your day is locked in. Start fresh tomorrow.');
       return;
     }
 
@@ -2053,46 +2526,55 @@ function HomeScreen({
           : goal
       )
     );
+    const streakBonus = Math.min(nextStreak * pointValues.streakBonusPerDay, pointValues.streakBonusCap);
+    const standardsPoints = allStandardsCompleted ? pointValues.standardsCompleted + streakBonus : 0;
+    const awarded = standardsPoints > 0 && awardPoints({
+      type: 'standards_completed',
+      points: standardsPoints,
+      label: streakBonus > 0 ? `Productivity tracker complete with ${nextStreak}-day streak bonus` : 'Productivity tracker complete',
+      uniqueKey: `standards-completed-${submissionDate}`,
+      metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus }
+    });
     setStandardsFeedback('');
-    celebrate('Day locked in. Stack another one tomorrow.');
+    celebrate(awarded ? `Day locked in. +${standardsPoints} points.` : 'Day locked in. Stack another one tomorrow.');
 
     notifyUser(
-      'Daily Standards submitted',
-      `Your standards are locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`,
+      'Productivity tracker locked',
+      `Your day is locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`,
       'success'
     );
 
     if (nextStreak % 7 === 0) {
       notifyUser(
         `${nextStreak}-day streak`,
-        `You have protected your standard for ${nextStreak} straight days.`,
+        `You have protected your daily work for ${nextStreak} straight days.`,
         'success'
       );
     }
   }
 
   function openDailyReflection() {
-    const keptStandards = completedStandards.map((standard) => standard.label).join(', ') || 'I kept my standard today.';
+    const keptStandards = completedStandards.map((standard) => standard.label).join(', ') || 'I handled my work today.';
     setJournalType('Daily Reflection');
     setJournal(
-      `Daily Deposit: ${lesson.title}\nFocus question: What is the one thing I need to carry into today?\nStandard I kept: ${keptStandards}\nWhat I need to remember: `
+      `Daily Deposit: ${lesson.title ? `${lesson.title}\n` : ''}Focus question: ${todaysFocus}\nWhat I handled today: ${keptStandards}\nWhat I need to remember: `
     );
     setTab('journal');
   }
 
   return (
     <>
-      <section className="panel">
-        <PanelTitle icon={<BookOpen size={18} />} title="Daily Deposit" action={lesson.time} />
-        <h2>{lesson.title}</h2>
+      <section className="panel daily-deposit-panel">
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" action={lesson.time} />
+        {lesson.title && <h2>{lesson.title}</h2>}
         <p>{lesson.body}</p>
       </section>
 
       <section className="panel today-focus-panel">
         <PanelTitle icon={<Target size={18} />} title="Today's Focus" action="Question" />
         <div className="focus-question">
-          <strong>What is the one thing I need to carry into today?</strong>
-          <p>Read it, answer it in your head, and let it shape how you show up.</p>
+          <strong>{todaysFocus}</strong>
+          <p>Built from today’s Daily Deposit. Answer it, then let it shape how you show up.</p>
         </div>
       </section>
 
@@ -2101,7 +2583,7 @@ function HomeScreen({
         <div className="progress-scoreboard">
           <span>
             <strong>{completion}%</strong>
-            Standards today
+            Productivity today
           </span>
           <span>
             <strong>{streakCount}</strong>
@@ -2112,8 +2594,8 @@ function HomeScreen({
             Goal progress
           </span>
           <span>
-            <strong>{linkedStandardsCount}/{standards.length}</strong>
-            Tasks linked
+            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
+            Plans completed
           </span>
         </div>
         {focusGoal && (
@@ -2123,20 +2605,87 @@ function HomeScreen({
             <Progress value={focusGoal.progress} />
           </div>
         )}
-        <div className="standards-trend-strip" aria-label="Recent standards completion trend">
-          {standardsTrend.length === 0 ? (
-            <p>No locked-in days yet.</p>
+      </section>
+
+      <section className="panel athlete-score-panel">
+        <PanelTitle icon={<Star size={18} />} title="Complete Athlete Score" action={`Today +${todayPoints}`} />
+        <div className="score-hero">
+          <strong>{athleteScore}</strong>
+          <span>Total points earned through productivity, goals, plans, and reflection.</span>
+          <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
+            <CircleHelp size={15} />
+            How points work
+          </button>
+        </div>
+        <div className="point-event-list">
+          {recentPointEvents.length === 0 ? (
+            <p>No points yet. Complete today’s work to start building your score.</p>
           ) : (
-            standardsTrend.map((entry) => (
-              <span key={entry.date} style={{ height: `${Math.max(entry.percent, 8)}%` }}>
-                <em>{entry.percent}%</em>
+            recentPointEvents.map((entry) => (
+              <span key={entry.id}>
+                <strong>+{entry.points}</strong>
+                {entry.label}
               </span>
             ))
           )}
         </div>
       </section>
 
-      <section className="panel">
+      {scoreInfoOpen && (
+        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
+          <section
+            aria-label="How points are calculated"
+            aria-modal="true"
+            className="bottom-sheet score-info-sheet"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-head">
+              <div>
+                <span>Complete Athlete Score</span>
+                <strong>How points work</strong>
+              </div>
+              <button className="icon-button sheet-close" onClick={() => setScoreInfoOpen(false)} type="button" aria-label="Close points explanation">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="points-breakdown">
+              <span>
+                <strong>+25</strong>
+                Full productivity day completed
+              </span>
+              <span>
+                <strong>+5</strong>
+                Streak bonus per day, up to +25
+              </span>
+              <span>
+                <strong>+15</strong>
+                Reflection saved
+              </span>
+              <span>
+                <strong>+10</strong>
+                Goal added
+              </span>
+              <span>
+                <strong>+150</strong>
+                Goal completed
+              </span>
+              <span>
+                <strong>+10</strong>
+                Plan lesson completed
+              </span>
+              <span>
+                <strong>+100</strong>
+                Full plan series completed
+              </span>
+            </div>
+            <p className="score-info-note">Your score is the total proof you have stacked through daily action, reflection, goals, and performance plans.</p>
+          </section>
+        </div>
+      )}
+
+      <section className="panel readiness-panel">
         <PanelTitle icon={<LineChart size={18} />} title="Morning Readiness Check-In" action="Daily" />
         {Object.entries(scores).map(([key, value]) => (
           <label className="slider-row" key={key}>
@@ -2153,112 +2702,168 @@ function HomeScreen({
         ))}
       </section>
 
-      <section className="panel">
-        <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Standards" action={`${standards.length} total`} />
-        <p className="info-note">Your goals need evidence. Add the tasks you can prove today. Set your goals in Reflect.</p>
-        <form className="standard-form" onSubmit={addStandard}>
-          <input
-            value={standardDraft}
-            onChange={(event) => setStandardDraft(event.target.value)}
-            placeholder="Add your own standard"
-            aria-label="Add a daily standard"
-          />
-          <select
-            aria-label="Connect standard to a goal"
-            value={standardGoalId}
-            onChange={(event) => setStandardGoalId(event.target.value)}
-          >
-            <option value="">Goal link</option>
-            {goals.map((goal) => (
-              <option key={goal.id} value={goal.id}>
-                {goal.label}
-              </option>
-            ))}
-          </select>
-          <button className="icon-button dark" type="submit" aria-label="Add standard">
-            <Plus size={18} />
-          </button>
-        </form>
-        <div className="checklist">
-          {standards.map((item) => (
-            <div
-              className={item.done ? 'check-row checked' : 'check-row'}
-              key={item.id}
+      <section className="panel daily-standards-panel">
+        <PanelTitle icon={<BadgeCheck size={18} />} title="Today’s Productivity" action={`${completedStandards.length}/${standards.length} done`} />
+        <div className="daily-standards-card">
+          <p className="info-note">Add what you need to handle today. Update it as you go, then lock in the day once everything is complete.</p>
+          <div className="productivity-summary" aria-label="Today’s productivity summary">
+            <span>
+              <strong>{completedStandards.length}</strong>
+              Done
+            </span>
+            <span>
+              <strong>{Math.max(standards.length - completedStandards.length, 0)}</strong>
+              Left
+            </span>
+            <span>
+              <strong>{streakCount}</strong>
+              Streak
+            </span>
+          </div>
+          <div className="standard-examples" aria-label="Productivity examples">
+            <span>Quick add</span>
+            <button type="button" onClick={() => setStandardDraft('Complete training with intent')}>
+              Training
+            </button>
+            <button type="button" onClick={() => setStandardDraft('Handle recovery routine')}>
+              Recovery
+            </button>
+            <button type="button" onClick={() => setStandardDraft('Finish schoolwork')}>
+              Schoolwork
+            </button>
+            <button type="button" onClick={() => setStandardDraft('Get extra quality reps')}>
+              Extra reps
+            </button>
+          </div>
+          <form className="standard-form" onSubmit={addStandard}>
+            <input
+              value={standardDraft}
+              onChange={(event) => setStandardDraft(event.target.value)}
+              placeholder="Add something you need to do today"
+              aria-label="Add a productivity item"
+            />
+            <select
+              aria-label="Connect productivity item to a goal"
+              value={standardGoalId}
+              onChange={(event) => setStandardGoalId(event.target.value)}
             >
-              <button
-                className="standard-toggle"
-                onClick={() =>
-                  setStandards((current) =>
-                    current.map((standard) =>
-                      standard.id === item.id ? { ...standard, done: !standard.done } : standard
+              <option value="">Goal link</option>
+              {goals.map((goal) => (
+                <option key={goal.id} value={goal.id}>
+                  {goal.label}
+                </option>
+              ))}
+            </select>
+            <button className="icon-button dark" type="submit" aria-label="Add productivity item">
+              <Plus size={18} />
+            </button>
+          </form>
+          <div className="checklist">
+            {standards.map((item) => (
+              <div
+                className={item.done ? 'check-row checked' : 'check-row'}
+                key={item.id}
+              >
+                <button
+                  className="standard-toggle"
+                  onClick={() =>
+                    setStandards((current) =>
+                      current.map((standard) =>
+                        standard.id === item.id ? { ...standard, done: !standard.done } : standard
+                      )
                     )
-                  )
-                }
-                type="button"
-              >
-                <span className="check-box">{item.done && <Check size={14} />}</span>
-              </button>
-              <span>
-                {item.label}
-                <em>{goals.find((goal) => goal.id === item.goalId)?.label ?? 'No goal linked'}</em>
-              </span>
-              <select
-                aria-label={`Link ${item.label} to goal`}
-                value={item.goalId ?? ''}
-                onChange={(event) => updateStandardGoal(item.id, event.target.value)}
-              >
-                <option value="">No goal</option>
-                {goals.map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.label}
-                  </option>
-                ))}
-              </select>
-              <button className="remove-standard" onClick={() => removeStandard(item.id)} type="button" aria-label={`Remove ${item.label}`}>
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-        {standards.length === 0 && <p className="empty-note">Start by setting one standard for today.</p>}
-        {standardsFeedback && <p className="inline-warning">{standardsFeedback}</p>}
-        <button className={submittedToday ? 'secondary-action submitted' : 'secondary-action'} onClick={submitStandards}>
-          {submittedToday ? 'Do It Again Tomorrow' : 'I Gave My All Today'}
-        </button>
-        {submittedToday && (
-          <button className="reflection-cta" onClick={openDailyReflection}>
-            <PenLine size={17} />
-            Write what you need to remember
-          </button>
-        )}
-      </section>
-
-      <section className="panel">
-        <PanelTitle icon={<BarChart3 size={18} />} title="Standards History" action={`${standardsHistory.length} days`} />
-        {recentStandardsHistory.length === 0 ? (
-          <p className="empty-note">Daily progress will appear here after the athlete locks in their standards.</p>
-        ) : (
-          <div className="standards-history">
-            {recentStandardsHistory.map((entry) => (
-              <article className="standards-history-row" key={entry.date}>
-                <div>
-                  <strong>{entry.date}</strong>
-                  <span>{entry.completed}/{entry.total} completed at {entry.submittedAt || 'submission'}</span>
-                </div>
-                <b>{entry.percent}%</b>
-                <ul>
-                  {entry.standards.map((standard, index) => (
-                    <li className={standard.done ? 'done' : ''} key={`${entry.date}-${index}`}>
-                      {standard.label}
-                      {standard.goalLabel && <em>{standard.goalLabel}</em>}
-                    </li>
+                  }
+                  type="button"
+                >
+                  <span className="check-box">{item.done && <Check size={14} />}</span>
+                </button>
+                <span>
+                  {item.label}
+                  <em>{goals.find((goal) => goal.id === item.goalId)?.label ?? 'No goal linked'}</em>
+                </span>
+                <select
+                  aria-label={`Link ${item.label} to goal`}
+                  value={item.goalId ?? ''}
+                  onChange={(event) => updateStandardGoal(item.id, event.target.value)}
+                >
+                  <option value="">No goal</option>
+                  {goals.map((goal) => (
+                    <option key={goal.id} value={goal.id}>
+                      {goal.label}
+                    </option>
                   ))}
-                </ul>
-              </article>
+                </select>
+                <button className="remove-standard" onClick={() => removeStandard(item.id)} type="button" aria-label={`Remove ${item.label}`}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
             ))}
           </div>
-        )}
+          {standards.length === 0 && <p className="empty-note">Start by adding one thing you need to handle today.</p>}
+          {standardsFeedback && <p className="inline-warning">{standardsFeedback}</p>}
+          <button className={submittedToday ? 'secondary-action submitted' : 'secondary-action'} onClick={submitStandards}>
+            {submittedToday ? 'Locked In For Today' : 'Lock In My Day'}
+          </button>
+          <button className="history-sheet-trigger" onClick={() => setStandardsHistoryOpen(true)} type="button">
+            <BarChart3 size={16} />
+            View productivity history
+          </button>
+          {submittedToday && (
+            <button className="reflection-cta" onClick={openDailyReflection}>
+              <PenLine size={17} />
+              Write what you need to remember
+            </button>
+          )}
+        </div>
       </section>
+
+      {standardsHistoryOpen && (
+        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setStandardsHistoryOpen(false)}>
+          <section
+            aria-label="Productivity history"
+            aria-modal="true"
+            className="bottom-sheet standards-history-sheet"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-head">
+              <div>
+                <span>Last 7 locked days</span>
+                <strong>Productivity History</strong>
+              </div>
+              <button className="icon-button sheet-close" onClick={() => setStandardsHistoryOpen(false)} type="button" aria-label="Close productivity history">
+                <X size={18} />
+              </button>
+            </div>
+            {recentStandardsHistory.length === 0 ? (
+              <p className="empty-note">Your locked-in productivity days will appear here after you submit a day.</p>
+            ) : (
+              <div className="standards-history sheet-history-list">
+                {recentStandardsHistory.map((entry) => (
+                  <article className="standards-history-row" key={entry.date}>
+                    <div className="standards-history-row-head">
+                      <div>
+                        <strong>{entry.date}</strong>
+                        <span>{entry.completed}/{entry.total} completed at {entry.submittedAt || 'submission'}</span>
+                      </div>
+                      <b>{entry.percent}%</b>
+                    </div>
+                    <ul>
+                      {entry.standards.map((standard, index) => (
+                        <li className={standard.done ? 'done' : ''} key={`${entry.date}-${index}`}>
+                          {standard.label}
+                          {standard.goalLabel && <em>{standard.goalLabel}</em>}
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
     </>
   );
@@ -2289,15 +2894,17 @@ function NotificationTray({ notifications, requestBrowserNotifications }) {
 }
 
 function GoalsScreen({
+  awardPoints,
   celebrate,
   goalDraft,
   goals,
-  journalHistory,
   setGoalDraft,
   setGoals,
   standards
 }) {
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100);
+  const linkedStandards = standards.filter((standard) => standard.goalId);
+  const completedLinkedStandards = linkedStandards.filter((standard) => standard.done);
 
   function updateGoal(id, field, value) {
     setGoals((current) =>
@@ -2314,9 +2921,17 @@ function GoalsScreen({
     const label = goalDraft.label.trim();
     const value = goalDraft.value.trim();
     if (!label || !value) return;
-    setGoals((current) => [...current, { id: Date.now(), label, value, progress: 0 }]);
+    const id = Date.now();
+    setGoals((current) => [...current, { id, label, value, progress: 0 }]);
     setGoalDraft({ label: '', value: '' });
-    celebrate('Goal added. Write it, read it, prove it.');
+    const awarded = awardPoints({
+      type: 'goal_added',
+      points: pointValues.goalAdded,
+      label: 'Goal added',
+      uniqueKey: `goal-added-${id}`,
+      metadata: { goalLabel: label }
+    });
+    celebrate(awarded ? `Goal added. +${pointValues.goalAdded} points.` : 'Goal added. Write it, read it, prove it.');
   }
 
   function removeGoal(id) {
@@ -2324,21 +2939,45 @@ function GoalsScreen({
   }
 
   function completeGoal(id) {
+    const goal = goals.find((item) => item.id === id);
+    const wasComplete = Number(goal?.progress) >= 100;
     setGoals((current) =>
       current.map((goal) => (goal.id === id ? { ...goal, progress: 100 } : goal))
     );
-    celebrate('Goal complete. Achievement unlocked.');
+    const awarded = !wasComplete && awardPoints({
+      type: 'goal_completed',
+      points: pointValues.goalCompleted,
+      label: `${goal?.label || 'Goal'} completed`,
+      uniqueKey: `goal-completed-${id}`,
+      metadata: { goalLabel: goal?.label || '' }
+    });
+    celebrate(awarded ? `Goal complete. +${pointValues.goalCompleted} points.` : 'Goal complete. Achievement unlocked.');
   }
 
   return (
     <>
       <section className="panel goal-lead">
         <PanelTitle icon={<Target size={18} />} title="Goal System" action={`${goals.length} goals`} />
-        <p>Goals dont guarantee success, but success rarely exists without them.</p>
+        <p>Your goals show where you are going. Today’s productivity proves you are becoming that athlete.</p>
         <div className="goal-reminder">
-          <strong>Goal rhythm</strong>
-          <span>Review monthly. Write daily. Prove one small piece today.</span>
+          <strong>How it works</strong>
+          <span>Link daily productivity to goals. When you complete those items and lock in the day, that goal earns progress.</span>
         </div>
+      </section>
+
+      <section className="panel goal-proof-panel">
+        <PanelTitle icon={<BadgeCheck size={18} />} title="Productivity Builds Goals" action="Daily proof" />
+        <div className="goal-proof-grid">
+          <span>
+            <strong>{linkedStandards.length}</strong>
+            Items linked to goals
+          </span>
+          <span>
+            <strong>{completedLinkedStandards.length}</strong>
+            Completed today
+          </span>
+        </div>
+        <p>Keep the goal big, then make today small enough to execute. The work is the proof.</p>
       </section>
 
       <section className="panel">
@@ -2364,70 +3003,83 @@ function GoalsScreen({
       </section>
 
       <div className="stack">
-        {goals.map((goal) => (
-          <section className="goal-card editable" key={goal.id}>
-            <label>
-              <span>Goal type</span>
-              <input
-                value={goal.label}
-                onChange={(event) => updateGoal(goal.id, 'label', event.target.value)}
-              />
-            </label>
-            <label>
-              <span>Write it down</span>
-              <textarea
-                value={goal.value}
-                onChange={(event) => updateGoal(goal.id, 'value', event.target.value)}
-              />
-            </label>
-            <Progress value={goal.progress} />
-            <label className="goal-progress">
-              <span>Progress</span>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={goal.progress}
-                onChange={(event) => updateGoal(goal.id, 'progress', event.target.value)}
-                onInput={(event) => updateGoal(goal.id, 'progress', event.target.value)}
-              />
-              <strong>{goal.progress}%</strong>
-            </label>
-            <div className="goal-linked-standards">
-              <strong>Daily standards helping this goal</strong>
-              {standards.filter((standard) => standard.goalId === goal.id).length === 0 ? (
-                <p>No standards linked yet.</p>
-              ) : (
-                standards
-                  .filter((standard) => standard.goalId === goal.id)
-                  .map((standard) => (
-                    <span className={standard.done ? 'linked-standard done' : 'linked-standard'} key={standard.id}>
-                      {standard.done && <Check size={14} />}
-                      {standard.label}
-                    </span>
-                  ))
-              )}
-            </div>
-            <div className="goal-actions">
-              <button
-                className={goal.progress >= 100 ? 'complete-goal done' : 'complete-goal'}
-                type="button"
-                onClick={() => completeGoal(goal.id)}
-              >
-                <Check size={16} />
-                {goal.progress >= 100 ? 'Goal Complete' : 'Complete Goal'}
-              </button>
-              <button className="remove-goal" type="button" onClick={() => removeGoal(goal.id)}>
-                <Trash2 size={16} />
-                Remove Goal
-              </button>
-            </div>
-          </section>
-        ))}
+        {goals.map((goal) => {
+          const goalStandards = standards.filter((standard) => standard.goalId === goal.id);
+          const completedGoalStandards = goalStandards.filter((standard) => standard.done);
+          return (
+            <section className="goal-card editable" key={goal.id}>
+              <label>
+                <span>Goal type</span>
+                <input
+                  value={goal.label}
+                  onChange={(event) => updateGoal(goal.id, 'label', event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Write it down</span>
+                <textarea
+                  value={goal.value}
+                  onChange={(event) => updateGoal(goal.id, 'value', event.target.value)}
+                />
+              </label>
+              <div className="goal-proof-summary">
+                <span>
+                  <strong>{goalStandards.length}</strong>
+                  Linked items
+                </span>
+                <span>
+                  <strong>{completedGoalStandards.length}</strong>
+                  Done today
+                </span>
+                <span>
+                  <strong>{goal.progress}%</strong>
+                  Goal progress
+                </span>
+              </div>
+              <Progress value={goal.progress} />
+              <label className="goal-progress">
+                <span>Progress</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={goal.progress}
+                  onChange={(event) => updateGoal(goal.id, 'progress', event.target.value)}
+                  onInput={(event) => updateGoal(goal.id, 'progress', event.target.value)}
+                />
+                <strong>{goal.progress}%</strong>
+              </label>
+              <div className="goal-linked-standards">
+                <strong>Today’s productivity helping this goal</strong>
+                {goalStandards.length === 0 ? (
+                  <p>No items linked yet. Add something on Home and connect it to this goal.</p>
+                ) : (
+                  goalStandards.map((standard) => (
+                      <span className={standard.done ? 'linked-standard done' : 'linked-standard'} key={standard.id}>
+                        {standard.done && <Check size={14} />}
+                        {standard.label}
+                      </span>
+                    ))
+                )}
+              </div>
+              <div className="goal-actions">
+                <button
+                  className={goal.progress >= 100 ? 'complete-goal done' : 'complete-goal'}
+                  type="button"
+                  onClick={() => completeGoal(goal.id)}
+                >
+                  <Check size={16} />
+                  {goal.progress >= 100 ? 'Goal Complete' : 'Complete Goal'}
+                </button>
+                <button className="remove-goal" type="button" onClick={() => removeGoal(goal.id)}>
+                  <Trash2 size={16} />
+                  Remove Goal
+                </button>
+              </div>
+            </section>
+          );
+        })}
       </div>
-
-      {journalHistory}
-
       <section className="panel">
         <PanelTitle icon={<Star size={18} />} title="Achievements" action={`${completedGoals.length} earned`} />
         {completedGoals.length === 0 ? (
@@ -2447,62 +3099,686 @@ function GoalsScreen({
   );
 }
 
-function PlansScreen({ plans }) {
+function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, persistPlanCompletion }) {
+  const readOnly = !setPlanProgress;
   const today = todayKey();
-  const releasedPlans = plans
-    .filter((plan) => !plan.releaseDate || plan.releaseDate <= today)
-    .sort((first, second) => (first.releaseDate || '').localeCompare(second.releaseDate || ''));
-  const lockedCount = plans.length - releasedPlans.length;
+  const sequencedPlans = sequencedPlanAccess(plans, planProgress, today);
+  const planLibrary = buildPlanLibrary(sequencedPlans);
+  const [selectedSeriesId, setSelectedSeriesId] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
+  const continueSeries = planLibrary.find((series) => series.openCount > 0 && series.completedCount < series.plans.length) ?? planLibrary[0];
+  const categories = ['All', ...Array.from(new Set(planLibrary.map((series) => series.category)))];
+  const filteredLibrary = activeCategory === 'All'
+    ? planLibrary
+    : planLibrary.filter((series) => series.category === activeCategory);
+  const visiblePlans = selectedSeries?.plans ?? [];
+  const openCount = visiblePlans.filter((plan) => plan.unlocked).length;
+  const completedCount = visiblePlans.filter((plan) => plan.completedAt).length;
+  const lockedCount = visiblePlans.length - openCount;
+
+  useEffect(() => {
+    if (selectedSeriesId && !planLibrary.some((series) => series.id === selectedSeriesId)) {
+      setSelectedSeriesId('');
+    }
+  }, [planLibrary, selectedSeriesId]);
+
+  function completePlan(planId) {
+    if (readOnly) return;
+    if (planProgress[String(planId)]) return;
+    const plan = sequencedPlans.find((item) => String(item.id) === String(planId));
+    const seriesTitle = plan ? planSeriesTitle(plan) : 'Performance Plan';
+    const seriesPlans = sequencedPlans.filter((item) => planSeriesTitle(item) === seriesTitle);
+    const nextProgress = {
+      ...planProgress,
+      [String(planId)]: today
+    };
+    const seriesAwarded = seriesPlans.length > 0 && seriesPlans.every((item) => Boolean(nextProgress[String(item.id)]));
+
+    setPlanProgress(nextProgress);
+    persistPlanCompletion?.(planId, today);
+
+    awardPoints?.({
+      type: 'plan_lesson_completed',
+      points: pointValues.planLessonCompleted,
+      label: `${plan?.challengeDay || 'Plan lesson'} completed`,
+      uniqueKey: `plan-lesson-completed-${planId}`,
+      metadata: { planId, seriesTitle, title: plan?.title || '' }
+    });
+
+    if (seriesAwarded) {
+      awardPoints?.({
+        type: 'plan_series_completed',
+        points: pointValues.planSeriesCompleted,
+        label: `${seriesTitle} completed`,
+        uniqueKey: `plan-series-completed-${seriesTitle}`,
+        metadata: { seriesTitle, lessonCount: seriesPlans.length }
+      });
+    }
+  }
+
+  if (selectedSeries) {
+    return (
+      <>
+        <section className="panel series-overview has-cover" style={{ '--plan-cover': `url(${selectedSeries.coverImage})`, '--plan-cover-position': selectedSeries.coverPosition }}>
+          <div className="series-cover" aria-hidden="true" />
+          <button className="plan-back-button" onClick={() => setSelectedSeriesId('')} type="button">
+            Back to Library
+          </button>
+          <PanelTitle icon={<CalendarDays size={18} />} title={selectedSeries.title} action={`${completedCount}/${visiblePlans.length} done`} />
+          <p>{selectedSeries.tagline}</p>
+          {lockedCount > 0 && <span>{lockedCount} lessons are waiting behind the completion flow.</span>}
+        </section>
+
+        <div className="plan-reader-stack">
+          {visiblePlans.map((plan) => (
+            <section className={plan.unlocked ? 'goal-card plan-card readonly-plan' : 'goal-card plan-card readonly-plan locked-plan'} key={plan.id}>
+              <div className="plan-read-header">
+                <span>{plan.completedAt ? 'Completed' : plan.unlocked ? (plan.challengeDay || `Day ${planDayNumber(plan) || planCurrentDay(plan)}`) : 'Locked'}</span>
+                <strong>{plan.title}</strong>
+                <em>
+                  {plan.completedAt
+                    ? `Completed ${plan.completedAt}`
+                    : plan.unlocked
+                      ? `${plan.challengeDay || `Day ${planDayNumber(plan) || planCurrentDay(plan)}`} of ${plan.challengeLength || 7}`
+                      : plan.unlockDate && plan.unlockDate > today
+                        ? `Unlocks ${plan.unlockDate}`
+                        : 'Complete the previous plan first'}
+                </em>
+                <p>{planDisplaySubject(plan)}</p>
+              </div>
+              {plan.unlocked && plan.steps.length > 0 && (
+                <PlanEpisode steps={plan.steps} planId={plan.id} />
+              )}
+              {!plan.unlocked && (
+                <div className="locked-message">
+                  <LockKeyhole size={18} />
+                  <p>Finish the previous lesson, then come back the next day to unlock this one.</p>
+                </div>
+              )}
+              {plan.unlocked && !readOnly && (
+                <button
+                  className={plan.completedAt ? 'secondary-action submitted' : 'secondary-action'}
+                  disabled={Boolean(plan.completedAt)}
+                  onClick={() => completePlan(plan.id)}
+                  type="button"
+                >
+                  <Check size={16} />
+                  {plan.completedAt ? 'Lesson Completed' : 'Mark Lesson Complete'}
+                </button>
+              )}
+            </section>
+          ))}
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <section className="panel goal-lead">
-        <PanelTitle icon={<BookOpen size={18} />} title="Performance Plans" action={`${releasedPlans.length} open`} />
-        <p>Simple mental performance plans to read before practice, games, or pressure moments.</p>
+      <section className="panel plan-hero">
+        <PanelTitle icon={<BookOpen size={18} />} title="Plan Library" action={`${planLibrary.length} series`} />
+        <h2>Choose a plan. Work the next lesson. Carry it into the day.</h2>
         <div className="goal-reminder">
           <strong>How to use this</strong>
-          <span>New plans open on the day your coach sets. Read slowly and carry one step into your next rep.</span>
+          <span>Start with Continue Training, or browse by category when you need a new focus.</span>
         </div>
       </section>
 
-      {lockedCount > 0 && (
-        <section className="panel plan-lock-note">
-          <PanelTitle icon={<CalendarDays size={18} />} title="Scheduled" action={`${lockedCount} locked`} />
-          <p>More performance plan content is scheduled and will open automatically on its release day.</p>
+      {continueSeries && (
+        <section className="panel continue-plan-panel">
+          <PanelTitle icon={<Sparkles size={18} />} title="Continue Training" action={`${continueSeries.completedCount}/${continueSeries.plans.length} done`} />
+          <button className="continue-plan-card has-cover" onClick={() => setSelectedSeriesId(continueSeries.id)} style={{ '--plan-cover': `url(${continueSeries.coverImage})`, '--plan-cover-position': continueSeries.coverPosition }} type="button">
+            <div className="plan-cover" aria-hidden="true" />
+            <div className="plan-card-copy">
+              <span>{continueSeries.category}</span>
+              <strong>{continueSeries.title}</strong>
+              <em>{nextPlanLabel(continueSeries)}</em>
+              <p>{continueSeries.tagline}</p>
+            </div>
+          </button>
         </section>
       )}
 
-      <div className="stack">
-        {releasedPlans.length === 0 ? (
-          <section className="panel">
-            <p className="empty-note">No performance plans are open yet. Check back on the next release day.</p>
-          </section>
-        ) : releasedPlans.map((plan) => (
-          <section className="goal-card plan-card readonly-plan" key={plan.id}>
-            <div className="plan-read-header">
-              <span>{plan.challengeDay || plan.releaseDate}</span>
-              <strong>{plan.title}</strong>
-              <p>{plan.subject}</p>
+      <section className="panel plan-library-panel">
+        <PanelTitle icon={<Target size={18} />} title="Browse Library" action={`${filteredLibrary.length} shown`} />
+        {planLibrary.length === 0 ? (
+          <p className="empty-note">No performance plans are open yet. Check back on the next release day.</p>
+        ) : (
+          <>
+            <div className="plan-category-strip" aria-label="Plan categories">
+              {categories.map((category) => (
+                <button
+                  className={category === activeCategory ? 'active' : ''}
+                  key={category}
+                  onClick={() => setActiveCategory(category)}
+                  type="button"
+                >
+                  {category}
+                </button>
+              ))}
             </div>
-            {plan.steps.length > 0 && (
-              <div className="plan-steps">
-                <strong>Plan steps</strong>
-                {plan.steps.map((step, index) => (
-                  <span key={`${plan.id}-${index}-${step}`}>
-                    <em>{index + 1}</em>
-                    {step}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-        ))}
-      </div>
+            <div className="plan-list">
+              {filteredLibrary.map((series) => (
+                <button className="plan-list-row has-cover" key={series.id} onClick={() => setSelectedSeriesId(series.id)} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-thumb': `url(${series.thumbnailImage})`, '--plan-cover-position': series.coverPosition }} type="button">
+                  <div className="plan-cover-thumb" aria-hidden="true" />
+                  <span>{series.category}</span>
+                  <strong>{series.title}</strong>
+                  <p>{series.tagline}</p>
+                  <em>{series.completedCount}/{series.plans.length} complete · {series.openCount} open</em>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </>
   );
 }
 
+function planSeriesTitle(plan) {
+  const subject = String(plan?.subject ?? '');
+  const match = subject.match(/Series:\s*([^.!]+)[.!]?/i);
+  return match?.[1]?.trim() || 'Performance Plans';
+}
+
+function planSeriesTagline(plan) {
+  const subject = String(plan?.subject ?? '');
+  const withoutSeries = subject.replace(/Series:\s*[^.!]+[.!]?\s*/i, '').trim();
+  return withoutSeries || 'Mental performance lessons for practice, games, and pressure moments.';
+}
+
+function planDisplaySubject(plan) {
+  return planSeriesTagline(plan);
+}
+
+function planCategory(plan) {
+  const text = `${planSeriesTitle(plan)} ${plan?.subject ?? ''}`.toLowerCase();
+  if (text.includes('90%') || text.includes('ninety') || text.includes('identity')) return 'Mindset';
+  if (text.includes('slump') || text.includes('mindset') || text.includes('belief')) return 'Mindset';
+  if (text.includes('confidence')) return 'Confidence';
+  if (text.includes('pressure') || text.includes('game')) return 'Pressure';
+  if (text.includes('leader') || text.includes('team')) return 'Leadership';
+  if (text.includes('recover') || text.includes('rest')) return 'Recovery';
+  if (text.includes('discipline') || text.includes('habit') || text.includes('standard')) return 'Discipline';
+  return 'Mindset';
+}
+
+function planCoverImage(seriesTitle) {
+  const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('90') || normalized.includes('blueprint')) {
+    return '/plan-covers/90-percent-blueprint.jpg';
+  }
+  if (normalized.includes('slump')) {
+    return '/plan-covers/slump-mindset.jpg';
+  }
+  if (normalized.includes('champion') || normalized.includes('habit')) {
+    return '/plan-covers/champion-habits-banner.jpg';
+  }
+  if (normalized.includes('control') || normalized.includes('controllable')) {
+    return '/plan-covers/control-controllables-banner.jpg';
+  }
+  if (normalized.includes('mirror') || normalized.includes('positive self image') || normalized.includes('self-image')) {
+    return '/plan-covers/mirror-banner.jpg';
+  }
+  if (normalized.includes('imagination') || normalized.includes('visualization')) {
+    return '/plan-covers/imagination-station-banner.png';
+  }
+  return '/plan-covers/90-percent-blueprint.jpg';
+}
+
+function planThumbnailImage(seriesTitle) {
+  const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('champion') || normalized.includes('habit')) {
+    return '/plan-covers/champion-habits-thumbnail.jpg';
+  }
+  if (normalized.includes('control') || normalized.includes('controllable')) {
+    return '/plan-covers/control-controllables-thumbnail.jpg';
+  }
+  if (normalized.includes('mirror') || normalized.includes('positive self image') || normalized.includes('self-image')) {
+    return '/plan-covers/mirror-thumbnail.jpg';
+  }
+  if (normalized.includes('imagination') || normalized.includes('visualization')) {
+    return '/plan-covers/imagination-station-thumbnail.png';
+  }
+  return planCoverImage(seriesTitle);
+}
+
+function planCoverPosition(seriesTitle) {
+  const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('90') || normalized.includes('blueprint')) {
+    return '64% 52%';
+  }
+  if (normalized.includes('slump')) {
+    return '80% 50%';
+  }
+  if (normalized.includes('champion') || normalized.includes('habit')) {
+    return '50% 45%';
+  }
+  if (normalized.includes('control') || normalized.includes('controllable')) {
+    return '58% 50%';
+  }
+  if (normalized.includes('mirror') || normalized.includes('positive self image') || normalized.includes('self-image')) {
+    return '54% 50%';
+  }
+  if (normalized.includes('imagination') || normalized.includes('visualization')) {
+    return '58% 50%';
+  }
+  return '70% 50%';
+}
+
+function nextPlanLabel(series) {
+  const nextOpen = series.plans.find((plan) => plan.unlocked && !plan.completedAt);
+  if (nextOpen) return `${nextOpen.challengeDay || 'Next lesson'} · ${nextOpen.title}`;
+  if (series.completedCount === series.plans.length) return 'Series complete';
+  return 'Next lesson unlocks after completion';
+}
+
+function buildPlanLibrary(plans) {
+  const groups = new Map();
+
+  plans.forEach((plan) => {
+    const title = planSeriesTitle(plan);
+    const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'performance-plans';
+    if (!groups.has(id)) {
+      groups.set(id, {
+        id,
+        title,
+        category: planCategory(plan),
+        coverImage: planCoverImage(title),
+        thumbnailImage: planThumbnailImage(title),
+        coverPosition: planCoverPosition(title),
+        tagline: planSeriesTagline(plan),
+        plans: []
+      });
+    }
+    groups.get(id).plans.push(plan);
+  });
+
+  return Array.from(groups.values()).map((series) => {
+    const orderedPlans = series.plans.sort((first, second) => planDayNumber(first) - planDayNumber(second));
+    return {
+      ...series,
+      plans: orderedPlans,
+      openCount: orderedPlans.filter((plan) => plan.unlocked).length,
+      completedCount: orderedPlans.filter((plan) => plan.completedAt).length
+    };
+  });
+}
+
+function splitEpisodeStep(step) {
+  const value = String(step ?? '').trim();
+  const separator = value.indexOf(':');
+  if (separator < 0) return { label: '', body: value };
+  return {
+    label: value.slice(0, separator).trim(),
+    body: value.slice(separator + 1).trim()
+  };
+}
+
+function planReaderBody(body) {
+  return String(body ?? '').replace(/\r\n/g, '\n').trim();
+}
+
+function readerLineType(line, previousType) {
+  const normalized = line.toLowerCase();
+  if (/^["“]/.test(line)) return 'quote';
+  if (normalized.includes('ai coach') || (previousType === 'coach' && /^["“]|^then ask|^based on/.test(normalized))) {
+    return 'coach';
+  }
+  if (
+    normalized.includes('in-app journal') ||
+    normalized.includes('create a page') ||
+    normalized.includes('answer honestly') ||
+    normalized.includes('reflect honestly') ||
+    normalized.startsWith('•') ||
+    (previousType === 'journal' && /^my |^captain says|^crew learns|^deposits|^withdrawals|^outcome goal|^performance goal|^identity goal|^today's action/.test(normalized))
+  ) {
+    return 'journal';
+  }
+  return 'body';
+}
+
+function isStoryStartLine(line) {
+  return /^(Imagine|Think about|When |Long before|For years|In \d{4}|One day|Now imagine|Maybe you|Have you ever)/.test(line);
+}
+
+function planReaderBlocks(body) {
+  const rawLines = planReaderBody(body)
+    .split(/\n{2,}/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const lines = rawLines.reduce((merged, line) => {
+    const previous = merged[merged.length - 1] ?? '';
+    const isWrappedPrompt = previous.startsWith('•') && !/[.!?]$/.test(previous) && /^[a-z]/.test(line);
+    if (isWrappedPrompt) {
+      merged[merged.length - 1] = `${previous} ${line}`;
+      return merged;
+    }
+    merged.push(line);
+    return merged;
+  }, []);
+  const blocks = [];
+  let bodyBuffer = [];
+
+  function pushBlock(type, paragraphs) {
+    const content = paragraphs.map((paragraph) => paragraph.trim()).filter(Boolean);
+    if (!content.length) return;
+    const lastBlock = blocks[blocks.length - 1];
+    if (lastBlock?.type === type && type !== 'body') {
+      lastBlock.paragraphs.push(...content);
+      return;
+    }
+    blocks.push({ type, paragraphs: content });
+  }
+
+  function flushBody() {
+    if (!bodyBuffer.length) return;
+    pushBlock('body', [bodyBuffer.join(' ')]);
+    bodyBuffer = [];
+  }
+
+  lines.forEach((line) => {
+    const previousType = blocks[blocks.length - 1]?.type ?? 'body';
+    const type = readerLineType(line, previousType);
+
+    if (type === 'quote') {
+      flushBody();
+      pushBlock('quote', [line]);
+      return;
+    }
+
+    if (type === 'body') {
+      if (bodyBuffer.length && isStoryStartLine(line)) {
+        flushBody();
+      }
+      bodyBuffer.push(line);
+      const paragraph = bodyBuffer.join(' ');
+      if (bodyBuffer.length >= 5 || paragraph.length > 520) {
+        flushBody();
+      }
+      return;
+    }
+
+    flushBody();
+    pushBlock(type, [line]);
+  });
+
+  flushBody();
+  return blocks;
+}
+
+function planDayFromId(planId) {
+  const match = String(planId ?? '').match(/day-(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function blockText(block) {
+  return block.paragraphs.join(' ');
+}
+
+function isFilmRoomStart(block) {
+  return /John Wooden|Allyson Felix|Roger Bannister|Ichiro Suzuki|Pat Summitt|Derek Jeter|Bethany Hamilton|John F\. Kennedy|United States faced|Hall of Fame/i.test(blockText(block));
+}
+
+function isPrincipleBlock(block) {
+  const text = blockText(block).trim();
+  return (
+    block.type === 'body' &&
+    text.length < 260 &&
+    (/↓|->|determines|build|become|repeated|pressure|self-trust|success is/i.test(text))
+  );
+}
+
+function buildPlanReaderSections(blocks, planId) {
+  const day = planDayFromId(planId);
+  const practiceStart = blocks.findIndex((block) => block.type === 'journal' || block.type === 'coach');
+  const beforePractice = practiceStart >= 0 ? blocks.slice(0, practiceStart) : blocks;
+  const practiceBlocks = practiceStart >= 0 ? blocks.slice(practiceStart).filter((block) => block.type === 'journal' || block.type === 'coach') : [];
+  const afterPractice = practiceStart >= 0 ? blocks.slice(practiceStart).filter((block) => block.type !== 'journal' && block.type !== 'coach') : [];
+  const sections = [];
+  const prePractice = [...beforePractice];
+  const principleBlocks = [];
+
+  const principleIndex = prePractice.findLastIndex(isPrincipleBlock);
+  if (principleIndex >= 0) {
+    principleBlocks.push(...prePractice.splice(principleIndex, 1));
+  }
+
+  const filmIndex = prePractice.findIndex(isFilmRoomStart);
+  const systemBlocks = filmIndex >= 0 ? prePractice.slice(0, filmIndex) : prePractice;
+  const filmBlocks = filmIndex >= 0 ? prePractice.slice(filmIndex) : [];
+
+  if (systemBlocks.length) sections.push({ title: 'System Update', tone: 'system', blocks: systemBlocks });
+  if (filmBlocks.length) sections.push({ title: 'Film Room', tone: 'film', blocks: filmBlocks });
+  if (practiceBlocks.length) sections.push({ title: 'Practice Install', tone: 'practice', blocks: practiceBlocks });
+  if (principleBlocks.length) {
+    sections.push({ title: 'Complete Athlete Principle', tone: 'principle', blocks: principleBlocks });
+  }
+  if (afterPractice.length) {
+    sections.push({
+      title: day === 9 ? 'What You Carry Forward' : 'What You Will Learn Next Chapter',
+      tone: 'next',
+      blocks: afterPractice
+    });
+  }
+
+  return sections.length ? sections : [{ title: '', tone: 'system', blocks }];
+}
+
+const explicitPlanSectionHeadings = new Set([
+  'Mental Model',
+  'This Chapter Will Help You',
+  'Opening',
+  'Pull Back the Curtain',
+  'Story',
+  'The Story',
+  'Why This Matters',
+  'The Turning Point',
+  'Mirror Check',
+  'System Update',
+  'Practice Install',
+  'Your Championship Habit Blueprint',
+  'Film Room',
+  'Complete Athlete Principle',
+  'Next Chapter',
+  'The Complete Athlete Declaration',
+  'One Last Thought',
+  'Final Thoughts',
+  'Series Finale',
+  'Final Complete Athlete Principle'
+]);
+
+function sectionTone(title) {
+  const normalized = title.toLowerCase();
+  if (normalized.includes('practice') || normalized.includes('blueprint')) return 'practice';
+  if (normalized.includes('film') || normalized.includes('story') || normalized.includes('curtain')) return 'film';
+  if (normalized.includes('principle') || normalized.includes('declaration')) return 'principle';
+  if (normalized.includes('next') || normalized.includes('last') || normalized.includes('finale') || normalized.includes('final thoughts')) return 'next';
+  if (normalized.includes('mental') || normalized.includes('system') || normalized.includes('mirror')) return 'system';
+  return 'body';
+}
+
+function sectionLinesToBlocks(lines) {
+  const blocks = [];
+  let bodyBuffer = [];
+  let quoteBuffer = [];
+  let bulletBuffer = [];
+
+  function flushBody() {
+    if (!bodyBuffer.length) return;
+    blocks.push({ type: 'body', paragraphs: [bodyBuffer.join(' ')] });
+    bodyBuffer = [];
+  }
+
+  function flushBullet() {
+    if (!bulletBuffer.length) return;
+    blocks.push({ type: 'body', paragraphs: [bulletBuffer.join(' ')] });
+    bulletBuffer = [];
+  }
+
+  function flushQuote() {
+    if (!quoteBuffer.length) return;
+    blocks.push({ type: 'quote', paragraphs: [quoteBuffer.join(' ')] });
+    quoteBuffer = [];
+  }
+
+  lines.forEach((line) => {
+    if (quoteBuffer.length) {
+      quoteBuffer.push(line);
+      if (/["”]$/.test(line)) flushQuote();
+      return;
+    }
+
+    if (bulletBuffer.length) {
+      if (/^[a-z]/.test(line) && !/[.!?]$/.test(bulletBuffer[bulletBuffer.length - 1])) {
+        bulletBuffer.push(line);
+        return;
+      }
+      flushBullet();
+    }
+
+    if (/^["“]/.test(line)) {
+      flushBody();
+      quoteBuffer.push(line);
+      if (/["”]$/.test(line)) flushQuote();
+      return;
+    }
+
+    if (/^(✓|•)/.test(line) || /^Old Programming$|^New Programming$|^⬇$|^↓$/.test(line)) {
+      flushBody();
+      flushQuote();
+      if (/^(✓|•)/.test(line)) {
+        bulletBuffer.push(line);
+      } else {
+        blocks.push({ type: 'body', paragraphs: [line] });
+      }
+      return;
+    }
+
+    if (bodyBuffer.length && isStoryStartLine(line)) {
+      flushBody();
+    }
+
+    bodyBuffer.push(line);
+    if (bodyBuffer.length >= 4 || bodyBuffer.join(' ').length > 460) {
+      flushBody();
+    }
+  });
+
+  flushBody();
+  flushBullet();
+  flushQuote();
+  return blocks;
+}
+
+function explicitPlanReaderSections(body) {
+  const lines = planReaderBody(body)
+    .split(/\n{2,}/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (!lines.some((line) => explicitPlanSectionHeadings.has(line))) return [];
+
+  const sections = [];
+  let current = null;
+
+  lines.forEach((line) => {
+    if (explicitPlanSectionHeadings.has(line)) {
+      const sectionTitleMap = {
+        'Mental Model': '',
+        Opening: 'Start Here',
+        'Pull Back the Curtain': 'Deeper Look',
+        Story: 'Athlete Story',
+        'The Story': 'Athlete Story'
+      };
+      const title = sectionTitleMap[line] ?? line;
+      current = { title, tone: line === 'Mental Model' ? 'model' : sectionTone(title), lines: [] };
+      sections.push(current);
+      return;
+    }
+
+    if (!current) {
+      current = { title: 'System Update', tone: 'system', lines: [] };
+      sections.push(current);
+    }
+    current.lines.push(line);
+  });
+
+  return sections
+    .map((section) => ({
+      title: section.title,
+      tone: section.tone,
+      blocks: sectionLinesToBlocks(section.lines)
+    }))
+    .filter((section) => section.blocks.length);
+}
+
+function episodeTone(label) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('train')) return 'action';
+  if (normalized.includes('film')) return 'reflect';
+  if (normalized.includes('principle')) return 'principle';
+  if (normalized.includes('next')) return 'next';
+  return 'story';
+}
+
+function episodeDisplayLabel(label) {
+  const normalized = label.toLowerCase();
+  if (
+    normalized.includes('opening') ||
+    normalized.includes('lesson') ||
+    normalized.includes('greats') ||
+    normalized.includes('shift')
+  ) {
+    return '';
+  }
+  if (normalized.includes('train')) return "Today's Training";
+  if (normalized.includes('film')) return 'Film Room';
+  if (normalized.includes('principle')) return 'Complete Athlete Principle';
+  if (normalized.includes('next')) return 'Next Lesson';
+  return label;
+}
+
+function PlanEpisode({ steps, planId }) {
+  const body = steps.join('\n\n');
+  const sections = explicitPlanReaderSections(body);
+  const readerSections = sections.length ? sections : buildPlanReaderSections(planReaderBlocks(body), planId);
+
+  return (
+    <div className="episode-flow episode-page-flow">
+      <article className="episode-section episode-page" key={`${planId}-page`}>
+        {readerSections.map((section, sectionIndex) => (
+          <section className={`reader-section reader-section-${section.tone}`} key={`${planId}-section-${sectionIndex}`}>
+            {section.title && <h3>{section.title}</h3>}
+            {section.blocks.map((block, blockIndex) => {
+              if (block.type === 'quote') {
+                return (
+                  <blockquote className="reader-quote" key={`${planId}-quote-${sectionIndex}-${blockIndex}`}>
+                    {block.paragraphs.map((paragraph, paragraphIndex) => (
+                      <p key={`${planId}-quote-${sectionIndex}-${blockIndex}-${paragraphIndex}`}>{paragraph}</p>
+                    ))}
+                  </blockquote>
+                );
+              }
+
+              return (
+                <div className="reader-copy" key={`${planId}-copy-${sectionIndex}-${blockIndex}`}>
+                  {block.paragraphs.map((paragraph, paragraphIndex) => (
+                    <p key={`${planId}-copy-${sectionIndex}-${blockIndex}-${paragraphIndex}`}>{paragraph}</p>
+                  ))}
+                </div>
+              );
+            })}
+          </section>
+        ))}
+      </article>
+    </div>
+  );
+}
+
 function JournalScreen({
+  awardPoints,
   celebrate,
   goalDraft,
   goals,
@@ -2518,6 +3794,8 @@ function JournalScreen({
   setGoals,
   standards
 }) {
+  const [reflectionHistoryOpen, setReflectionHistoryOpen] = useState(false);
+
   function saveJournalEntry() {
     const body = journal.trim();
     if (!body) return;
@@ -2532,7 +3810,14 @@ function JournalScreen({
     setJournalEntries((current) => [entry, ...current]);
     setJournal('');
     setJournalGoalId('');
-    celebrate('Journal saved. That reflection is yours to revisit.');
+    const awarded = awardPoints({
+      type: 'journal_saved',
+      points: pointValues.journalSaved,
+      label: 'Journal reflection saved',
+      uniqueKey: `journal-saved-${entry.id}`,
+      metadata: { entryType: entry.type }
+    });
+    celebrate(awarded ? `Journal saved. +${pointValues.journalSaved} points.` : 'Journal saved. That reflection is yours to revisit.');
   }
 
   function openJournalEntry(entry) {
@@ -2545,41 +3830,46 @@ function JournalScreen({
     setJournalEntries((current) => current.filter((entry) => entry.id !== id));
   }
 
-  const journalHistory = (
-    <section className="panel">
-      <PanelTitle icon={<BookOpen size={18} />} title="Reflection History" action={`${journalEntries.length} saved`} />
-      {journalEntries.length === 0 ? (
-        <p className="empty-note">Saved reflections will appear here so you can review your growth over time.</p>
-      ) : (
-        <div className="journal-history">
-          {journalEntries.map((entry) => {
-            const linkedGoal = entry.linkedGoalId
-              ? goals.find((goal) => goal.id === entry.linkedGoalId)
-              : null;
+  const journalHistoryList = journalEntries.length === 0 ? (
+    <p className="empty-note">Saved reflections will appear here so you can review your growth over time.</p>
+  ) : (
+    <div className="journal-history sheet-history-list">
+      {journalEntries.map((entry) => {
+        const linkedGoal = entry.linkedGoalId
+          ? goals.find((goal) => goal.id === entry.linkedGoalId)
+          : null;
 
-            return (
-              <article className="journal-entry" key={entry.id}>
-                <button onClick={() => openJournalEntry(entry)}>
-                  <span>{entry.type}</span>
-                  <strong>{entry.date} at {entry.time}</strong>
-                  {linkedGoal && <em>Connected to {linkedGoal.label}</em>}
-                  <p>{entry.body}</p>
-                </button>
-                <button className="remove-standard" onClick={() => removeJournalEntry(entry.id)} aria-label={`Remove journal entry from ${entry.date}`}>
-                  <Trash2 size={16} />
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
+        return (
+          <article className="journal-entry" key={entry.id}>
+            <button
+              onClick={() => {
+                openJournalEntry(entry);
+                setReflectionHistoryOpen(false);
+              }}
+              type="button"
+            >
+              <span>{entry.type}</span>
+              <strong>{entry.date} at {entry.time}</strong>
+              {linkedGoal && <em>Connected to {linkedGoal.label}</em>}
+              <p>{entry.body}</p>
+            </button>
+            <button className="remove-standard" onClick={() => removeJournalEntry(entry.id)} type="button" aria-label={`Remove journal entry from ${entry.date}`}>
+              <Trash2 size={16} />
+            </button>
+          </article>
+        );
+      })}
+    </div>
   );
 
   return (
     <>
-      <section className="panel">
-        <PanelTitle icon={<PenLine size={18} />} title="Write What You Need To Remember" action={todayKey()} />
+      <section className="panel journal-panel">
+        <PanelTitle icon={<PenLine size={18} />} title="Journal" action="Private" />
+        <div className="journal-intro">
+          <strong>Write what you need to remember.</strong>
+          <span>Use this space for reflection. Your goals and productivity tracker live below.</span>
+        </div>
         <label className="journal-label" htmlFor="journal-type">
           Entry type
         </label>
@@ -2622,12 +3912,40 @@ function JournalScreen({
           <PenLine size={18} />
           Save Reflection
         </button>
+        <button className="history-sheet-trigger" onClick={() => setReflectionHistoryOpen(true)} type="button">
+          <BookOpen size={16} />
+          View reflection history
+          <span>{journalEntries.length}</span>
+        </button>
       </section>
+      {reflectionHistoryOpen && (
+        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setReflectionHistoryOpen(false)}>
+          <section
+            aria-label="Reflection history"
+            aria-modal="true"
+            className="bottom-sheet reflection-history-sheet"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-head">
+              <div>
+                <span>{journalEntries.length} saved</span>
+                <strong>Reflection History</strong>
+              </div>
+              <button className="icon-button sheet-close" onClick={() => setReflectionHistoryOpen(false)} type="button" aria-label="Close reflection history">
+                <X size={18} />
+              </button>
+            </div>
+            {journalHistoryList}
+          </section>
+        </div>
+      )}
       <GoalsScreen
+        awardPoints={awardPoints}
         celebrate={celebrate}
         goalDraft={goalDraft}
         goals={goals}
-        journalHistory={journalHistory}
         setGoalDraft={setGoalDraft}
         setGoals={setGoals}
         standards={standards}
@@ -2641,9 +3959,12 @@ function CoachScreen({
   athleteProfile,
   authSession,
   coachSessions,
+  lesson,
   goals,
   messages,
   messageDraft,
+  planProgress,
+  plans,
   standards,
   setActiveCoachSessionId,
   setCoachSessions,
@@ -2685,7 +4006,7 @@ function CoachScreen({
       return `I get why that feels frustrating. I am still going to challenge you: even if part of this is unfair, the useful question is what you can own next. Tell me the exact ${topic} moment and what you did right after it, then we can choose the response you want to train.`;
     }
 
-    return `That sounds like a real ${topic} moment, but I do not want to guess at the whole story. What happened right before you felt this, and what do you wish you had done differently? Once I know that, we can turn it into one clear standard for today.`;
+    return `That sounds like a real ${topic} moment, but I do not want to guess at the whole story. What happened right before you felt this, and what do you wish you had done differently? Once I know that, we can turn it into one clear action for today.`;
   }
 
   function saveCoachSession(sessionId, sessionTitle, nextMessages) {
@@ -2729,18 +4050,45 @@ function CoachScreen({
           location: athleteProfile?.location || '',
           goals: goals.map((goal) => `${goal.label}: ${goal.value}`),
           standards: standards.filter((standard) => standard.active !== false).map((standard) => standard.label)
+        },
+        curriculum: {
+          dailyDeposit: {
+            title: lesson?.title || '',
+            body: lesson?.body || '',
+            focusQuestion: lessonFocusQuestion(lesson),
+            releaseDate: lesson?.releaseDate || todayKey()
+          },
+          performancePlans: sequencedPlanAccess(plans, planProgress)
+            .slice(0, 18)
+            .map((plan) => ({
+              title: plan.title,
+              seriesTitle: planSeriesTitle(plan),
+              subject: plan.subject,
+              steps: plan.steps,
+              releaseDate: plan.releaseDate,
+              challengeDay: plan.challengeDay,
+              challengeLength: plan.challengeLength,
+              currentDay: planCurrentDay(plan),
+              completedAt: plan.completedAt || '',
+              unlocked: plan.unlocked,
+              unlockDate: plan.unlockDate || ''
+            }))
         }
       })
     });
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload.error || 'Coach backend unavailable.');
+      const error = new Error(payload.error || 'Coach backend unavailable.');
+      error.code = payload.code;
+      error.messageCount = payload.messageCount;
+      error.messageLimit = payload.messageLimit;
+      throw error;
     }
     if (!payload.reply) {
       throw new Error('Coach backend returned an empty reply.');
     }
-    return payload.reply;
+    return payload;
   }
 
   async function sendMessage() {
@@ -2759,12 +4107,31 @@ function CoachScreen({
     saveCoachSession(sessionId, sessionTitle, nextMessages);
 
     try {
-      const reply = await requestCoachReply(clean, nextMessages, sessionId, sessionTitle);
-      saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
+      const payload = await requestCoachReply(clean, nextMessages, sessionId, sessionTitle);
+      if (payload.messageLimit) {
+        setCoachStatus(`${payload.messageCount} of ${payload.messageLimit} coach messages used today.`);
+      }
+      saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: payload.reply }]);
     } catch (error) {
-      const reply = coachReply(clean);
-      setCoachStatus('Backend coach is not configured yet, so this chat used the prototype coach.');
-      saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
+      if (error.code === 'coach_daily_limit') {
+        setCoachStatus(error.message);
+        setMessages(messages);
+        if (messages.length === 0 && !activeCoachSessionId) {
+          setActiveCoachSessionId(null);
+          setCoachSessions((current) => current.filter((session) => session.id !== sessionId));
+        } else {
+          saveCoachSession(sessionId, sessionTitle, messages);
+        }
+        return;
+      }
+      if (import.meta.env.DEV) {
+        const reply = coachReply(clean);
+        setCoachStatus('Local coach backend is not connected, so this chat used the prototype coach.');
+        saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
+      } else {
+        setCoachStatus('My Mindset Coach could not connect to the backend. Try again in a moment.');
+        saveCoachSession(sessionId, sessionTitle, nextMessages);
+      }
     } finally {
       setCoachThinking(false);
     }
@@ -2796,9 +4163,22 @@ function CoachScreen({
   }
 
   return (
-    <>
-      <section className="panel">
-        <PanelTitle icon={<MessageCircle size={18} />} title="Quick Coaching" action="Choose one" />
+    <div className="coach-screen">
+      <section className="coach-conversation">
+        <div className="coach-conversation-head">
+          <div className="coach-mark">
+            <Sparkles size={18} />
+          </div>
+          <div>
+            <span>Mindset Coach</span>
+            <strong>{activeCoachSessionId ? 'Conversation open' : 'New conversation'}</strong>
+          </div>
+          <button className="ghost-action" onClick={startNewChat}>
+            <Plus size={16} />
+            New
+          </button>
+        </div>
+
         <div className="coach-topics">
           {coachTopics.map((topic) => (
             <button key={topic.title} onClick={() => useTopic(topic.prompt)}>
@@ -2806,76 +4186,66 @@ function CoachScreen({
             </button>
           ))}
         </div>
-      </section>
-      <section className="panel mental-reps-panel">
-        <PanelTitle icon={<Brain size={18} />} title="Lock In" action="Guided" />
-        <div className="visualization-flow">
-          <span>
-            <strong>Breathe</strong>
-            In through your nose. Out slow. Let your shoulders drop.
-          </span>
-          <span>
-            <strong>See it</strong>
-            Picture one practice or game moment where you stay composed.
-          </span>
-          <span>
-            <strong>Feel it</strong>
-            See your body language, your pace, your voice, and your next rep.
-          </span>
-          <span>
-            <strong>Carry it</strong>
-            Repeat: I am ready for the next play.
-          </span>
+        <p className="privacy-note">
+          My Mindset Coach is for performance mindset support, not therapy or medical care. If safety, injury, abuse, or self-harm is involved, tell a trusted adult immediately.
+        </p>
+
+        <section className="chat-panel">
+          {messages.length === 0 && (
+            <div className="coach-empty-state">
+              <MessageCircle size={24} />
+              <strong>What do you want to work on today?</strong>
+              <span>Bring a goal, a game moment, a question, or something you want to sharpen.</span>
+            </div>
+          )}
+          {messages.map((message, index) => (
+            <div className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'} key={`${message.role}-${index}`}>
+              {message.text}
+            </div>
+          ))}
+          {coachThinking && <div className="bubble coach thinking">Thinking it through...</div>}
+        </section>
+
+        {coachStatus && <p className="coach-status">{coachStatus}</p>}
+        <div className="composer">
+          <input
+            value={messageDraft}
+            onChange={(event) => setMessageDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') sendMessage();
+            }}
+            disabled={coachThinking}
+            placeholder="Ask your coach..."
+          />
+          <button className="icon-button dark" onClick={sendMessage} aria-label="Send message" disabled={coachThinking}>
+            <Send size={18} />
+          </button>
         </div>
       </section>
-      <section className="panel">
-        <PanelTitle icon={<BookOpen size={18} />} title="Coach History" action={`${coachSessions.length} saved`} />
-        <button className="primary-action full" onClick={startNewChat}>
-          <Plus size={18} />
-          New Chat
-        </button>
-        {coachSessions.length === 0 ? (
-          <p className="empty-note">Saved coach conversations will appear here for review.</p>
-        ) : (
-          <div className="coach-history">
-            {coachSessions.map((session) => (
-              <article className={session.id === activeCoachSessionId ? 'coach-session active' : 'coach-session'} key={session.id}>
-                <button onClick={() => openCoachSession(session)}>
-                  <strong>{session.title}</strong>
-                  <span>{session.date} at {session.time}</span>
-                </button>
-                <button className="remove-standard" onClick={() => removeCoachSession(session.id)} aria-label={`Remove coach chat from ${session.date}`}>
-                  <Trash2 size={16} />
-                </button>
-              </article>
-            ))}
-          </div>
-        )}
+
+      <section className="coach-support-grid">
+        <div className="panel coach-history-panel">
+          <PanelTitle icon={<BookOpen size={18} />} title="History" action={`${coachSessions.length} saved`} />
+          {coachSessions.length === 0 ? (
+            <p className="empty-note">Saved coach conversations will appear here.</p>
+          ) : (
+            <div className="coach-history">
+              {coachSessions.map((session) => (
+                <article className={session.id === activeCoachSessionId ? 'coach-session active' : 'coach-session'} key={session.id}>
+                  <button onClick={() => openCoachSession(session)}>
+                    <strong>{session.title}</strong>
+                    <span>{session.date} at {session.time}</span>
+                  </button>
+                  <button className="remove-standard" onClick={() => removeCoachSession(session.id)} aria-label={`Remove coach chat from ${session.date}`}>
+                    <Trash2 size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
-      <section className="chat-panel">
-        {messages.map((message, index) => (
-          <div className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'} key={`${message.role}-${index}`}>
-            {message.text}
-          </div>
-        ))}
-        {coachThinking && <div className="bubble coach">Thinking it through...</div>}
-      </section>
-      {coachStatus && <p className="coach-status">{coachStatus}</p>}
-      <div className="composer">
-        <input
-          value={messageDraft}
-          onChange={(event) => setMessageDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') sendMessage();
-          }}
-          disabled={coachThinking}
-          placeholder="Ask about mindset, training, pressure, team, injury..."
-        />
-        <button className="icon-button dark" onClick={sendMessage} aria-label="Send message" disabled={coachThinking}>
-          <Send size={18} />
-        </button>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -2957,7 +4327,7 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
           )}
         </div>
       </section>
-      <section className="panel">
+      <section className="panel add-goal-panel">
         <PanelTitle icon={<UserRound size={18} />} title="Profile Details" action="Athlete controlled" />
         <div className="photo-actions">
           <label className="photo-upload">
@@ -2994,7 +4364,7 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
           </label>
         </div>
       </section>
-      <section className="panel">
+      <section className="panel achievements-panel">
         <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Share" />
         <label className="journal-label" htmlFor="parent-contact">
           Parent email or phone
@@ -3027,7 +4397,7 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
         </div>
         {shareFeedback && <p className="inline-note">{shareFeedback}</p>}
       </section>
-      <section className="panel">
+      <section className="panel privacy-controls-panel">
         <PanelTitle icon={<Shield size={18} />} title="Privacy Controls" action="Parent view" />
         <div className="privacy-list">
           <label>
@@ -3039,7 +4409,7 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
             />
           </label>
           <label>
-            <span>Standards submitted visible to parent</span>
+            <span>Productivity tracker visible to parent</span>
             <input
               type="checkbox"
               checked={privacySettings.standardsVisible}
@@ -3065,87 +4435,84 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
 }
 
 function ParentDashboard({
-  completion,
-  confidenceAverage,
+  athleteScore,
   goals,
-  journalEntries,
   lesson,
+  linkedAthleteId,
+  linkParentAccessCode,
+  parentAccessDraft,
+  parentLinkChecked,
+  parentLinkFeedback,
   parentMessage,
+  planProgress,
+  plans,
   privacySettings,
-  readinessScores,
+  setParentAccessDraft,
+  setParentLinkFeedback,
   standardsCompleted,
-  standardsHistory,
-  standardsTotal,
-  submittedToday
+  standardsTotal
 }) {
-  const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100).length;
-  const latestJournalDate = journalEntries[0]?.date ?? 'None yet';
-  const recentStandardsHistory = [...standardsHistory].reverse().slice(0, 7);
+  const planSeriesStats = planSeriesCompletion(plans, planProgress);
+
+  if (!parentLinkChecked) {
+    return (
+      <section className="panel parent-access-panel">
+        <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Checking" />
+        <p className="empty-note">Checking your athlete connection...</p>
+      </section>
+    );
+  }
+
+  if (!linkedAthleteId) {
+    return (
+      <>
+        <section className="panel parent-access-panel">
+          <PanelTitle icon={<Users size={18} />} title="Link Athlete" action="Access code" />
+          <p className="info-note">Enter the parent access code from your athlete’s profile or invite link.</p>
+          <form className="standard-form" onSubmit={linkParentAccessCode}>
+            <input
+              aria-label="Parent access code"
+              placeholder="Parent access code"
+              value={parentAccessDraft}
+              onChange={(event) => {
+                setParentAccessDraft(event.target.value);
+                setParentLinkFeedback('');
+              }}
+            />
+            <button className="primary-action" type="submit">
+              Link Athlete
+            </button>
+          </form>
+          {parentLinkFeedback && <p className="inline-note">{parentLinkFeedback}</p>}
+        </section>
+        <ParentCornerSection parentMessage={parentMessage} />
+      </>
+    );
+  }
 
   return (
     <>
       <div className="metric-grid">
+        <Metric icon={<Trophy size={18} />} label="Athlete Score" value={athleteScore} />
         {privacySettings.standardsVisible && (
-          <Metric icon={<BookOpen size={18} />} label="Standards Submitted" value={submittedToday ? 'Yes' : 'No'} />
-        )}
-        {privacySettings.readinessVisible && (
-          <Metric icon={<BarChart3 size={18} />} label="Daily Readiness" value={`${confidenceAverage}/10`} />
+          <Metric icon={<BadgeCheck size={18} />} label="Productivity" value={`${standardsCompleted}/${standardsTotal}`} />
         )}
         {privacySettings.standardsVisible && (
-          <Metric icon={<BadgeCheck size={18} />} label="Standards" value={`${standardsCompleted}/${standardsTotal}`} />
+          <Metric icon={<BookOpen size={18} />} label="Plans Completed" value={`${planSeriesStats.completed}/${planSeriesStats.total}`} />
         )}
-        {!privacySettings.readinessVisible && !privacySettings.standardsVisible && (
+        {!privacySettings.standardsVisible && (
           <Metric icon={<Shield size={18} />} label="Privacy" value="Limited" />
         )}
       </div>
-      <section className="panel">
-        <PanelTitle icon={<Activity size={18} />} title="Athlete Snapshot" action="Today" />
-        <div className="parent-snapshot">
-          <span>
-            <strong>Daily Deposit</strong>
-            {lesson.title}
-          </span>
-          {privacySettings.standardsVisible && (
-            <span>
-              <strong>Standards</strong>
-              {standardsCompleted}/{standardsTotal} complete
-            </span>
-          )}
-          {privacySettings.readinessVisible && (
-            <span>
-              <strong>Readiness</strong>
-              {confidenceAverage}/10
-            </span>
-          )}
-          {privacySettings.goalsVisible && (
-            <span>
-              <strong>Goals</strong>
-              {completedGoals} complete
-            </span>
-          )}
-          <span>
-            <strong>Reflection</strong>
-            Latest saved: {latestJournalDate}
-          </span>
-        </div>
+      <section className="panel daily-deposit-panel parent-daily-deposit-panel">
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
+        <h2>{lesson.title}</h2>
+        <p>{lesson.body}</p>
       </section>
-      <section className="panel">
-        <PanelTitle icon={<Users size={18} />} title="Parent Corner" action={parentMessage.sendDate} />
-        <h2>{parentMessage.title}</h2>
-        <p>{parentMessage.body}</p>
-        <div className="parent-cues">
-          <span>
-            <strong>Ask</strong>
-            {parentMessage.conversationCue}
-          </span>
-          <span>
-            <strong>Avoid</strong>
-            {parentMessage.avoid}
-          </span>
-        </div>
-      </section>
+      <ParentCornerSection parentMessage={parentMessage} />
+      <ParentPlanLibrary plans={plans} planProgress={planProgress} />
       {privacySettings.goalsVisible && (
-        <section className="panel">
+        <section className="panel parent-goal-panel">
           <PanelTitle icon={<Goal size={18} />} title="Goal Snapshot" action={`${goals.length} goals`} />
           <div className="parent-goals">
             {goals.slice(0, 3).map((goal) => (
@@ -3157,60 +4524,250 @@ function ParentDashboard({
           </div>
         </section>
       )}
-      {privacySettings.readinessVisible && (
-        <section className="panel">
-          <PanelTitle icon={<LineChart size={18} />} title="Readiness Trend" action="7 days" />
-          <div className="trend-bars">
-            {readinessScores.map((entry) => (
-              <span
-                aria-label={`${entry.date}: ${entry.score}/10`}
-                className={entry.score === 0 ? 'empty' : ''}
-                key={entry.date}
-                style={{ height: `${Math.max(entry.score, 0.7) * 10}%` }}
+    </>
+  );
+}
+
+function ParentCornerSection({ parentMessage }) {
+  const [selectedParentContentId, setSelectedParentContentId] = useState('');
+  const parentContent = [
+    {
+      id: 'daily-parent-corner',
+      category: 'Mindset Support',
+      title: parentMessage.title,
+      date: parentMessage.sendDate,
+      promise: parentMessage.body,
+      ask: parentMessage.conversationCue,
+      avoid: parentMessage.avoid
+    }
+  ];
+  const selectedContent = parentContent.find((item) => item.id === selectedParentContentId);
+
+  if (selectedContent) {
+    return (
+      <section className="panel parent-corner-detail">
+        <button className="plan-back-button" onClick={() => setSelectedParentContentId('')} type="button">
+          Back to Parent Corner
+        </button>
+        <PanelTitle icon={<Users size={18} />} title={selectedContent.title} action={selectedContent.date} />
+        <p>{selectedContent.promise}</p>
+        <div className="parent-cues">
+          <span>
+            <strong>Ask</strong>
+            {selectedContent.ask}
+          </span>
+          <span>
+            <strong>Avoid</strong>
+            {selectedContent.avoid}
+          </span>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      <section className="panel parent-corner-hero">
+        <PanelTitle icon={<Users size={18} />} title="Parent Corner" action={`${parentContent.length} guide`} />
+        <h2>Support the daily work behind the scenes.</h2>
+        <div className="goal-reminder">
+          <strong>How to use this</strong>
+          <span>Read the parent guide, then use the conversation cue to help your athlete think through the day without taking over the work.</span>
+        </div>
+      </section>
+
+      <section className="panel parent-corner-library">
+        <PanelTitle icon={<Sparkles size={18} />} title="Continue Parent Guide" action={parentMessage.sendDate} />
+        <button className="continue-plan-card parent-guide-card" onClick={() => setSelectedParentContentId(parentContent[0].id)} type="button">
+          <span>{parentContent[0].category}</span>
+          <strong>{parentContent[0].title}</strong>
+          <em>Today’s parent focus</em>
+          <p>{parentContent[0].promise}</p>
+        </button>
+      </section>
+
+      <section className="panel parent-corner-library">
+        <PanelTitle icon={<Target size={18} />} title="Browse Parent Content" action={`${parentContent.length} shown`} />
+        <div className="plan-category-strip" aria-label="Parent content categories">
+          <button className="active" type="button">All</button>
+          <button type="button">Mindset Support</button>
+        </div>
+        <div className="plan-list">
+          {parentContent.map((item) => (
+            <button className="plan-list-row parent-guide-row" key={item.id} onClick={() => setSelectedParentContentId(item.id)} type="button">
+              <span>{item.category}</span>
+              <strong>{item.title}</strong>
+              <p>{item.promise}</p>
+              <em>{item.date}</em>
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function ParentPlanLibrary({ plans, planProgress }) {
+  const today = todayKey();
+  const sequencedPlans = sequencedPlanAccess(plans, planProgress, today);
+  const planLibrary = buildPlanLibrary(sequencedPlans);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [selectedSeriesId, setSelectedSeriesId] = useState('');
+  const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
+  const defaultLesson = selectedSeries?.plans.find((plan) => plan.unlocked && !plan.completedAt)
+    ?? selectedSeries?.plans.find((plan) => plan.unlocked)
+    ?? selectedSeries?.plans[0]
+    ?? null;
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const selectedPlan = selectedSeries?.plans.find((plan) => String(plan.id) === String(selectedPlanId)) ?? defaultLesson;
+  const openSeriesCount = planLibrary.filter((series) => series.openCount > 0).length;
+  const completedSeriesCount = planLibrary.filter((series) => series.completedCount === series.plans.length).length;
+
+  useEffect(() => {
+    if (!libraryOpen) {
+      setSelectedSeriesId('');
+    }
+  }, [libraryOpen]);
+
+  useEffect(() => {
+    if (selectedSeriesId && !planLibrary.some((series) => series.id === selectedSeriesId)) {
+      setSelectedSeriesId('');
+    }
+  }, [planLibrary, selectedSeriesId]);
+
+  useEffect(() => {
+    if (!selectedSeries) {
+      setSelectedPlanId('');
+      return;
+    }
+    if (!selectedPlanId || !selectedSeries.plans.some((plan) => String(plan.id) === String(selectedPlanId))) {
+      setSelectedPlanId(defaultLesson?.id ?? '');
+    }
+  }, [defaultLesson?.id, selectedPlanId, selectedSeries]);
+
+  if (!libraryOpen) {
+    return (
+      <section className="panel parent-plans-panel parent-plans-closed">
+        <PanelTitle icon={<BookOpen size={18} />} title="Performance Plans" action={`${planLibrary.length} series`} />
+        <div>
+          <h2>Review the same plans your athlete is working through.</h2>
+          <p>Open the library when you want to see each series, follow lesson progress, or talk through a chapter together.</p>
+        </div>
+        <button className="primary-action full" onClick={() => setLibraryOpen(true)} type="button">
+          Open Performance Plans
+        </button>
+      </section>
+    );
+  }
+
+  if (selectedSeries) {
+    return (
+      <section className="panel parent-plans-panel parent-plans-detail">
+        <button className="plan-back-button" onClick={() => setSelectedSeriesId('')} type="button">
+          Back to Plan Library
+        </button>
+        <div className="parent-plans-banner has-cover" style={{ '--plan-cover': `url(${selectedSeries.coverImage})`, '--plan-cover-position': selectedSeries.coverPosition }}>
+          <div className="series-cover" aria-hidden="true" />
+          <PanelTitle icon={<BookOpen size={18} />} title={selectedSeries.title} action={`${selectedSeries.completedCount}/${selectedSeries.plans.length} done`} />
+          <p>{selectedSeries.tagline}</p>
+        </div>
+        <div className="parent-plan-detail-layout">
+          <div className="parent-lesson-list" aria-label={`${selectedSeries.title} lessons`}>
+            {selectedSeries.plans.map((plan) => (
+              <button
+                className={String(selectedPlan?.id) === String(plan.id) ? 'active' : ''}
+                key={plan.id}
+                onClick={() => setSelectedPlanId(plan.id)}
+                type="button"
               >
-                <em>{entry.score}</em>
-              </span>
+                <span>{plan.completedAt ? 'Completed' : plan.unlocked ? plan.challengeDay : 'Locked'}</span>
+                <strong>{plan.title}</strong>
+                <em>
+                  {plan.completedAt
+                    ? `Completed ${plan.completedAt}`
+                    : plan.unlocked
+                      ? 'Available to review'
+                      : 'Unlocks through athlete progress'}
+                </em>
+              </button>
             ))}
           </div>
-        </section>
-      )}
-      {privacySettings.standardsVisible && (
-        <section className="panel">
-          <PanelTitle icon={<BadgeCheck size={18} />} title="Standards History" action={`${standardsHistory.length} days`} />
-          {recentStandardsHistory.length === 0 ? (
-            <p className="empty-note">Submitted standards history will appear here after the athlete locks in a day.</p>
-          ) : (
-            <div className="standards-history parent-history">
-              {recentStandardsHistory.map((entry) => (
-                <article className="standards-history-row" key={entry.date}>
-                  <div>
-                    <strong>{entry.date}</strong>
-                    <span>{entry.completed}/{entry.total} completed at {entry.submittedAt || 'submission'}</span>
+          <article className={selectedPlan?.unlocked ? 'goal-card plan-card readonly-plan parent-plan-reader' : 'goal-card plan-card readonly-plan parent-plan-reader locked-plan'}>
+            {selectedPlan ? (
+              <>
+                <div className="plan-read-header">
+                  <span>{selectedPlan.completedAt ? 'Completed' : selectedPlan.unlocked ? selectedPlan.challengeDay : 'Locked'}</span>
+                  <strong>{selectedPlan.title}</strong>
+                  <em>{selectedPlan.unlocked ? 'Parent review mode' : 'Athlete unlock required'}</em>
+                  <p>{planDisplaySubject(selectedPlan)}</p>
+                </div>
+                {selectedPlan.unlocked ? (
+                  <PlanEpisode steps={selectedPlan.steps} planId={selectedPlan.id} />
+                ) : (
+                  <div className="locked-message">
+                    <LockKeyhole size={18} />
+                    <p>This lesson is still locked for the athlete. Parents can see the roadmap here without crowding the dashboard.</p>
                   </div>
-                  <b>{entry.percent}%</b>
-                  <ul>
-                    {entry.standards.filter((standard) => standard.done).map((standard, index) => (
-                      <li className="done" key={`${entry.date}-${index}`}>
-                        {standard.label}
-                        {standard.goalLabel && <em>{standard.goalLabel}</em>}
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-    </>
+                )}
+              </>
+            ) : (
+              <p className="empty-note">Choose a plan lesson to review.</p>
+            )}
+          </article>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel parent-plans-panel">
+      <div className="parent-library-header">
+        <PanelTitle icon={<BookOpen size={18} />} title="Athlete Plan Library" action={`${planLibrary.length} series`} />
+        <button className="ghost-action compact" onClick={() => setLibraryOpen(false)} type="button">
+          Close
+        </button>
+      </div>
+      <div className="parent-plan-overview">
+        <span>
+          <strong>{openSeriesCount}</strong>
+          Open series
+        </span>
+        <span>
+          <strong>{completedSeriesCount}</strong>
+          Completed series
+        </span>
+        <span>
+          <strong>{planLibrary.length}</strong>
+          Plan series
+        </span>
+      </div>
+      <p className="parent-plan-intro">Review what your athlete is working through, then use one idea from the lesson to start a thoughtful conversation.</p>
+      <div className="parent-plan-series-grid">
+        {planLibrary.map((series) => (
+          <button
+            className="parent-plan-series-card has-cover"
+            key={series.id}
+            onClick={() => setSelectedSeriesId(series.id)}
+            style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-thumb': `url(${series.thumbnailImage})`, '--plan-cover-position': series.coverPosition }}
+            type="button"
+          >
+            <div className="plan-cover-thumb" aria-hidden="true" />
+            <span>{series.category}</span>
+            <strong>{series.title}</strong>
+            <p>{series.tagline}</p>
+            <em>{series.completedCount}/{series.plans.length} complete · {series.openCount} open</em>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
 function BottomNav({ tab, setTab }) {
   const items = [
     ['home', Home, 'home'],
+    ['journal', PenLine, 'goals'],
     ['plans', BookOpen, 'plans'],
-    ['journal', PenLine, 'reflect'],
     ['coach', MessageCircle, 'coach'],
     ['profile', UserRound, 'profile']
   ];

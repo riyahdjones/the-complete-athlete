@@ -26,6 +26,6 @@ export function adminEnv() {
   return {
     supabaseUrl: process.env.SUPABASE_URL,
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    dashboardPassword: process.env.ADMIN_DASHBOARD_PASSWORD || 'completeadmin'
+    dashboardPassword: process.env.ADMIN_DASHBOARD_PASSWORD
   };
 }

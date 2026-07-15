@@ -22,14 +22,16 @@ export async function saveDailyDeposit(formData) {
   await requireAdmin();
   const supabase = supabaseAdmin();
   const id = text(formData, 'id');
-  const title = requireTitle(text(formData, 'title'));
   const body = text(formData, 'body');
+  const focusQuestion = text(formData, 'focusQuestion');
   const releaseDate = text(formData, 'releaseDate') || new Date().toISOString().slice(0, 10);
+  const title = text(formData, 'title');
   const status = text(formData, 'status') || 'draft';
 
   const payload = {
     title,
     body,
+    focus_question: focusQuestion,
     release_date: releaseDate,
     status
   };
@@ -42,6 +44,7 @@ export async function saveDailyDeposit(formData) {
   if (error) throw new Error(error.message);
 
   revalidatePath('/');
+  revalidatePath('/deposits');
 }
 
 export async function deleteDailyDeposit(formData) {
@@ -53,6 +56,7 @@ export async function deleteDailyDeposit(formData) {
   if (error) throw new Error(error.message);
 
   revalidatePath('/');
+  revalidatePath('/deposits');
 }
 
 export async function savePerformancePlan(formData) {
@@ -64,10 +68,26 @@ export async function savePerformancePlan(formData) {
   const releaseDate = text(formData, 'releaseDate') || new Date().toISOString().slice(0, 10);
   const challengeDay = text(formData, 'challengeDay');
   const challengeLength = Number(text(formData, 'challengeLength')) || 7;
-  const steps = text(formData, 'steps')
+
+  const episodeSections = [
+    ['Opening', text(formData, 'opening')],
+    ['The Lesson', text(formData, 'lesson')],
+    ['The Greats', text(formData, 'greats')],
+    ['The Shift', text(formData, 'shift')],
+    ['Train Today', text(formData, 'trainToday')],
+    ['Film Room', text(formData, 'filmRoom')],
+    ["Coach's Corner", text(formData, 'coachCorner')],
+    ['Complete Athlete Principle', text(formData, 'principle')],
+    ['Next Episode', text(formData, 'nextEpisode')]
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label}: ${value}`);
+
+  const legacySteps = text(formData, 'steps')
     .split('\n')
     .map((step) => step.trim())
     .filter(Boolean);
+  const steps = episodeSections.length ? episodeSections : legacySteps;
 
   const payload = {
     title,

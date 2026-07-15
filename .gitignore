@@ -6,3 +6,5 @@ dist/
 admin-dashboard/.next/
 admin-dashboard/node_modules/
 .vercel/
+.vercel
+.env*
