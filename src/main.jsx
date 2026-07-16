@@ -68,6 +68,16 @@ const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
 const prototypeBypassLogin = false;
+const productionApiOrigin = import.meta.env.VITE_API_ORIGIN || 'https://the-complete-athlete.vercel.app';
+
+function appApiUrl(path) {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (typeof window === 'undefined') return cleanPath;
+
+  const host = window.location.host;
+  const isProductionWeb = host === 'the-complete-athlete.vercel.app';
+  return isProductionWeb ? cleanPath : `${productionApiOrigin}${cleanPath}`;
+}
 
 const pointValues = {
   standardsCompleted: 25,
@@ -1570,7 +1580,7 @@ function App() {
     const token = data.session?.access_token;
     if (!token) return 'Sign in again before deleting your account.';
 
-    const response = await fetch('/api/delete-account', {
+    const response = await fetch(appApiUrl('/api/delete-account'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -4035,7 +4045,7 @@ function CoachScreen({
       }
     }
 
-    const response = await fetch('/api/coach', {
+    const response = await fetch(appApiUrl('/api/coach'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
