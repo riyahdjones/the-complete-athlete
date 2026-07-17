@@ -604,7 +604,7 @@ function lessonFromSupabase(row) {
   return {
     id: row.id,
     title: row.title ?? '',
-    time: '5 min',
+    time: '2 min',
     status: row.status === 'posted' ? 'Posted' : row.status === 'scheduled' ? 'Scheduled' : 'Draft',
     sendDate: row.release_date ?? todayKey(),
     focusQuestion: row.focus_question ?? '',
@@ -2592,7 +2592,7 @@ function HomeScreen({
       </section>
 
       <section className="panel today-focus-panel">
-        <PanelTitle icon={<Target size={18} />} title="Today's Focus" action="Question" />
+        <PanelTitle icon={<Target size={18} />} title="Today's Focus" />
         <div className="focus-question">
           <strong>{todaysFocus}</strong>
         </div>
