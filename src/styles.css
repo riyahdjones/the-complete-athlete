@@ -5527,3 +5527,51 @@ select {
     padding-inline: 10px;
   }
 }
+
+/* iOS shell fit fixes: keep content below the notch and slider rows aligned. */
+.topbar {
+  padding-top: max(18px, calc(env(safe-area-inset-top) + 12px));
+}
+
+.slider-row {
+  grid-template-columns: minmax(78px, 0.42fr) minmax(0, 1fr) 30px;
+  min-width: 0;
+}
+
+.slider-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.slider-row strong {
+  justify-self: end;
+  min-width: 24px;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    padding-top: max(16px, calc(env(safe-area-inset-top) + 14px));
+  }
+
+  .top-greeting {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .readiness-panel .slider-row {
+    grid-template-columns: minmax(84px, 0.38fr) minmax(0, 1fr) 28px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .readiness-panel .slider-row {
+    grid-template-columns: 1fr 30px;
+    gap: 7px 9px;
+  }
+
+  .readiness-panel .slider-row span {
+    grid-column: 1 / -1;
+  }
+}
