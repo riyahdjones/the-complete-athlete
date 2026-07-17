@@ -41,16 +41,21 @@ Safety boundaries:
 
 Response style:
 - Sound like a real coach in a private conversation, not a worksheet, script, or motivational poster.
+- If the athlete sends a casual check-in like "you there," "hey," "what's up," or "can you help," answer naturally first. Do not treat it as a performance problem.
+- Use the athlete's first name sometimes when it feels natural, especially to greet, reassure, or bring them back to the point. Do not use their name in every message.
 - Listen first. If the athlete's message is vague, broad, or emotional without details, do not give steps yet. Ask 1-2 warm clarifying questions and wait for the athlete to explain.
 - Do not assume the problem. Reflect what the athlete actually said, then find out what happened, when it happens, and what they want help changing.
 - If the problem is clear, give a short human response: one honest observation, one or two practical moves, and one question or small action for today.
 - Never start with "One clear truth" or use labels like "Reflection," "Action step," "Cue ideas," or "Do this right now."
-- Avoid rigid formats, numbered lists, bolded templates, repeated slogans, hashtags, and clinical language.
-- Keep it concise, but let it feel natural. Use the athlete's name only occasionally.
+- Do not use markdown formatting, asterisks, bold marks, headings, rigid formats, numbered lists, repeated slogans, hashtags, or clinical language.
+- Keep it concise, but let it feel natural.
 
 Examples of the right style:
+Athlete: "you there"
+Coach: "I'm here. What's going on today?"
+
 Athlete: "im having a challenge"
-Coach: "I hear you. What kind of challenge are we talking about: something in practice, a game, your confidence, a coach, or something off the field? And what happened most recently that made it feel heavy?"
+Coach: "I'm with you. What kind of challenge are we talking about: practice, a game, confidence, a coach, teammates, or something outside the sport?"
 
 Athlete: "I keep messing up in games"
 Coach: "That is frustrating, especially when you know you can play better. When the mistake happens, what changes first: your body language, your focus, or the way you talk to yourself?"
@@ -81,6 +86,14 @@ function cleanMessage(value, maxLength = MAX_MESSAGE_LENGTH) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
+function displayCoachText(value) {
+  return cleanMessage(value, 3000)
+    .replace(/\*\*/g, '')
+    .replace(/__+/g, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .trim();
+}
+
 function crisisResponse() {
   return [
     'Your safety matters more than performance right now.',
@@ -108,6 +121,7 @@ function needsClarifyingQuestion(message, history) {
   const lower = message.toLowerCase();
   const recentAthleteTurns = cleanMessages(history).filter((entry) => entry.role === 'athlete').length;
   if (recentAthleteTurns > 1) return false;
+  if (isCasualCheckIn(message)) return false;
 
   const vaguePhrases = [
     'challenge',
@@ -132,13 +146,23 @@ function isCurriculumQuestion(message) {
   return /\b(daily deposit|deposit|today'?s focus|focus question|performance plan|plan|challenge|lesson|step|what does this mean|explain this|how do i use this)\b/i.test(message);
 }
 
+function isCasualCheckIn(message) {
+  return /^(yo+|hey+|hi+|hello+|sup|what'?s up|you there|are you there|u there|can you help|help me|coach|mindset coach)[\s?.!]*$/i.test(message);
+}
+
 function clarifyingResponse(message, athlete) {
+  if (isCasualCheckIn(message)) {
+    const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
+    const namePhrase = firstName && firstName !== 'Athlete' && firstName !== 'Unknown' ? `, ${firstName}` : '';
+    return `I'm here${namePhrase}. What's going on today?`;
+  }
+
   const sport = cleanMessage(athlete?.sport, 40);
   const sportPhrase = sport && sport !== 'Unknown' ? ` in ${sport}` : '';
   return [
-    'I hear you. Before I coach it too hard, I need to understand the moment.',
-    `What kind of challenge is it${sportPhrase}: confidence, pressure, a coach, teammates, playing time, focus, or something outside the sport?`,
-    'And what happened most recently that made it feel heavy?'
+    "I'm with you. Help me understand the moment a little more.",
+    `Is it about confidence, pressure, a coach, teammates, playing time, focus${sportPhrase ? `, or something in ${sport}` : ', or something outside the sport'}?`,
+    'What happened most recently?'
   ].join(' ');
 }
 
@@ -805,7 +829,7 @@ export default async function handler(req, res) {
   }
 
   const data = await response.json();
-  const reply = extractOutputText(data);
+  const reply = displayCoachText(extractOutputText(data));
   if (!reply) {
     await logAppEvent({
       area: 'coach',

@@ -3987,8 +3987,13 @@ function CoachScreen({
   function coachReply(text) {
     const lower = text.toLowerCase();
     const words = text.trim().split(/\s+/).filter(Boolean);
+    if (/^(yo+|hey+|hi+|hello+|sup|what'?s up|you there|are you there|u there|can you help|help me|coach|mindset coach)[\s?.!]*$/i.test(text)) {
+      const firstName = String(athleteProfile?.name || authSession?.name || '').trim().split(/\s+/)[0];
+      const namePhrase = firstName ? `, ${firstName}` : '';
+      return `I'm here${namePhrase}. What's going on today?`;
+    }
     if (words.length < 12) {
-      return 'I hear you. Before I coach it too hard, help me understand the moment: what happened, and what part of it is sticking with you right now?';
+      return "I'm with you. Help me understand the moment a little more. What happened most recently?";
     }
     const hasExcuse =
       lower.includes('not my fault') ||
