@@ -2595,7 +2595,6 @@ function HomeScreen({
         <PanelTitle icon={<Target size={18} />} title="Today's Focus" action="Question" />
         <div className="focus-question">
           <strong>{todaysFocus}</strong>
-          <p>Built from today’s Daily Deposit. Answer it, then let it shape how you show up.</p>
         </div>
       </section>
 
