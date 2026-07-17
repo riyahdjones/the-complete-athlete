@@ -29,6 +29,7 @@ export async function saveDailyDeposit(formData) {
   const status = requestedStatus === 'published' ? 'posted' : requestedStatus;
 
   const payload = {
+    title: '',
     body,
     focus_question: focusQuestion,
     release_date: releaseDate,
