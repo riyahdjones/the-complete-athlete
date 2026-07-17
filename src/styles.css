@@ -5365,3 +5365,165 @@ textarea::placeholder {
     background: rgba(5, 7, 11, 0.84);
   }
 }
+
+/* Responsive containment: prevent sideways scrolling in mobile and tablet shells. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.app-shell,
+.onboarding-shell,
+.auth-shell,
+.phone-frame,
+.content,
+.panel,
+.coach-screen,
+.plans-screen,
+.plan-library,
+.plan-reader,
+.parent-portal,
+.parent-plan-reader,
+.goal-system,
+.journal-screen,
+.profile-screen,
+.progress-screen {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.app-shell {
+  width: 100%;
+  grid-template-columns: minmax(72px, 104px) minmax(0, 430px);
+}
+
+.phone-frame {
+  width: min(100%, 430px);
+  justify-self: center;
+}
+
+.content,
+.phone-scroll,
+.coach-thread,
+.plan-reader-body,
+.sheet-history-list {
+  overflow-x: hidden;
+}
+
+.panel,
+.goal-card,
+.plan-card,
+.parent-plan-card,
+.coach-session,
+.journal-entry,
+.standards-history-row,
+.productivity-row,
+.check-row,
+.goal-row {
+  overflow-wrap: anywhere;
+}
+
+.primary-action,
+.secondary-action,
+.history-sheet-trigger,
+.complete-goal,
+.remove-goal,
+.photo-upload,
+.role-choice-button,
+.plan-filter-button,
+.rail-btn {
+  white-space: normal;
+}
+
+@media (max-width: 900px) and (min-width: 721px) {
+  .app-shell {
+    grid-template-columns: minmax(68px, 92px) minmax(0, 430px);
+    gap: 18px;
+    padding: 18px;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell,
+  .phone-frame {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .content {
+    width: 100%;
+  }
+
+  .rail {
+    max-width: calc(100vw - 20px);
+  }
+
+  .topbar {
+    min-width: 0;
+  }
+
+  .topbar h1,
+  .topbar p,
+  .panel-title,
+  .plan-card,
+  .parent-plan-card {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .score-grid,
+  .metric-grid,
+  .progress-scoreboard,
+  .review-snapshot,
+  .goal-proof-grid,
+  .goal-proof-summary,
+  .context-grid,
+  .profile-fields,
+  .parent-stat-grid,
+  .parent-score-grid,
+  .parent-plan-stats,
+  .plan-meta-grid,
+  .lesson-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .standards-grid,
+  .quick-actions,
+  .privacy-boundaries,
+  .coach-support-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .check-row,
+  .standard-form,
+  .goal-actions,
+  .reflection-actions,
+  .coach-composer,
+  .parent-plan-row,
+  .productivity-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bottom-sheet-backdrop {
+    padding-inline: 10px;
+  }
+}
