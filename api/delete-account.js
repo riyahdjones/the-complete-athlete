@@ -2,9 +2,17 @@ import { logAppEvent } from './_monitoring.js';
 
 function json(res, status, payload) {
   res.statusCode = status;
+  setCorsHeaders(res);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(payload));
+}
+
+function setCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
 }
 
 function envValue(...names) {
@@ -28,6 +36,13 @@ async function verifyUser(token, supabaseUrl, anonKey) {
 }
 
 export default async function handler(req, res) {
+  setCorsHeaders(res);
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    return res.end();
+  }
+
   if (req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed.' });
   }

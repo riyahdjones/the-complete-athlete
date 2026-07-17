@@ -58,8 +58,16 @@ Coach: "That is frustrating, especially when you know you can play better. When 
 
 function json(res, status, payload) {
   res.statusCode = status;
+  setCorsHeaders(res);
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(payload));
+}
+
+function setCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Max-Age', '86400');
 }
 
 async function readBody(req) {
@@ -599,6 +607,13 @@ function shouldBlockModeration(result) {
 }
 
 export default async function handler(req, res) {
+  setCorsHeaders(res);
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    return res.end();
+  }
+
   if (req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed.' });
   }
