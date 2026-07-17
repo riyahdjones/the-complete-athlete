@@ -5614,3 +5614,78 @@ select {
     grid-column: 1 / -1;
   }
 }
+
+/* Installed iOS app shell: use the real device width and clear the status area. */
+.native-shell,
+.native-shell body,
+.native-shell #root {
+  min-width: 0;
+  width: 100%;
+  min-height: 100dvh;
+  background: #f4f6fb;
+}
+
+.native-shell .app-shell {
+  display: block;
+  width: 100vw;
+  max-width: none;
+  min-height: 100dvh;
+  padding: 0;
+  background: #f4f6fb;
+}
+
+.native-shell .phone-frame {
+  width: 100vw;
+  max-width: none;
+  min-height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.native-shell .topbar {
+  align-items: flex-start;
+  min-height: auto;
+  padding: max(56px, calc(env(safe-area-inset-top) + 18px)) 16px 12px;
+}
+
+.native-shell .topbar h1,
+.native-shell .top-greeting {
+  max-width: calc(100vw - 32px);
+}
+
+.native-shell .content {
+  width: 100%;
+  padding: 0 14px max(16px, env(safe-area-inset-bottom));
+}
+
+.native-shell .panel {
+  width: 100%;
+}
+
+.native-shell .rail {
+  right: max(10px, env(safe-area-inset-right));
+  top: max(10px, calc(env(safe-area-inset-top) + 8px));
+  max-width: calc(100vw - 20px);
+}
+
+.native-shell .topbar > .icon-button {
+  display: none;
+}
+
+@media (min-width: 721px) {
+  .native-shell .app-shell {
+    display: block;
+  }
+
+  .native-shell .phone-frame {
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 720px) {
+  .native-shell .topbar {
+    padding-right: 16px;
+  }
+}

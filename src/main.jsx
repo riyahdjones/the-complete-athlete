@@ -33,6 +33,17 @@ import { createPerformancePlanSeeds } from './performancePlans';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import './styles.css';
 
+if (typeof window !== 'undefined') {
+  const isNativeShell =
+    window.location.protocol === 'capacitor:' ||
+    Boolean(window.Capacitor?.isNativePlatform?.()) ||
+    Boolean(window.Capacitor?.getPlatform && window.Capacitor.getPlatform() !== 'web');
+
+  if (isNativeShell) {
+    document.documentElement.classList.add('native-shell');
+  }
+}
+
 const standardsSeed = [
   { id: 1, label: 'Quality training session', done: false, goalId: 2 },
   { id: 2, label: 'Recovery routine', done: false, goalId: 4 },
