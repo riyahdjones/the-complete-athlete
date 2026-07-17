@@ -11,7 +11,6 @@ function DepositForm({ deposit }) {
   return (
     <form className="editor-card deposit-editor" action={saveDailyDeposit}>
       <input name="id" type="hidden" defaultValue={deposit?.id ?? ''} />
-      <input name="title" type="hidden" defaultValue={deposit?.title ?? ''} />
       <label>
         <span>Release date</span>
         <input name="releaseDate" type="date" defaultValue={deposit?.release_date ?? todayKey()} />
@@ -20,7 +19,8 @@ function DepositForm({ deposit }) {
         <span>Status</span>
         <select name="status" defaultValue={deposit?.status ?? 'draft'}>
           <option value="draft">Draft</option>
-          <option value="published">Published</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="posted">Published</option>
         </select>
       </label>
       <div className="editor-spacer" aria-hidden="true" />
@@ -55,7 +55,7 @@ function DepositRow({ deposit }) {
         <strong>{deposit.body || 'Untitled deposit'}</strong>
         {deposit.focus_question && <p>{deposit.focus_question}</p>}
       </div>
-      <em>{deposit.status || 'draft'}</em>
+      <em>{deposit.status === 'posted' ? 'published' : deposit.status || 'draft'}</em>
       <form action={deleteDailyDeposit}>
         <input name="id" type="hidden" value={deposit.id} />
         <button className="danger-button" type="submit">Delete</button>

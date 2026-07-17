@@ -25,11 +25,10 @@ export async function saveDailyDeposit(formData) {
   const body = text(formData, 'body');
   const focusQuestion = text(formData, 'focusQuestion');
   const releaseDate = text(formData, 'releaseDate') || new Date().toISOString().slice(0, 10);
-  const title = text(formData, 'title');
-  const status = text(formData, 'status') || 'draft';
+  const requestedStatus = text(formData, 'status') || 'draft';
+  const status = requestedStatus === 'published' ? 'posted' : requestedStatus;
 
   const payload = {
-    title,
     body,
     focus_question: focusQuestion,
     release_date: releaseDate,
