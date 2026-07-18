@@ -860,6 +860,7 @@ function App() {
   const [coachSessions, setCoachSessions] = useState(loadCoachSessions);
   const [activeCoachSessionId, setActiveCoachSessionId] = useState(null);
   const [messageDraft, setMessageDraft] = useState('');
+  const [coachComposerFocused, setCoachComposerFocused] = useState(false);
   const [parentMessage, setParentMessage] = useState(parentMessageSeed);
   const [parentAccessDraft, setParentAccessDraft] = useState('');
   const [parentLinkFeedback, setParentLinkFeedback] = useState('');
@@ -2050,6 +2051,7 @@ function App() {
           setMessages={setMessages}
           messageDraft={messageDraft}
           setMessageDraft={setMessageDraft}
+          setCoachComposerFocused={setCoachComposerFocused}
         />
       ),
       profile: (
@@ -2080,6 +2082,7 @@ function App() {
     activeCoachSessionId,
     athleteProfile,
     coachSessions,
+    coachComposerFocused,
     messageDraft,
     messages,
     parentMessage,
@@ -2122,9 +2125,13 @@ function App() {
       document.documentElement.classList.contains('native-shell')
       || isPhoneViewport
     );
+  const coachTypingMode = useMobileAppShell && view === 'athlete' && tab === 'coach' && coachComposerFocused;
 
   return (
-    <div className={useMobileAppShell ? 'mobile-native-app' : 'app-shell'} data-viewport-revision={viewportRevision}>
+    <div
+      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'}${coachTypingMode ? ' coach-typing-mode' : ''}`}
+      data-viewport-revision={viewportRevision}
+    >
       {!useMobileAppShell && (
         <aside className="rail">
           <div className="brand-mark">
@@ -2149,7 +2156,10 @@ function App() {
         </aside>
       )}
 
-      <main className={useMobileAppShell ? 'mobile-native-frame' : 'phone-frame'} aria-label="The Complete Athlete app prototype">
+      <main
+        className={`${useMobileAppShell ? 'mobile-native-frame' : 'phone-frame'}${coachTypingMode ? ' coach-typing-mode' : ''}`}
+        aria-label="The Complete Athlete app prototype"
+      >
         <header className="topbar">
           <div>
             <p className="top-greeting">{timeBasedGreeting(effectiveSession.name)}</p>
@@ -2174,7 +2184,7 @@ function App() {
 
         <section className="content">{content}</section>
 
-        {view === 'athlete' && <BottomNav tab={tab} setTab={setTab} />}
+        {view === 'athlete' && !coachTypingMode && <BottomNav tab={tab} setTab={setTab} />}
       </main>
     </div>
   );
@@ -4179,7 +4189,8 @@ function CoachScreen({
   setActiveCoachSessionId,
   setCoachSessions,
   setMessages,
-  setMessageDraft
+  setMessageDraft,
+  setCoachComposerFocused
 }) {
   const [coachStatus, setCoachStatus] = useState('');
   const [coachThinking, setCoachThinking] = useState(false);
@@ -4357,6 +4368,7 @@ function CoachScreen({
   }
 
   function startNewChat() {
+    setCoachComposerFocused(false);
     setActiveCoachSessionId(null);
     setMessages([]);
     setMessageDraft('');
@@ -4364,6 +4376,7 @@ function CoachScreen({
   }
 
   function openCoachSession(session) {
+    setCoachComposerFocused(false);
     setActiveCoachSessionId(session.id);
     setMessages(session.messages);
     setMessageDraft('');
@@ -4426,6 +4439,15 @@ function CoachScreen({
           <input
             value={messageDraft}
             onChange={(event) => setMessageDraft(event.target.value)}
+            onFocus={(event) => {
+              setCoachComposerFocused(true);
+              setTimeout(() => {
+                event.target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+              }, 120);
+            }}
+            onBlur={() => {
+              setTimeout(() => setCoachComposerFocused(false), 140);
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') sendMessage();
             }}
