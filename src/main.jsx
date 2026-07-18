@@ -38,6 +38,12 @@ if (typeof window !== 'undefined') {
     window.location.protocol === 'capacitor:' ||
     Boolean(window.Capacitor?.isNativePlatform?.()) ||
     Boolean(window.Capacitor?.getPlatform && window.Capacitor.getPlatform() !== 'web');
+  const syncAppViewportHeight = () => {
+    const viewportHeight = Math.floor(window.visualViewport?.height || window.innerHeight || 0);
+    if (viewportHeight > 0) {
+      document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
+    }
+  };
 
   if (isNativeShell) {
     document.documentElement.classList.add('native-shell');
@@ -80,6 +86,7 @@ if (typeof window !== 'undefined') {
       lockHorizontalScroll();
     };
     const runNativeLayoutPass = () => {
+      syncAppViewportHeight();
       lockHorizontalScroll();
       requestAnimationFrame(containNativeOverflow);
     };
@@ -102,13 +109,18 @@ if (typeof window !== 'undefined') {
 
     window.addEventListener('scroll', runNativeLayoutPass, { passive: true });
     window.addEventListener('resize', runNativeLayoutPass, { passive: true });
+    window.addEventListener('orientationchange', runNativeLayoutPass, { passive: true });
+    window.visualViewport?.addEventListener('resize', runNativeLayoutPass, { passive: true });
+    window.visualViewport?.addEventListener('scroll', runNativeLayoutPass, { passive: true });
     document.addEventListener('scroll', runNativeLayoutPass, { passive: true, capture: true });
     document.addEventListener('touchstart', rememberNativeTouchStart, { passive: true, capture: true });
     document.addEventListener('touchmove', blockNativeHorizontalPan, { passive: false, capture: true });
     document.addEventListener('touchend', runNativeLayoutPass, { passive: true, capture: true });
     document.addEventListener('DOMContentLoaded', runNativeLayoutPass, { once: true });
+    syncAppViewportHeight();
     window.setTimeout(runNativeLayoutPass, 120);
     window.setTimeout(runNativeLayoutPass, 650);
+    window.setTimeout(runNativeLayoutPass, 1400);
   }
 }
 
@@ -815,6 +827,10 @@ function App() {
   const [authUsers, setAuthUsers] = useState(loadAuthUsers);
   const [authSession, setAuthSession] = useState(loadAuthSession);
   const [onboardingComplete, setOnboardingComplete] = useState(loadOnboardingComplete);
+  const [viewportRevision, setViewportRevision] = useState(0);
+  const [isPhoneViewport, setIsPhoneViewport] = useState(() => (
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 720px)').matches : false
+  ));
   const [dailyDate, setDailyDate] = useState(initialDailyState.date);
   const [view, setView] = useState('athlete');
   const [tab, setTab] = useState('home');
@@ -887,6 +903,39 @@ function App() {
       })
     );
   }, [dailyDate, lastReminderDate, lastSubmittedDate, notifications, readinessHistory, scores, standards, standardsHistory, streakCount]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const refreshViewport = () => {
+      const phoneViewport = window.matchMedia('(max-width: 720px)').matches;
+      const viewportHeight = Math.floor(window.visualViewport?.height || window.innerHeight || 0);
+      setIsPhoneViewport(phoneViewport);
+      setViewportRevision((current) => current + 1);
+      if (viewportHeight > 0) {
+        document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
+      }
+      document.documentElement.scrollLeft = 0;
+      if (document.body) document.body.scrollLeft = 0;
+      document.querySelectorAll('*').forEach((element) => {
+        if (element instanceof HTMLElement && element.scrollLeft) element.scrollLeft = 0;
+      });
+    };
+
+    const timeouts = [0, 80, 240, 700, 1400].map((delay) => window.setTimeout(refreshViewport, delay));
+    window.addEventListener('resize', refreshViewport, { passive: true });
+    window.addEventListener('orientationchange', refreshViewport, { passive: true });
+    window.visualViewport?.addEventListener('resize', refreshViewport, { passive: true });
+    window.visualViewport?.addEventListener('scroll', refreshViewport, { passive: true });
+
+    return () => {
+      timeouts.forEach((timeout) => window.clearTimeout(timeout));
+      window.removeEventListener('resize', refreshViewport);
+      window.removeEventListener('orientationchange', refreshViewport);
+      window.visualViewport?.removeEventListener('resize', refreshViewport);
+      window.visualViewport?.removeEventListener('scroll', refreshViewport);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(journalStorageKey, JSON.stringify(journalEntries));
@@ -2069,11 +2118,11 @@ function App() {
   const useMobileAppShell = typeof window !== 'undefined'
     && (
       document.documentElement.classList.contains('native-shell')
-      || window.matchMedia('(max-width: 720px)').matches
+      || isPhoneViewport
     );
 
   return (
-    <div className={useMobileAppShell ? 'mobile-native-app' : 'app-shell'}>
+    <div className={useMobileAppShell ? 'mobile-native-app' : 'app-shell'} data-viewport-revision={viewportRevision}>
       {!useMobileAppShell && (
         <aside className="rail">
           <div className="brand-mark">
