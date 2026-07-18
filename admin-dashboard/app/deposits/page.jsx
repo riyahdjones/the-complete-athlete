@@ -45,21 +45,46 @@ function DepositForm({ deposit }) {
   );
 }
 
-function DepositRow({ deposit }) {
+function DepositRow({ deposit, editable = false }) {
   const dateLabel = deposit.release_date ? formatShortDate(deposit.release_date) : 'No date';
+
+  if (editable) {
+    return (
+      <details className="deposit-row editable-deposit-row" id={`edit-deposit-${deposit.id}`}>
+        <summary className="deposit-row-main">
+          <div>
+            <span>{dateLabel}</span>
+            <strong>{deposit.body || 'Untitled deposit'}</strong>
+            {deposit.focus_question && <p>{deposit.focus_question}</p>}
+          </div>
+          <em>{deposit.status === 'posted' ? 'published' : deposit.status || 'draft'}</em>
+          <b>Edit</b>
+        </summary>
+        <div className="deposit-edit-panel">
+          <DepositForm deposit={deposit} />
+          <form action={deleteDailyDeposit}>
+            <input name="id" type="hidden" value={deposit.id} />
+            <button className="danger-button" type="submit">Delete Deposit</button>
+          </form>
+        </div>
+      </details>
+    );
+  }
 
   return (
     <article className="deposit-row">
-      <div>
-        <span>{dateLabel}</span>
-        <strong>{deposit.body || 'Untitled deposit'}</strong>
-        {deposit.focus_question && <p>{deposit.focus_question}</p>}
+      <div className="deposit-row-main">
+        <div>
+          <span>{dateLabel}</span>
+          <strong>{deposit.body || 'Untitled deposit'}</strong>
+          {deposit.focus_question && <p>{deposit.focus_question}</p>}
+        </div>
+        <em>{deposit.status === 'posted' ? 'published' : deposit.status || 'draft'}</em>
+        <form action={deleteDailyDeposit}>
+          <input name="id" type="hidden" value={deposit.id} />
+          <button className="danger-button" type="submit">Delete</button>
+        </form>
       </div>
-      <em>{deposit.status === 'posted' ? 'published' : deposit.status || 'draft'}</em>
-      <form action={deleteDailyDeposit}>
-        <input name="id" type="hidden" value={deposit.id} />
-        <button className="danger-button" type="submit">Delete</button>
-      </form>
     </article>
   );
 }
@@ -154,7 +179,7 @@ export default async function DailyDepositsPage() {
           <>
             <DepositQueueSummary deposits={futureDeposits} />
             <div className="deposit-list future-deposit-list">
-              {futureDeposits.map((deposit) => <DepositRow key={deposit.id} deposit={deposit} />)}
+              {futureDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />)}
             </div>
           </>
         ) : (

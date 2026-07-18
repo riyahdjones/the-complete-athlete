@@ -864,14 +864,18 @@ button:active {
 }
 
 .deposit-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 14px;
+  display: block;
   padding: 14px;
   border: 1px solid rgba(0, 0, 0, 0.055);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.58);
+}
+
+.deposit-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
 }
 
 .deposit-row span {
@@ -917,6 +921,53 @@ button:active {
 .future-deposit-list .deposit-row {
   border-color: rgba(0, 113, 227, 0.1);
   background: rgba(255, 255, 255, 0.72);
+}
+
+.editable-deposit-row {
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.editable-deposit-row[open] {
+  border-color: rgba(0, 113, 227, 0.18);
+  background: #ffffff;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.06);
+}
+
+.editable-deposit-row summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.editable-deposit-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.editable-deposit-row summary b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  border-radius: 999px;
+  color: var(--blue);
+  background: rgba(0, 113, 227, 0.07);
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.deposit-edit-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.deposit-edit-panel .deposit-editor {
+  margin-bottom: 12px;
+  box-shadow: none;
 }
 
 .danger-button {
@@ -1072,6 +1123,16 @@ button:active {
   .deposit-queue-summary,
   .plan-principles {
     grid-template-columns: 1fr;
+  }
+
+  .deposit-row-main {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .editable-deposit-row summary b,
+  .deposit-row-main .danger-button {
+    width: 100%;
   }
 
   .deposit-queue-summary span.wide {
