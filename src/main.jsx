@@ -730,7 +730,8 @@ function loadPlans() {
       (String(plan.id).startsWith('slump-series-day-') || String(plan.subject).includes("I'm In A Slump")) &&
       plan.steps.some((step) => String(step).includes('Final Complete Athlete Principle') || String(step).includes('The Second Opponent'))
     );
-    return savedPlans.length && (!hasCurrentNinetyPlan || hasDocumentStructuredNinetyPlan) && hasCurrentSlumpPlan
+    const hasCompeteDifferentlyPlan = savedPlans.some((plan) => String(plan.id).startsWith('compete-differently-day-'));
+    return savedPlans.length && (!hasCurrentNinetyPlan || hasDocumentStructuredNinetyPlan) && hasCurrentSlumpPlan && hasCompeteDifferentlyPlan
       ? savedPlans
       : plansSeed.map(normalizePlan);
   } catch {
@@ -3514,6 +3515,7 @@ function planDisplaySubject(plan) {
 
 function planCategory(plan) {
   const text = `${planSeriesTitle(plan)} ${plan?.subject ?? ''}`.toLowerCase();
+  if (text.includes('faith') || text.includes('god') || text.includes('scripture') || text.includes('compete differently')) return 'Faith';
   if (text.includes('90%') || text.includes('ninety') || text.includes('identity')) return 'Mindset';
   if (text.includes('slump') || text.includes('mindset') || text.includes('belief')) return 'Mindset';
   if (text.includes('confidence')) return 'Confidence';
@@ -3544,6 +3546,9 @@ function planCoverImage(seriesTitle) {
   if (normalized.includes('imagination') || normalized.includes('visualization')) {
     return '/plan-covers/imagination-station-banner.png';
   }
+  if (normalized.includes('compete differently') || normalized.includes('faith')) {
+    return '/plan-covers/compete-differently-banner.png';
+  }
   return '/plan-covers/90-percent-blueprint.jpg';
 }
 
@@ -3560,6 +3565,9 @@ function planThumbnailImage(seriesTitle) {
   }
   if (normalized.includes('imagination') || normalized.includes('visualization')) {
     return '/plan-covers/imagination-station-thumbnail.png';
+  }
+  if (normalized.includes('compete differently') || normalized.includes('faith')) {
+    return '/plan-covers/compete-differently-thumbnail.png';
   }
   return planCoverImage(seriesTitle);
 }
@@ -3583,6 +3591,9 @@ function planCoverPosition(seriesTitle) {
   }
   if (normalized.includes('imagination') || normalized.includes('visualization')) {
     return '58% 50%';
+  }
+  if (normalized.includes('compete differently') || normalized.includes('faith')) {
+    return '60% 50%';
   }
   return '70% 50%';
 }
@@ -3798,6 +3809,7 @@ const explicitPlanSectionHeadings = new Set([
   'Mirror Check',
   'System Update',
   'Practice Install',
+  'Journal',
   'Your Championship Habit Blueprint',
   'Film Room',
   'Complete Athlete Principle',
@@ -3805,6 +3817,8 @@ const explicitPlanSectionHeadings = new Set([
   'The Complete Athlete Declaration',
   'One Last Thought',
   'Final Thoughts',
+  'Final Thought',
+  'Closing Reflection',
   'Series Finale',
   'Final Complete Athlete Principle'
 ]);
@@ -3812,6 +3826,7 @@ const explicitPlanSectionHeadings = new Set([
 function sectionTone(title) {
   const normalized = title.toLowerCase();
   if (normalized.includes('practice') || normalized.includes('blueprint')) return 'practice';
+  if (normalized.includes('journal') || normalized.includes('reflection')) return 'practice';
   if (normalized.includes('film') || normalized.includes('story') || normalized.includes('curtain')) return 'film';
   if (normalized.includes('principle') || normalized.includes('declaration')) return 'principle';
   if (normalized.includes('next') || normalized.includes('last') || normalized.includes('finale') || normalized.includes('final thoughts')) return 'next';
