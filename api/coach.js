@@ -11,6 +11,8 @@ const DAILY_COACH_MESSAGE_LIMIT = 15;
 const SPORTS_FETCH_TIMEOUT_MS = 3500;
 const SPORTS_MAX_EVENTS_PER_LEAGUE = 6;
 const SPORTS_MAX_NEWS_PER_LEAGUE = 5;
+const SPORTS_MAX_SEARCH_PLAYERS = 4;
+const SPORTS_MAX_SEARCH_ARTICLES = 5;
 const SPORTS_TEAM_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 
 const sportsLeagues = {
@@ -73,8 +75,8 @@ Your role:
 - When answering about a Performance Plan, mention the athlete's current plan day when available, such as "Day 1 of 7," and anchor the advice to that day's steps.
 - If a Performance Plan is locked, explain that it unlocks after the prior plan is completed and the next day arrives. Do not give locked-plan steps as if they are available today.
 - Do not claim the athlete completed a deposit, plan, goal, productivity item, or reflection unless the provided data says so.
-- When the athlete asks about current professional sports scores, schedules, standings, or news in MLB, MLS, NBA, or NFL, use the provided live sports context. If live sports context is not available or does not answer the question, say that you cannot verify the live update from inside the app right now instead of guessing.
-- For sports-score questions, answer directly inside the chat from the provided context. Do not send athletes to ESPN, MLB, NBA, NFL, MLS, another app, or another website.
+- When the athlete asks about professional sports scores, schedules, standings, teams, player stats, rosters, injuries, trades, draft news, or headlines in MLB, MLS, NBA, or NFL, use the provided live sports encyclopedia context. If live sports context is not available or does not answer the question, say that you cannot verify that update from inside the app right now instead of guessing.
+- For sports questions, answer directly inside the chat from the provided context. Do not send athletes to ESPN, MLB, NBA, NFL, MLS, another app, or another website.
 - Keep sports-news answers short and practical. Give source names only from the provided sports context, and do not quote long article text.
 
 Safety boundaries:
@@ -205,7 +207,18 @@ function normalizeSportsText(value) {
 
 function hasSportsCurrentIntent(message) {
   const lower = String(message ?? '').toLowerCase();
-  return /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|trade|traded|draft|news|headline|today|tonight|last night|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat)\b/i.test(lower);
+  return /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|injured|injury|trade|traded|draft|news|headline|today|tonight|last night|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat|stats|stat|player|roster|contract|mvp|award|points|rebounds|assists|yards|touchdown|touchdowns|interception|interceptions|sacks|batting|home run|home runs|homer|rbi|era|ops|goals|saves)\b/i.test(lower);
+}
+
+function hasSportsKnowledgeIntent(message) {
+  const lower = String(message ?? '').toLowerCase();
+  const knowledgeTerms =
+    /\b(nba|nfl|mlb|mls|espn|score|scores|schedule|standings|record|news|headline|trade|draft|injury|injured|stats|stat|player|team|roster|contract|mvp|award|points|rebounds|assists|yards|touchdown|touchdowns|interception|interceptions|sacks|batting|home run|home runs|homer|rbi|era|ops|goals|saves|who won|last night|yesterday|today|tonight|latest|current)\b/i;
+  const playerLikeQuestion =
+    /\b(how many|what did|what is|what are|who is|tell me about|give me|show me)\b/i.test(lower) &&
+    /\b(points|stats|stat|news|team|play for|injury|injured|trade|contract|record|score|scored|goals|yards|home runs|rbi|assists|rebounds|touchdowns)\b/i.test(lower);
+
+  return knowledgeTerms.test(lower) || playerLikeQuestion;
 }
 
 function messageMentionsAlias(message, aliases) {
@@ -338,12 +351,110 @@ function summarizeNews(data, leagueLabel) {
   });
 }
 
-async function getSportsContext(message) {
-  if (!hasSportsCurrentIntent(message)) return '';
+function leagueFromSearchContent(content) {
+  const text = `${content?.description || ''} ${content?.subtitle || ''} ${content?.displayName || ''}`.toLowerCase();
+  if (text.includes('nba')) return sportsLeagues.nba;
+  if (text.includes('nfl')) return sportsLeagues.nfl;
+  if (text.includes('mlb')) return sportsLeagues.mlb;
+  if (text.includes('mls')) return sportsLeagues.mls;
+  return null;
+}
 
-  const keys = (await requestedSportsLeagues(message)).slice(0, 4);
+function athleteIdFromSearchContent(content) {
+  const uid = String(content?.uid || '');
+  const match = uid.match(/~a:(\d+)/);
+  return match?.[1] || String(content?.id || '').replace(/\D/g, '');
+}
+
+function summarizeAthleteStats(statsData, leagueLabel) {
+  const categories = asArray(statsData?.splits?.categories);
+  const stats = categories.flatMap((category) => asArray(category.stats));
+  const wantedNamesByLeague = {
+    NBA: ['avgPoints', 'avgRebounds', 'avgAssists', 'points', 'rebounds', 'assists', 'fieldGoalPct', 'threePointPct', 'freeThrowPct', 'steals', 'blocks'],
+    NFL: ['passingYards', 'passingTouchdowns', 'interceptions', 'rushingYards', 'rushingTouchdowns', 'receivingYards', 'receivingTouchdowns', 'totalTackles', 'sacks'],
+    MLB: ['battingAverage', 'homeRuns', 'RBIs', 'ops', 'earnedRunAverage', 'strikeouts', 'wins', 'saves'],
+    MLS: ['totalGoals', 'goalAssists', 'shotsTotal', 'shotsOnTarget', 'saves', 'goalsAgainst']
+  };
+  const wantedNames = wantedNamesByLeague[leagueLabel] || [];
+  const selected = wantedNames
+    .map((name) => stats.find((stat) => stat.name === name))
+    .filter(Boolean);
+  const fallback = selected.length ? selected : stats
+    .filter((stat) => stat.abbreviation && stat.displayValue && Number(stat.value || 0) !== 0)
+    .slice(0, 10);
+
+  return fallback
+    .slice(0, 10)
+    .map((stat) => `${stat.abbreviation}: ${stat.displayValue}`)
+    .join(', ');
+}
+
+async function summarizeSearchPlayer(content) {
+  const league = leagueFromSearchContent(content);
+  const athleteId = athleteIdFromSearchContent(content);
+  const name = cleanMessage(content?.displayName || content?.name, 100);
+  const subtitle = cleanMessage(content?.subtitle || content?.description, 120);
+  if (!name) return '';
+
+  let statLine = '';
+  if (league && athleteId) {
+    const statsUrl = `https://sports.core.api.espn.com/v2/sports/${league.sport}/leagues/${league.league}/athletes/${athleteId}/statistics?lang=en&region=us`;
+    const statsData = await fetchJsonWithTimeout(statsUrl, SPORTS_FETCH_TIMEOUT_MS);
+    statLine = summarizeAthleteStats(statsData, league.label);
+  }
+
+  return `Player result from ESPN: ${name}${subtitle ? ` (${subtitle})` : ''}${statLine ? `. Stats snapshot: ${statLine}` : ''}`;
+}
+
+function summarizeSearchArticle(content) {
+  const headline = cleanMessage(content?.headline || content?.title || content?.displayName, 180);
+  const description = cleanMessage(content?.description || content?.summary, 220);
+  const source = cleanMessage(content?.source || content?.provider || 'ESPN', 40);
+  if (!headline) return '';
+  return `Article result from ${source}: ${headline}${description ? ` - ${description}` : ''}`;
+}
+
+function sportsSearchQuery(message) {
+  const cleaned = String(message ?? '')
+    .replace(/\b(give me|show me|tell me about|what are|what is|who is|can you|please|in the app|inside the app|latest|current|stats?|statistics|news|headlines?|score|scores|schedule|standings|record|injury|injured|trade|traded|draft|player|team|and|nba|nfl|mlb|mls)\b/gi, ' ')
+    .replace(/[?.!,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleanMessage(cleaned || message, 140);
+}
+
+async function getSportsSearchContext(message) {
+  if (!hasSportsKnowledgeIntent(message)) return '';
+
+  const query = encodeURIComponent(sportsSearchQuery(message));
+  const data = await fetchJsonWithTimeout(
+    `https://site.web.api.espn.com/apis/search/v2?region=us&lang=en&limit=8&query=${query}`,
+    SPORTS_FETCH_TIMEOUT_MS
+  );
+  const results = asArray(data?.results);
+  const players = results.find((result) => result.type === 'player');
+  const articles = results.find((result) => result.type === 'article');
+
+  const playerLines = await Promise.all(
+    asArray(players?.contents).slice(0, SPORTS_MAX_SEARCH_PLAYERS).map(summarizeSearchPlayer)
+  );
+  const articleLines = asArray(articles?.contents)
+    .slice(0, SPORTS_MAX_SEARCH_ARTICLES)
+    .map(summarizeSearchArticle);
+  const lines = [...playerLines, ...articleLines].filter(Boolean);
+
+  if (!lines.length) return '';
+  return ['Sports encyclopedia search source: ESPN public search and stats data.', ...lines].join('\n');
+}
+
+async function getSportsContext(message) {
+  if (!hasSportsKnowledgeIntent(message)) return '';
+
+  const keys = hasSportsCurrentIntent(message) ? (await requestedSportsLeagues(message)).slice(0, 4) : [];
   const dates = sportsDateParams(message);
-  const sections = await Promise.all(keys.map(async (key) => {
+  const [searchContext, ...leagueSections] = await Promise.all([
+    getSportsSearchContext(message),
+    ...keys.map(async (key) => {
     const league = sportsLeagues[key];
     if (!league) return '';
 
@@ -359,9 +470,10 @@ async function getSportsContext(message) {
     ];
 
     return [`${league.label} live context source: ESPN public sports data.`, ...lines].join('\n');
-  }));
+    })
+  ]);
 
-  const context = sections.filter(Boolean).join('\n\n');
+  const context = [searchContext, ...leagueSections].filter(Boolean).join('\n\n');
   return context || 'Live sports lookup was requested, but no current sports data returned.';
 }
 

@@ -4457,7 +4457,13 @@ function CoachScreen({
               {message.text}
             </div>
           ))}
-          {coachThinking && <div className="bubble coach thinking">Thinking it through...</div>}
+          {coachThinking && (
+            <div className="bubble coach thinking" aria-label="Coach is typing">
+              <span />
+              <span />
+              <span />
+            </div>
+          )}
         </section>
 
         {coachStatus && <p className="coach-status">{coachStatus}</p>}
