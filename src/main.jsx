@@ -41,6 +41,26 @@ if (typeof window !== 'undefined') {
 
   if (isNativeShell) {
     document.documentElement.classList.add('native-shell');
+    const syncNativeViewport = () => {
+      const viewportWidth = Math.floor(
+        window.visualViewport?.width ||
+        window.innerWidth ||
+        document.documentElement.clientWidth ||
+        390
+      );
+      document.documentElement.style.setProperty('--native-vw', `${viewportWidth}px`);
+      document.documentElement.scrollLeft = 0;
+      if (document.body) {
+        document.body.style.setProperty('width', `${viewportWidth}px`);
+        document.body.scrollLeft = 0;
+      }
+    };
+
+    syncNativeViewport();
+    window.addEventListener('resize', syncNativeViewport);
+    window.visualViewport?.addEventListener('resize', syncNativeViewport);
+    window.visualViewport?.addEventListener('scroll', syncNativeViewport);
+    document.addEventListener('DOMContentLoaded', syncNativeViewport, { once: true });
   }
 }
 

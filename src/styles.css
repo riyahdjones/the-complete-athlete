@@ -6145,6 +6145,7 @@ select {
   width: 100%;
   max-width: 100%;
   height: 100%;
+  font-size: 14px;
   overflow: hidden;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -6154,8 +6155,8 @@ select {
 .native-shell #root {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  max-width: 100vw;
+  width: var(--native-vw, 100%);
+  max-width: var(--native-vw, 100%);
   min-width: 0 !important;
   overflow: hidden;
   overscroll-behavior-x: none;
@@ -6165,14 +6166,19 @@ select {
 .native-shell *::before,
 .native-shell *::after {
   box-sizing: border-box;
+  min-width: 0 !important;
+}
+
+.native-shell :where(main, section, article, div, nav, form, label, button, input, textarea, select, p, h1, h2, h3, span, strong, em) {
+  max-width: 100% !important;
 }
 
 .native-shell .app-shell,
 .native-shell .phone-frame {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  max-width: 100vw;
+  width: var(--native-vw, 100%);
+  max-width: var(--native-vw, 100%);
   min-width: 0;
   height: auto;
   max-height: none;
@@ -6188,10 +6194,10 @@ select {
   box-sizing: border-box;
   flex: 1 1 auto;
   width: 100%;
-  max-width: 100vw;
+  max-width: var(--native-vw, 100%);
   min-width: 0;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: 8px;
+  padding-right: 8px;
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior-x: none;
@@ -6207,11 +6213,14 @@ select {
 }
 
 .native-shell .topbar > div {
+  width: 100%;
   min-width: 0;
 }
 
 .native-shell .top-greeting {
   display: block;
+  font-size: clamp(1.15rem, 5.4vw, 1.45rem);
+  line-height: 1.1;
   overflow-wrap: anywhere;
 }
 
@@ -6236,20 +6245,28 @@ select {
   min-width: 0;
   margin-left: 0;
   margin-right: 0;
-  padding: 14px;
+  padding: 12px;
+  border-radius: 12px;
 }
 
 .native-shell .panel-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
+  gap: 8px;
 }
 
 .native-shell .panel-title span {
   min-width: 0;
+  font-size: 0.72rem;
   overflow-wrap: anywhere;
 }
 
 .native-shell .panel-title em {
   flex: 0 0 auto;
+  max-width: max-content !important;
+  padding: 4px 8px;
+  font-size: 0.68rem;
   white-space: nowrap;
 }
 
@@ -6262,8 +6279,8 @@ select {
 }
 
 .native-shell .daily-deposit-panel p {
-  font-size: 0.98rem;
-  line-height: 1.46;
+  font-size: 0.9rem;
+  line-height: 1.42;
 }
 
 .native-shell .focus-question {
@@ -6271,7 +6288,7 @@ select {
 }
 
 .native-shell .today-focus-panel .focus-question strong {
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   line-height: 1.34;
 }
 
@@ -6291,22 +6308,22 @@ select {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 3px;
   width: 100%;
-  max-width: 100vw;
+  max-width: var(--native-vw, 100%);
   min-width: 0;
-  padding: 7px max(8px, env(safe-area-inset-left)) max(9px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
+  padding: 6px max(6px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-right));
   overflow: hidden;
 }
 
 .native-shell .nav-item {
   min-width: 0;
-  min-height: 48px;
+  min-height: 44px;
   padding: 0 2px;
   border-radius: 13px;
 }
 
 .native-shell .nav-item svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .native-shell .nav-item span {
@@ -6318,13 +6335,39 @@ select {
   white-space: nowrap;
 }
 
+@media (max-width: 430px) {
+  .native-shell {
+    font-size: 13px;
+  }
+
+  .native-shell .content {
+    padding-inline: 6px;
+  }
+
+  .native-shell .panel,
+  .native-shell .goal-card,
+  .native-shell .profile-head,
+  .native-shell .chat-panel {
+    padding: 11px;
+  }
+
+  .native-shell .daily-deposit-panel p,
+  .native-shell .today-focus-panel .focus-question strong {
+    font-size: 0.86rem;
+  }
+
+  .native-shell .nav-item span {
+    font-size: 0.52rem;
+  }
+}
+
 /* Native onboarding: direct, safe-area aware, and locked to the device width. */
 .native-shell .onboarding-shell {
   position: fixed;
   inset: 0;
   display: block;
-  width: 100dvw;
-  max-width: 100dvw;
+  width: var(--native-vw, 100%);
+  max-width: var(--native-vw, 100%);
   min-height: 100dvh;
   padding: 0;
   overflow-y: auto;
