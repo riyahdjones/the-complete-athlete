@@ -11,6 +11,7 @@ const DAILY_COACH_MESSAGE_LIMIT = 15;
 const SPORTS_FETCH_TIMEOUT_MS = 3500;
 const SPORTS_MAX_EVENTS_PER_LEAGUE = 6;
 const SPORTS_MAX_NEWS_PER_LEAGUE = 5;
+const SPORTS_TEAM_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 
 const sportsLeagues = {
   nba: { label: 'NBA', sport: 'basketball', league: 'nba' },
@@ -19,12 +20,38 @@ const sportsLeagues = {
   mls: { label: 'MLS', sport: 'soccer', league: 'usa.1' }
 };
 
-const sportsTeamPatterns = {
-  mlb: /\b(dodgers|yankees|mets|red sox|redsox|cubs|white sox|whitesox|giants|padres|angels|athletics|a's|astros|rangers|mariners|orioles|blue jays|bluejays|rays|guardians|tigers|twins|royals|braves|phillies|nationals|marlins|brewers|cardinals|reds|pirates|diamondbacks|dbacks|rockies)\b/i,
-  nba: /\b(lakers|clippers|warriors|celtics|knicks|nets|heat|magic|hawks|hornets|bulls|cavaliers|cavs|pistons|pacers|bucks|timberwolves|wolves|thunder|nuggets|jazz|blazers|trail blazers|kings|suns|mavericks|mavs|rockets|spurs|grizzlies|pelicans|raptors|sixers|76ers|wizards)\b/i,
-  nfl: /\b(chiefs|eagles|cowboys|giants|jets|patriots|dolphins|bills|ravens|steelers|bengals|browns|texans|colts|titans|jaguars|broncos|raiders|chargers|commanders|packers|bears|lions|vikings|falcons|panthers|saints|buccaneers|bucs|cardinals|rams|seahawks|49ers|niners)\b/i,
-  mls: /\b(inter miami|lafc|la galaxy|galaxy|atlanta united|austin fc|charlotte fc|chicago fire|colorado rapids|columbus crew|dc united|d\.c\. united|fc cincinnati|fc dallas|houston dynamo|sporting kc|sporting kansas city|minnesota united|cf montreal|nashville sc|new england revolution|nycfc|new york city fc|orlando city|philadelphia union|portland timbers|real salt lake|san jose earthquakes|seattle sounders|st louis city|st\. louis city|toronto fc|vancouver whitecaps)\b/i
+const sportsTeamAliases = {
+  mlb: [
+    'dodgers', 'yankees', 'mets', 'red sox', 'redsox', 'cubs', 'white sox', 'whitesox', 'giants',
+    'padres', 'angels', 'athletics', 'a s', 'astros', 'rangers', 'mariners', 'orioles',
+    'blue jays', 'bluejays', 'rays', 'guardians', 'tigers', 'twins', 'royals', 'braves',
+    'phillies', 'nationals', 'marlins', 'brewers', 'cardinals', 'reds', 'pirates',
+    'diamondbacks', 'dbacks', 'rockies'
+  ],
+  nba: [
+    'lakers', 'clippers', 'warriors', 'celtics', 'knicks', 'nets', 'heat', 'magic', 'hawks',
+    'hornets', 'bulls', 'cavaliers', 'cavs', 'pistons', 'pacers', 'bucks', 'timberwolves',
+    'wolves', 'thunder', 'nuggets', 'jazz', 'blazers', 'trail blazers', 'kings', 'suns',
+    'mavericks', 'mavs', 'rockets', 'spurs', 'grizzlies', 'pelicans', 'raptors', 'sixers',
+    '76ers', 'wizards'
+  ],
+  nfl: [
+    'chiefs', 'eagles', 'cowboys', 'giants', 'jets', 'patriots', 'dolphins', 'bills', 'ravens',
+    'steelers', 'bengals', 'browns', 'texans', 'colts', 'titans', 'jaguars', 'broncos',
+    'raiders', 'chargers', 'commanders', 'packers', 'bears', 'lions', 'vikings', 'falcons',
+    'panthers', 'saints', 'buccaneers', 'bucs', 'cardinals', 'rams', 'seahawks', '49ers', 'niners'
+  ],
+  mls: [
+    'inter miami', 'lafc', 'la galaxy', 'galaxy', 'atlanta united', 'austin fc', 'charlotte fc',
+    'chicago fire', 'colorado rapids', 'columbus crew', 'dc united', 'd c united', 'fc cincinnati',
+    'fc dallas', 'houston dynamo', 'sporting kc', 'sporting kansas city', 'minnesota united',
+    'cf montreal', 'nashville sc', 'new england revolution', 'nycfc', 'new york city fc',
+    'orlando city', 'philadelphia union', 'portland timbers', 'real salt lake',
+    'san jose earthquakes', 'seattle sounders', 'st louis city', 'toronto fc', 'vancouver whitecaps'
+  ]
 };
+
+let sportsTeamAliasCache = { expiresAt: 0, aliases: {} };
 
 const crisisPattern =
   /\b(kill myself|end my life|suicide|suicidal|hurt myself|self harm|self-harm|i want to die|don't want to live|cut myself)\b/i;
@@ -166,25 +193,84 @@ function isCurriculumQuestion(message) {
   return /\b(daily deposit|deposit|today'?s focus|focus question|performance plan|plan|challenge|lesson|step|what does this mean|explain this|how do i use this)\b/i.test(message);
 }
 
-function isSportsCurrentQuestion(message) {
-  const lower = String(message ?? '').toLowerCase();
-  const hasLeague = /\b(mlb|baseball|nba|basketball|nfl|football|mls|soccer)\b/i.test(lower);
-  const hasKnownTeam = Object.values(sportsTeamPatterns).some((pattern) => pattern.test(lower));
-  const hasCurrentIntent = /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|trade|traded|draft|news|headline|today|tonight|last night|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat)\b/i.test(lower);
-  return (hasLeague || hasKnownTeam) && hasCurrentIntent;
+function normalizeSportsText(value) {
+  const text = String(value ?? '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text ? ` ${text} ` : ' ';
 }
 
-function requestedSportsLeagues(message) {
+function hasSportsCurrentIntent(message) {
+  const lower = String(message ?? '').toLowerCase();
+  return /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|trade|traded|draft|news|headline|today|tonight|last night|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat)\b/i.test(lower);
+}
+
+function messageMentionsAlias(message, aliases) {
+  const normalizedMessage = normalizeSportsText(message);
+  return asArray(aliases).some((alias) => {
+    const normalizedAlias = normalizeSportsText(alias).trim();
+    return normalizedAlias && normalizedMessage.includes(` ${normalizedAlias} `);
+  });
+}
+
+function staticSportsLeaguesForMessage(message) {
   const lower = String(message ?? '').toLowerCase();
   const leagues = new Set();
   if (/\bnba\b|basketball/.test(lower)) leagues.add('nba');
   if (/\bnfl\b|football/.test(lower)) leagues.add('nfl');
   if (/\bmlb\b|baseball/.test(lower)) leagues.add('mlb');
   if (/\bmls\b|soccer/.test(lower)) leagues.add('mls');
-  Object.entries(sportsTeamPatterns).forEach(([league, pattern]) => {
-    if (pattern.test(lower)) leagues.add(league);
+  Object.entries(sportsTeamAliases).forEach(([league, aliases]) => {
+    if (messageMentionsAlias(message, aliases)) leagues.add(league);
   });
-  if (!leagues.size && isSportsCurrentQuestion(message)) {
+  return leagues;
+}
+
+function isSportsCurrentQuestion(message) {
+  return hasSportsCurrentIntent(message) && staticSportsLeaguesForMessage(message).size > 0;
+}
+
+async function getLiveSportsTeamAliases() {
+  const now = Date.now();
+  if (sportsTeamAliasCache.expiresAt > now) return sportsTeamAliasCache.aliases;
+
+  const entries = await Promise.all(Object.entries(sportsLeagues).map(async ([key, league]) => {
+    const baseUrl = `https://site.api.espn.com/apis/site/v2/sports/${league.sport}/${league.league}`;
+    const data = await fetchJsonWithTimeout(`${baseUrl}/teams`, SPORTS_FETCH_TIMEOUT_MS);
+    const teams = asArray(data?.sports?.[0]?.leagues?.[0]?.teams)
+      .map((entry) => entry.team || entry)
+      .filter(Boolean);
+    const aliases = teams.flatMap((team) => [
+      team.displayName,
+      team.shortDisplayName,
+      team.name,
+      team.nickname,
+      team.abbreviation
+    ]).filter(Boolean);
+    return [key, aliases];
+  }));
+
+  sportsTeamAliasCache = {
+    expiresAt: now + SPORTS_TEAM_CACHE_TTL_MS,
+    aliases: Object.fromEntries(entries)
+  };
+  return sportsTeamAliasCache.aliases;
+}
+
+async function requestedSportsLeagues(message) {
+  const leagues = staticSportsLeaguesForMessage(message);
+
+  if (hasSportsCurrentIntent(message)) {
+    const liveAliases = await getLiveSportsTeamAliases();
+    Object.entries(liveAliases).forEach(([league, aliases]) => {
+      if (messageMentionsAlias(message, aliases)) leagues.add(league);
+    });
+  }
+
+  if (!leagues.size && hasSportsCurrentIntent(message)) {
     Object.keys(sportsLeagues).forEach((league) => leagues.add(league));
   }
   return [...leagues];
@@ -253,9 +339,9 @@ function summarizeNews(data, leagueLabel) {
 }
 
 async function getSportsContext(message) {
-  if (!isSportsCurrentQuestion(message)) return '';
+  if (!hasSportsCurrentIntent(message)) return '';
 
-  const keys = requestedSportsLeagues(message).slice(0, 4);
+  const keys = (await requestedSportsLeagues(message)).slice(0, 4);
   const dates = sportsDateParams(message);
   const sections = await Promise.all(keys.map(async (key) => {
     const league = sportsLeagues[key];
