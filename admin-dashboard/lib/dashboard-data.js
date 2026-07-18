@@ -78,6 +78,7 @@ export async function getDashboardData() {
 
   const [
     profiles,
+    athleteProfiles,
     parentLinks,
     athleteCount,
     parentCount,
@@ -100,6 +101,7 @@ export async function getDashboardData() {
     safetyEvents
   ] = await Promise.all([
     supabase.from('profiles').select('id, role, full_name, created_at').order('created_at', { ascending: false }).limit(1000),
+    supabase.from('athlete_profiles').select('user_id, sport, location').limit(1000),
     supabase.from('parent_links').select('parent_user_id, athlete_user_id, created_at').order('created_at', { ascending: false }).limit(1000),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'athlete'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'parent'),
@@ -135,6 +137,7 @@ export async function getDashboardData() {
   const authUsers = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const authUserMap = new Map((authUsers.data?.users ?? []).map((user) => [user.id, user]));
   const profileRows = profiles.data ?? [];
+  const athleteProfileMap = new Map((athleteProfiles.data ?? []).map((profile) => [profile.user_id, profile]));
   const parentLinkRows = parentLinks.data ?? [];
   const readinessRows = readinessChecks.data ?? [];
   const standardsRows = standardsHistory.data ?? [];
@@ -203,12 +206,15 @@ export async function getDashboardData() {
   const coachLimitHits = coachUsageTodayRows.filter((row) => Number(row.message_count || 0) >= 15).length;
   const userRows = profileRows.map((profile) => {
     const authUser = authUserMap.get(profile.id);
+    const athleteProfile = athleteProfileMap.get(profile.id);
     const lastActive = maxDate([activityByUser.get(profile.id), authUser?.last_sign_in_at]);
     return {
       id: profile.id,
       name: profile.full_name || authUser?.user_metadata?.full_name || 'Unnamed',
       email: authUser?.email || 'No email found',
       role: profile.role || 'unknown',
+      sport: athleteProfile?.sport || '-',
+      location: athleteProfile?.location || '-',
       createdAt: profile.created_at || authUser?.created_at,
       lastActive,
       linkedAccounts: parentLinkRows.filter((link) => link.parent_user_id === profile.id || link.athlete_user_id === profile.id).length,

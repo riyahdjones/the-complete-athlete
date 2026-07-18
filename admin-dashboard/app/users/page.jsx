@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { deleteUserAccount } from '../actions';
 import { isAdminAuthed } from '../../lib/admin-auth';
 import { getDashboardData } from '../../lib/dashboard-data';
 
@@ -40,18 +41,38 @@ export default async function UsersPage() {
             <span>Name</span>
             <span>Email</span>
             <span>Role</span>
+            <span>Sport</span>
+            <span>State/Country</span>
             <span>Last Active</span>
             <span>Score</span>
             <span>Account ID</span>
+            <span>Manage</span>
           </div>
           {profiles.map((profile) => (
             <div className="user-table-row" key={profile.id}>
               <strong>{profile.name}</strong>
               <span>{profile.email}</span>
               <em>{profile.role}</em>
+              <span>{profile.sport}</span>
+              <span>{profile.location}</span>
               <span>{profile.lastActive ? new Date(profile.lastActive).toLocaleDateString() : '-'}</span>
               <span>{profile.score}</span>
               <code>{profile.id.slice(0, 8)}...</code>
+              {profile.role === 'admin' ? (
+                <span className="protected-user">Protected</span>
+              ) : (
+                <details className="delete-user-control">
+                  <summary>Delete</summary>
+                  <form action={deleteUserAccount} className="delete-user-form">
+                    <input type="hidden" name="id" value={profile.id} />
+                    <input type="hidden" name="email" value={profile.email} />
+                    <input type="hidden" name="role" value={profile.role} />
+                    <label htmlFor={`delete-${profile.id}`}>Type email to confirm</label>
+                    <input id={`delete-${profile.id}`} name="confirmation" type="email" placeholder={profile.email} />
+                    <button className="danger-button" type="submit">Delete Account</button>
+                  </form>
+                </details>
+              )}
             </div>
           ))}
         </div>
