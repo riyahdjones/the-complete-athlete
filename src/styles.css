@@ -6139,3 +6139,59 @@ select {
       linear-gradient(135deg, #08111f 0%, #05070b 46%, #f3f6fb 46%, #eef3fb 100%);
   }
 }
+
+/* Real device lock: no desktop rail, no x-axis drift. */
+.native-shell {
+  overflow: hidden;
+}
+
+.native-shell body,
+.native-shell #root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior-x: none;
+}
+
+.native-shell .app-shell,
+.native-shell .phone-frame {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.native-shell .content {
+  overflow-y: auto;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+.native-shell .rail {
+  display: none;
+}
+
+.native-shell .topbar {
+  overflow: hidden;
+}
+
+.native-shell .topbar > div {
+  min-width: 0;
+}
+
+.native-shell .top-greeting {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.native-shell .auth-login-shell .auth-role-summary {
+  display: none;
+}
+
+.native-shell .auth-login-shell .auth-brand-panel p:not(.eyebrow) {
+  margin-bottom: 0;
+}
