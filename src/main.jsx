@@ -160,6 +160,7 @@ const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
+const notificationPrefsStorageKey = 'the-ninety-percent-notification-preferences';
 const prototypeBypassLogin = false;
 const productionApiOrigin = import.meta.env.VITE_API_ORIGIN || 'https://the-complete-athlete.vercel.app';
 
@@ -181,6 +182,17 @@ const pointValues = {
   planSeriesCompleted: 100,
   streakBonusPerDay: 5,
   streakBonusCap: 25
+};
+
+const notificationPreferenceSeed = {
+  dailyDeposits: true,
+  performancePlans: true,
+  planUnlocks: true,
+  streaks: true,
+  productivity: true,
+  points: true,
+  parentUpdates: true,
+  browserPush: false
 };
 
 function todayKey() {
@@ -304,7 +316,7 @@ function loadDailyState() {
       lastReminderDate: saved.lastReminderDate ?? null,
       readinessHistory: normalizeReadinessHistory(saved.readinessHistory),
       standardsHistory: normalizeStandardsHistory(saved.standardsHistory),
-      notifications: Array.isArray(saved.notifications) ? saved.notifications : []
+      notifications: normalizeNotifications(saved.notifications)
     };
   } catch {
     return {
@@ -321,13 +333,89 @@ function loadDailyState() {
   }
 }
 
-function buildNotification(title, body, tone = 'info') {
+function buildNotification(title, body, tone = 'info', options = {}) {
+  const createdAt = options.createdAt || new Date().toISOString();
   return {
-    id: Date.now() + Math.random(),
+    id: options.id || `${options.type || 'notice'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: options.type || 'general',
     title,
     body,
     tone,
-    createdAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    createdAt,
+    displayTime: new Date(createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    read: Boolean(options.read)
+  };
+}
+
+function normalizeNotifications(value) {
+  return Array.isArray(value)
+    ? value
+        .filter((notification) => notification?.title && notification?.body)
+        .map((notification) => ({
+          ...buildNotification(notification.title, notification.body, notification.tone || 'info', notification),
+          displayTime: notification.displayTime || new Date(notification.createdAt || Date.now()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        }))
+        .slice(0, 40)
+    : [];
+}
+
+function loadNotificationPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(notificationPrefsStorageKey) ?? '{}');
+    return { ...notificationPreferenceSeed, ...saved };
+  } catch {
+    return notificationPreferenceSeed;
+  }
+}
+
+function notificationFromSupabase(row) {
+  return buildNotification(row.title, row.body, row.tone || 'info', {
+    id: row.id,
+    type: row.notification_type || row.type || 'general',
+    createdAt: row.created_at,
+    read: row.read
+  });
+}
+
+function notificationToSupabase(notification, userId) {
+  return {
+    id: String(notification.id),
+    user_id: userId,
+    notification_type: notification.type || 'general',
+    title: notification.title || '',
+    body: notification.body || '',
+    tone: notification.tone || 'info',
+    read: Boolean(notification.read),
+    created_at: notification.createdAt || new Date().toISOString()
+  };
+}
+
+function notificationPreferencesFromSupabase(row) {
+  return {
+    ...notificationPreferenceSeed,
+    dailyDeposits: row?.daily_deposits ?? notificationPreferenceSeed.dailyDeposits,
+    performancePlans: row?.performance_plans ?? notificationPreferenceSeed.performancePlans,
+    planUnlocks: row?.plan_unlocks ?? notificationPreferenceSeed.planUnlocks,
+    streaks: row?.streaks ?? notificationPreferenceSeed.streaks,
+    productivity: row?.productivity ?? notificationPreferenceSeed.productivity,
+    points: row?.points ?? notificationPreferenceSeed.points,
+    parentUpdates: row?.parent_updates ?? notificationPreferenceSeed.parentUpdates,
+    browserPush: row?.browser_push ?? notificationPreferenceSeed.browserPush
+  };
+}
+
+function notificationPreferencesToSupabase(preferences, userId) {
+  return {
+    user_id: userId,
+    daily_deposits: Boolean(preferences.dailyDeposits),
+    performance_plans: Boolean(preferences.performancePlans),
+    plan_unlocks: Boolean(preferences.planUnlocks),
+    streaks: Boolean(preferences.streaks),
+    productivity: Boolean(preferences.productivity),
+    points: Boolean(preferences.points),
+    parent_updates: Boolean(preferences.parentUpdates),
+    browser_push: Boolean(preferences.browserPush),
+    updated_at: new Date().toISOString()
   };
 }
 
@@ -858,6 +946,7 @@ function App() {
   const [readinessHistory, setReadinessHistory] = useState(initialDailyState.readinessHistory);
   const [standardsHistory, setStandardsHistory] = useState(initialDailyState.standardsHistory);
   const [notifications, setNotifications] = useState(initialDailyState.notifications);
+  const [notificationPreferences, setNotificationPreferences] = useState(loadNotificationPreferences);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [journal, setJournal] = useState('');
   const [journalType, setJournalType] = useState('Daily Reflection');
@@ -901,6 +990,7 @@ function App() {
   const athleteScore = pointsTotal(pointsLedger);
   const todayPoints = pointsToday(pointsLedger, dailyDate);
   const recentPointEvents = latestPointEvents(pointsLedger);
+  const unreadNotifications = notifications.filter((notification) => !notification.read);
 
   useEffect(() => {
     localStorage.setItem(
@@ -995,6 +1085,64 @@ function App() {
       localStorage.removeItem(authSessionStorageKey);
     }
   }, [authSession]);
+
+  useEffect(() => {
+    localStorage.setItem(notificationPrefsStorageKey, JSON.stringify(notificationPreferences));
+  }, [notificationPreferences]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authSession?.id || !notifications.length) return;
+
+    supabase
+      .from('app_notifications')
+      .upsert(
+        notifications.map((notification) => notificationToSupabase(notification, authSession.id)),
+        { onConflict: 'id' }
+      );
+  }, [authSession?.id, notifications]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authSession?.id) return;
+
+    supabase
+      .from('notification_preferences')
+      .upsert(notificationPreferencesToSupabase(notificationPreferences, authSession.id), { onConflict: 'user_id' });
+  }, [authSession?.id, notificationPreferences]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authSession?.id) return;
+    let cancelled = false;
+
+    async function loadNotifications() {
+      const [notificationsResult, preferencesResult] = await Promise.all([
+        supabase
+          .from('app_notifications')
+          .select('id, notification_type, title, body, tone, read, created_at')
+          .eq('user_id', authSession.id)
+          .order('created_at', { ascending: false })
+          .limit(40),
+        supabase
+          .from('notification_preferences')
+          .select('daily_deposits, performance_plans, plan_unlocks, streaks, productivity, points, parent_updates, browser_push')
+          .eq('user_id', authSession.id)
+          .maybeSingle()
+      ]);
+
+      if (cancelled) return;
+      if (!notificationsResult.error && Array.isArray(notificationsResult.data)) {
+        setNotifications(notificationsResult.data.map(notificationFromSupabase));
+      }
+      if (!preferencesResult.error && preferencesResult.data) {
+        setNotificationPreferences(notificationPreferencesFromSupabase(preferencesResult.data));
+      }
+    }
+
+    loadNotifications();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authSession?.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete') {
@@ -1194,11 +1342,27 @@ function App() {
       if (!lessonsResult.error && Array.isArray(lessonsResult.data) && lessonsResult.data.length) {
         const nextLessons = lessonsResult.data.map(lessonFromSupabase);
         setLessonLibrary(nextLessons);
-        setSelectedLessonId(dailyLessonId(nextLessons, dailyDate));
+        const nextLessonId = dailyLessonId(nextLessons, dailyDate);
+        const nextLesson = nextLessons.find((lesson) => String(lesson.id) === String(nextLessonId));
+        setSelectedLessonId(nextLessonId);
+        if (nextLesson) {
+          notifyUser('Daily Deposit ready', 'Today’s Daily Deposit is available.', 'info', {
+            type: 'dailyDeposits',
+            id: `daily-deposit-${dailyDate}-${nextLesson.id}`
+          });
+        }
       }
 
       if (!plansResult.error && Array.isArray(plansResult.data) && plansResult.data.length) {
-        setPlans(mergeWithSeedPlans(plansResult.data.map(planFromSupabase)));
+        const nextPlans = mergeWithSeedPlans(plansResult.data.map(planFromSupabase));
+        const releasedToday = nextPlans.find((plan) => plan.releaseDate === dailyDate);
+        setPlans(nextPlans);
+        if (releasedToday) {
+          notifyUser('New performance plan available', `${planSeriesTitle(releasedToday)} is ready in Performance Plans.`, 'info', {
+            type: 'performancePlans',
+            id: `plan-release-${dailyDate}-${planSeriesTitle(releasedToday)}`
+          });
+        }
       }
 
       if (!parentMessageResult.error && parentMessageResult.data) {
@@ -1212,7 +1376,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [authSession?.id, authSession?.role]);
+  }, [authSession?.id, authSession?.role, dailyDate]);
 
   useEffect(() => {
     setSelectedLessonId(dailyLessonId(lessonLibrary, dailyDate));
@@ -1813,17 +1977,48 @@ function App() {
     return () => authListener.subscription.unsubscribe();
   }, []);
 
-  function notifyUser(title, body, tone = 'info') {
-    setNotifications((current) => [buildNotification(title, body, tone), ...current].slice(0, 8));
+  function notifyUser(title, body, tone = 'info', options = {}) {
+    const type = options.type || 'general';
+    if (type !== 'general' && notificationPreferences[type] === false) return;
 
-    if ('Notification' in window && Notification.permission === 'granted') {
+    const nextNotification = buildNotification(title, body, tone, { ...options, type });
+    setNotifications((current) => {
+      if (current.some((notification) => notification.id === nextNotification.id)) return current;
+      return [nextNotification, ...current].slice(0, 40);
+    });
+
+    if (notificationPreferences.browserPush && 'Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body });
     }
   }
 
-  function requestBrowserNotifications() {
+  async function requestBrowserNotifications() {
     if (!('Notification' in window)) return;
-    Notification.requestPermission();
+    const permission = await Notification.requestPermission();
+    setNotificationPreferences((current) => ({ ...current, browserPush: permission === 'granted' }));
+  }
+
+  function updateNotificationPreference(field, value) {
+    setNotificationPreferences((current) => ({ ...current, [field]: value }));
+  }
+
+  function markNotificationsRead() {
+    setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
+  }
+
+  async function clearNotifications() {
+    setNotifications([]);
+    if (isSupabaseConfigured && authSession?.id) {
+      await supabase.from('app_notifications').delete().eq('user_id', authSession.id);
+    }
+  }
+
+  function toggleNotifications() {
+    setNotificationsOpen((open) => {
+      const nextOpen = !open;
+      if (nextOpen) markNotificationsRead();
+      return nextOpen;
+    });
   }
 
   function awardPoints({ type, points, label, uniqueKey, metadata = {} }) {
@@ -1848,7 +2043,10 @@ function App() {
     });
 
     persistPointEvent(pointEvent);
-    notifyUser('Points earned', `+${cleanPoints} points · ${label}`, 'success');
+    notifyUser('Points earned', `+${cleanPoints} points · ${label}`, 'success', {
+      type: 'points',
+      id: `points-${cleanKey}`
+    });
     return true;
   }
 
@@ -1947,7 +2145,11 @@ function App() {
     notifyUser(
       `${streakCount}-day streak on the line`,
       'Check off today’s productivity list and lock in your day to keep your streak alive.',
-      'warning'
+      'warning',
+      {
+        type: 'streaks',
+        id: `streak-warning-${dailyDate}-${streakCount}`
+      }
     );
     setLastReminderDate(dailyDate);
   }, [dailyDate, lastReminderDate, lastSubmittedDate, streakCount, submittedToday]);
@@ -2024,6 +2226,7 @@ function App() {
           planProgress={planProgress}
           setPlanProgress={setPlanProgress}
           awardPoints={awardPoints}
+          notifyUser={notifyUser}
           persistPlanCompletion={persistPlanCompletion}
         />
       ),
@@ -2070,9 +2273,13 @@ function App() {
         <ProfileScreen
           authSession={authSession}
           athleteProfile={athleteProfile}
+          notificationPreferences={notificationPreferences}
           privacySettings={privacySettings}
+          requestBrowserNotifications={requestBrowserNotifications}
           setAthleteProfile={setAthleteProfile}
+          setNotificationPreferences={setNotificationPreferences}
           setPrivacySettings={setPrivacySettings}
+          updateNotificationPreference={updateNotificationPreference}
         />
       )
     };
@@ -2097,6 +2304,7 @@ function App() {
     coachComposerFocused,
     messageDraft,
     messages,
+    notificationPreferences,
     parentMessage,
     planProgress,
     plans,
@@ -2179,15 +2387,17 @@ function App() {
               <h1>{view === 'athlete' ? screenTitles[tab] : 'Parent Dashboard'}</h1>
             )}
           </div>
-          <button className="icon-button notification-button" aria-label="Notifications" onClick={() => setNotificationsOpen((open) => !open)}>
+          <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
             <Bell size={19} />
-            {notifications.length > 0 && <span>{notifications.length}</span>}
+            {unreadNotifications.length > 0 && <span>{unreadNotifications.length}</span>}
           </button>
         </header>
 
         {notificationsOpen && (
           <NotificationTray
+            clearNotifications={clearNotifications}
             notifications={notifications}
+            onMarkAllRead={markNotificationsRead}
             requestBrowserNotifications={requestBrowserNotifications}
           />
         )}
@@ -2742,14 +2952,22 @@ function HomeScreen({
       allStandardsCompleted
         ? `Your day is locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`
         : `You submitted ${completedStandards.length} of ${standards.length} items. Complete every item to earn productivity points.`,
-      'success'
+      'success',
+      {
+        type: 'productivity',
+        id: `productivity-${submissionDate}`
+      }
     );
 
     if (nextStreak % 7 === 0) {
       notifyUser(
         `${nextStreak}-day streak`,
         `You have protected your daily work for ${nextStreak} straight days.`,
-        'success'
+        'success',
+        {
+          type: 'streaks',
+          id: `streak-${submissionDate}-${nextStreak}`
+        }
       );
     }
   }
@@ -3101,20 +3319,24 @@ function HomeScreen({
   );
 }
 
-function NotificationTray({ notifications, requestBrowserNotifications }) {
+function NotificationTray({ clearNotifications, notifications, onMarkAllRead, requestBrowserNotifications }) {
   return (
     <section className="notification-tray" aria-label="Notifications">
       <div className="tray-head">
         <strong>Notifications</strong>
-        <button onClick={requestBrowserNotifications}>Enable</button>
+        <div className="tray-actions">
+          <button onClick={requestBrowserNotifications}>Enable</button>
+          {notifications.length > 0 && <button onClick={onMarkAllRead}>Read</button>}
+          {notifications.length > 0 && <button onClick={clearNotifications}>Clear</button>}
+        </div>
       </div>
       {notifications.length === 0 ? (
         <p>No notifications yet.</p>
       ) : (
         <div className="notification-list">
           {notifications.map((notification) => (
-            <article className={`notice ${notification.tone}`} key={notification.id}>
-              <span>{notification.createdAt}</span>
+            <article className={`notice ${notification.tone}${notification.read ? '' : ' unread'}`} key={notification.id}>
+              <span>{notification.displayTime}</span>
               <strong>{notification.title}</strong>
               <p>{notification.body}</p>
             </article>
@@ -3331,7 +3553,7 @@ function GoalsScreen({
   );
 }
 
-function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, persistPlanCompletion }) {
+function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion }) {
   const readOnly = !setPlanProgress;
   const today = todayKey();
   const sequencedPlans = sequencedPlanAccess(plans, planProgress, today);
@@ -3385,6 +3607,22 @@ function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, persis
         label: `${seriesTitle} completed`,
         uniqueKey: `plan-series-completed-${seriesTitle}`,
         metadata: { seriesTitle, lessonCount: seriesPlans.length }
+      });
+      notifyUser?.('Full series completed', `${seriesTitle} is complete. That is a major rep banked.`, 'success', {
+        type: 'planUnlocks',
+        id: `plan-series-notification-${seriesTitle}`
+      });
+    } else {
+      const nextPlan = seriesPlans
+        .sort((first, second) => planDayNumber(first) - planDayNumber(second))
+        .find((item) => !nextProgress[String(item.id)]);
+      notifyUser?.('Lesson complete', nextPlan
+        ? 'The next lesson will unlock after today so the work has time to sink in.'
+        : 'Lesson complete. Keep stacking the work.',
+      'success',
+      {
+        type: 'planUnlocks',
+        id: `plan-lesson-notification-${planId}`
       });
     }
   }
@@ -4522,7 +4760,17 @@ function CoachScreen({
   );
 }
 
-function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthleteProfile, setPrivacySettings }) {
+function ProfileScreen({
+  authSession,
+  athleteProfile,
+  notificationPreferences,
+  privacySettings,
+  requestBrowserNotifications,
+  setAthleteProfile,
+  setNotificationPreferences,
+  setPrivacySettings,
+  updateNotificationPreference
+}) {
   const [shareFeedback, setShareFeedback] = useState('');
   const accountEmail = authSession?.email || 'No email found';
 
@@ -4555,6 +4803,14 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
 
   function updatePrivacy(field, value) {
     setPrivacySettings((current) => ({ ...current, [field]: value }));
+  }
+
+  function toggleBrowserPush(checked) {
+    if (checked) {
+      requestBrowserNotifications();
+      return;
+    }
+    setNotificationPreferences((current) => ({ ...current, browserPush: false }));
   }
 
   const parentInviteUrl = `${window.location.origin}${window.location.pathname}?role=parent&parentCode=${encodeURIComponent(athleteProfile.parentAccessCode)}`;
@@ -4707,6 +4963,68 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
           <span>Journal is private unless you choose to share it.</span>
           <span>My Mindset Coach chats stay private.</span>
         </div>
+      </section>
+      <section className="panel notification-settings-panel">
+        <PanelTitle icon={<Bell size={18} />} title="Notifications" action="Athlete controlled" />
+        <div className="privacy-list notification-settings-list">
+          <label>
+            <span>Daily Deposit reminders</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.dailyDeposits}
+              onChange={(event) => updateNotificationPreference('dailyDeposits', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>New performance plans</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.performancePlans}
+              onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Plan unlocks and completions</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.planUnlocks}
+              onChange={(event) => updateNotificationPreference('planUnlocks', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Streak reminders</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.streaks}
+              onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Productivity updates</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.productivity}
+              onChange={(event) => updateNotificationPreference('productivity', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Points earned</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.points}
+              onChange={(event) => updateNotificationPreference('points', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Browser push while using the app</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.browserPush}
+              onChange={(event) => toggleBrowserPush(event.target.checked)}
+            />
+          </label>
+        </div>
+        <p className="privacy-note">Lock-screen push notifications will use Apple/phone credentials when we finish the native App Store setup.</p>
       </section>
     </>
   );

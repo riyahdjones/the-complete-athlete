@@ -541,7 +541,15 @@ p {
   font-size: 0.9rem;
 }
 
-.tray-head button {
+.tray-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tray-head button,
+.tray-actions button {
   min-height: 32px;
   padding: 0 10px;
   border-radius: 10px;
@@ -567,6 +575,11 @@ p {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #f7f8f4;
+}
+
+.notice.unread {
+  border-color: rgba(45, 97, 213, 0.45);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .notice.warning {
