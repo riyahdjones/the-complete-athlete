@@ -2133,7 +2133,7 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
   }
 
   return (
-    <main className="auth-shell" aria-label="The Complete Athlete login">
+    <main className="auth-shell auth-login-shell" aria-label="The Complete Athlete login">
       <section className="auth-brand-panel">
         <p className="eyebrow">The Complete Athlete</p>
         <h1>Access the side built for you.</h1>
