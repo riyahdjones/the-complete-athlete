@@ -4514,6 +4514,7 @@ function CoachScreen({
 
 function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthleteProfile, setPrivacySettings }) {
   const [shareFeedback, setShareFeedback] = useState('');
+  const accountEmail = authSession?.email || 'No email found';
 
   function updateAthleteProfile(field, value) {
     setAthleteProfile((current) => ({ ...current, [field]: value }));
@@ -4580,7 +4581,7 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
         </div>
         <div>
           <p className="eyebrow">Athlete Profile</p>
-          <h2>Riyahd Jones</h2>
+          <h2>{athleteProfile.name || authSession?.name || 'Athlete'}</h2>
           {(athleteProfile.age || athleteProfile.location) && (
             <span>
               {athleteProfile.age ? `Age ${athleteProfile.age}` : ''}
@@ -4592,6 +4593,10 @@ function ProfileScreen({ authSession, athleteProfile, privacySettings, setAthlet
       </section>
       <section className="panel add-goal-panel">
         <PanelTitle icon={<UserRound size={18} />} title="Profile Details" action="Athlete controlled" />
+        <div className="account-email-card">
+          <span>Registered email</span>
+          <strong>{accountEmail}</strong>
+        </div>
         <div className="photo-actions">
           <label className="photo-upload">
             <Camera size={18} />

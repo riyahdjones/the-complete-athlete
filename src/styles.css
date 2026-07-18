@@ -2068,6 +2068,31 @@ textarea {
   gap: 10px;
 }
 
+.account-email-card {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 12px 13px;
+  border: 1px solid rgba(99, 113, 133, 0.18);
+  border-radius: 12px;
+  background: rgba(242, 246, 255, 0.82);
+}
+
+.account-email-card span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.account-email-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
 .photo-actions {
   display: flex;
   flex-wrap: wrap;
