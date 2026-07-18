@@ -540,6 +540,17 @@ function normalizePlan(plan) {
   };
 }
 
+function mergeWithSeedPlans(sourcePlans) {
+  const nextPlans = Array.isArray(sourcePlans) ? sourcePlans.map(normalizePlan) : [];
+  const existingIds = new Set(nextPlans.map((plan) => String(plan.id)));
+  plansSeed.map(normalizePlan).forEach((plan) => {
+    if (!existingIds.has(String(plan.id))) {
+      nextPlans.push(plan);
+    }
+  });
+  return nextPlans;
+}
+
 function loadGoals() {
   try {
     const saved = JSON.parse(localStorage.getItem(goalsStorageKey) ?? '[]');
@@ -1187,7 +1198,7 @@ function App() {
       }
 
       if (!plansResult.error && Array.isArray(plansResult.data) && plansResult.data.length) {
-        setPlans(plansResult.data.map(planFromSupabase));
+        setPlans(mergeWithSeedPlans(plansResult.data.map(planFromSupabase)));
       }
 
       if (!parentMessageResult.error && parentMessageResult.data) {
