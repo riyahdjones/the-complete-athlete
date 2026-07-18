@@ -3137,6 +3137,217 @@ textarea,
   }
 }
 
+/* Final authority for the real mobile shell. Keep this at the end. */
+.native-shell .mobile-native-app,
+.mobile-native-app {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100svh;
+  overflow: hidden;
+  background: #f4f6fb;
+}
+
+.native-shell .mobile-native-frame,
+.mobile-native-frame {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100svh;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #f4f6fb;
+  box-shadow: none;
+}
+
+.native-shell .mobile-native-frame .content,
+.mobile-native-frame .content {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 8px max(14px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.native-shell .mobile-native-frame .bottom-nav,
+.mobile-native-frame .bottom-nav {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* True mobile app shell: React uses this instead of the desktop mockup frame. */
+.mobile-native-app {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100svh;
+  overflow: hidden;
+  background: #f4f6fb;
+}
+
+.mobile-native-frame {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100svh;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #f4f6fb;
+  box-shadow: none;
+}
+
+.mobile-native-frame .topbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: max(58px, calc(env(safe-area-inset-top) + 18px)) 12px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.mobile-native-frame .topbar > div {
+  width: 100%;
+  min-width: 0;
+}
+
+.mobile-native-frame .topbar > .icon-button {
+  display: none;
+}
+
+.mobile-native-frame .top-greeting,
+.mobile-native-frame .topbar h1 {
+  max-width: 100%;
+  font-size: 1.18rem;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+.mobile-native-frame .content {
+  flex: 1 1 auto;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 8px max(14px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-native-frame .content > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mobile-native-frame .panel,
+.mobile-native-frame .goal-card,
+.mobile-native-frame .profile-head,
+.mobile-native-frame .chat-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 12px;
+  border-radius: 12px;
+  overflow-x: hidden;
+}
+
+.mobile-native-frame .panel-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.mobile-native-frame .panel-title span {
+  min-width: 0;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.mobile-native-frame .panel-title em {
+  max-width: max-content;
+  white-space: nowrap;
+  font-size: 0.68rem;
+}
+
+.mobile-native-frame .daily-deposit-panel p {
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.mobile-native-frame .today-focus-panel .focus-question strong {
+  font-size: 0.82rem;
+  line-height: 1.34;
+}
+
+.mobile-native-frame .progress-scoreboard {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mobile-native-frame .bottom-nav {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 6px max(6px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-right));
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.mobile-native-frame .nav-item {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 2px;
+  border-radius: 12px;
+}
+
+.mobile-native-frame .nav-item svg {
+  width: 17px;
+  height: 17px;
+}
+
+.mobile-native-frame .nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.52rem;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
 @media (max-width: 400px) {
   .metric-grid {
     grid-template-columns: 1fr;

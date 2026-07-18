@@ -2066,31 +2066,39 @@ function App() {
     return <OnboardingScreen completeOnboarding={completeOnboarding} />;
   }
 
-  return (
-    <div className="app-shell">
-      <aside className="rail">
-        <div className="brand-mark">
-          <span>TCA</span>
-        </div>
-        {effectiveSession.role === 'athlete' && (
-          <button className="rail-btn active" onClick={() => setView('athlete')}>
-            <Trophy size={20} />
-            <span>Athlete</span>
-          </button>
-        )}
-        {effectiveSession.role === 'parent' && (
-          <button className="rail-btn active" onClick={() => setView('parent')}>
-            <Users size={20} />
-            <span>Parent</span>
-          </button>
-        )}
-        <div className="rail-account">
-          <strong>{effectiveSession.name}</strong>
-          {!prototypeBypassLogin && <button onClick={logoutUser}>Log out</button>}
-        </div>
-      </aside>
+  const useMobileAppShell = typeof window !== 'undefined'
+    && (
+      document.documentElement.classList.contains('native-shell')
+      || window.matchMedia('(max-width: 720px)').matches
+    );
 
-      <main className="phone-frame" aria-label="The Complete Athlete app prototype">
+  return (
+    <div className={useMobileAppShell ? 'mobile-native-app' : 'app-shell'}>
+      {!useMobileAppShell && (
+        <aside className="rail">
+          <div className="brand-mark">
+            <span>TCA</span>
+          </div>
+          {effectiveSession.role === 'athlete' && (
+            <button className="rail-btn active" onClick={() => setView('athlete')}>
+              <Trophy size={20} />
+              <span>Athlete</span>
+            </button>
+          )}
+          {effectiveSession.role === 'parent' && (
+            <button className="rail-btn active" onClick={() => setView('parent')}>
+              <Users size={20} />
+              <span>Parent</span>
+            </button>
+          )}
+          <div className="rail-account">
+            <strong>{effectiveSession.name}</strong>
+            {!prototypeBypassLogin && <button onClick={logoutUser}>Log out</button>}
+          </div>
+        </aside>
+      )}
+
+      <main className={useMobileAppShell ? 'mobile-native-frame' : 'phone-frame'} aria-label="The Complete Athlete app prototype">
         <header className="topbar">
           <div>
             <p className="top-greeting">{timeBasedGreeting(effectiveSession.name)}</p>
