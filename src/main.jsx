@@ -2109,7 +2109,7 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
         <section className="auth-brand-panel">
           <p className="eyebrow">The Complete Athlete</p>
           <h1>How are you using the app?</h1>
-          <p>Choose the experience that fits you. Athletes build the day. Parents support the process.</p>
+          <p>Start in the space built for your role. Athletes train the habits. Parents stay connected to the growth.</p>
         </section>
 
         <section className="auth-card role-choice-card">
