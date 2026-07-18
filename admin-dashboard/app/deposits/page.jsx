@@ -64,17 +64,67 @@ function DepositRow({ deposit }) {
   );
 }
 
+function DepositQueueSummary({ deposits }) {
+  const scheduledCount = deposits.filter((deposit) => deposit.status === 'scheduled').length;
+  const draftCount = deposits.filter((deposit) => deposit.status === 'draft').length;
+  const publishedCount = deposits.filter((deposit) => deposit.status === 'posted').length;
+  const nextDeposit = deposits[0];
+
+  return (
+    <div className="deposit-queue-summary">
+      <span>
+        <strong>{deposits.length}</strong>
+        Future deposits
+      </span>
+      <span>
+        <strong>{scheduledCount}</strong>
+        Scheduled
+      </span>
+      <span>
+        <strong>{draftCount}</strong>
+        Drafts
+      </span>
+      <span>
+        <strong>{publishedCount}</strong>
+        Published ahead
+      </span>
+      {nextDeposit && (
+        <span className="wide">
+          <strong>{formatShortDate(nextDeposit.release_date)}</strong>
+          Next queued deposit
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default async function DailyDepositsPage() {
   const authed = await isAdminAuthed();
   if (!authed) redirect('/');
 
-  const { data: deposits = [], error } = await supabaseAdmin()
-    .from('daily_deposits')
-    .select('id, title, body, focus_question, release_date, status, created_at')
-    .order('release_date', { ascending: false })
-    .limit(30);
+  const today = todayKey();
+  const supabase = supabaseAdmin();
 
-  const latestDeposit = deposits[0];
+  const [
+    { data: recentDeposits = [], error: recentError },
+    { data: futureDeposits = [], error: futureError }
+  ] = await Promise.all([
+    supabase
+      .from('daily_deposits')
+      .select('id, title, body, focus_question, release_date, status, created_at')
+      .lte('release_date', today)
+      .order('release_date', { ascending: false })
+      .limit(30),
+    supabase
+      .from('daily_deposits')
+      .select('id, title, body, focus_question, release_date, status, created_at')
+      .gt('release_date', today)
+      .order('release_date', { ascending: true })
+      .limit(120)
+  ]);
+
+  const error = recentError || futureError;
+  const latestDeposit = recentDeposits[0];
 
   return (
     <main className="dashboard-shell">
@@ -93,6 +143,24 @@ export default async function DailyDepositsPage() {
           <p>{error.message}</p>
         </section>
       )}
+
+      <section className="dashboard-section">
+        <div className="section-head">
+          <p className="eyebrow">Queue</p>
+          <h2>Future Daily Deposits</h2>
+          <p>Review what is already scheduled ahead so you can see the upcoming rhythm at a glance.</p>
+        </div>
+        {futureDeposits.length ? (
+          <>
+            <DepositQueueSummary deposits={futureDeposits} />
+            <div className="deposit-list future-deposit-list">
+              {futureDeposits.map((deposit) => <DepositRow key={deposit.id} deposit={deposit} />)}
+            </div>
+          </>
+        ) : (
+          <p className="empty-state">No future deposits are queued yet.</p>
+        )}
+      </section>
 
       <section className="dashboard-section">
         <div className="section-head">
@@ -121,7 +189,7 @@ export default async function DailyDepositsPage() {
           <p>The last 30 deposits are shown here for quick review.</p>
         </div>
         <div className="deposit-list">
-          {deposits.length ? deposits.map((deposit) => <DepositRow key={deposit.id} deposit={deposit} />) : <p>No deposits yet.</p>}
+          {recentDeposits.length ? recentDeposits.map((deposit) => <DepositRow key={deposit.id} deposit={deposit} />) : <p>No deposits yet.</p>}
         </div>
       </section>
     </main>
