@@ -41,11 +41,14 @@ if (typeof window !== 'undefined') {
 
   if (isNativeShell) {
     document.documentElement.classList.add('native-shell');
+    let nativeTouchStartX = 0;
+    let nativeTouchStartY = 0;
     const lockHorizontalScroll = () => {
+      window.scrollTo(0, window.scrollY);
       document.documentElement.scrollLeft = 0;
       if (document.body) document.body.scrollLeft = 0;
-      document.querySelectorAll('.content, .onboarding-shell, .auth-shell').forEach((element) => {
-        element.scrollLeft = 0;
+      document.querySelectorAll('*').forEach((element) => {
+        if (element.scrollLeft) element.scrollLeft = 0;
       });
     };
     const containNativeOverflow = () => {
@@ -80,10 +83,29 @@ if (typeof window !== 'undefined') {
       lockHorizontalScroll();
       requestAnimationFrame(containNativeOverflow);
     };
+    const rememberNativeTouchStart = (event) => {
+      const touch = event.touches?.[0];
+      if (!touch) return;
+      nativeTouchStartX = touch.clientX;
+      nativeTouchStartY = touch.clientY;
+    };
+    const blockNativeHorizontalPan = (event) => {
+      const touch = event.touches?.[0];
+      if (!touch) return;
+      const dx = Math.abs(touch.clientX - nativeTouchStartX);
+      const dy = Math.abs(touch.clientY - nativeTouchStartY);
+      if (dx > dy && dx > 6) {
+        event.preventDefault();
+      }
+      lockHorizontalScroll();
+    };
 
     window.addEventListener('scroll', runNativeLayoutPass, { passive: true });
     window.addEventListener('resize', runNativeLayoutPass, { passive: true });
     document.addEventListener('scroll', runNativeLayoutPass, { passive: true, capture: true });
+    document.addEventListener('touchstart', rememberNativeTouchStart, { passive: true, capture: true });
+    document.addEventListener('touchmove', blockNativeHorizontalPan, { passive: false, capture: true });
+    document.addEventListener('touchend', runNativeLayoutPass, { passive: true, capture: true });
     document.addEventListener('DOMContentLoaded', runNativeLayoutPass, { once: true });
     window.setTimeout(runNativeLayoutPass, 120);
     window.setTimeout(runNativeLayoutPass, 650);

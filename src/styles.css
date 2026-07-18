@@ -6148,6 +6148,7 @@ select {
   font-size: 14px;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: pan-y;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -6200,6 +6201,15 @@ select {
   padding-right: 8px;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+.native-shell .app-shell,
+.native-shell .phone-frame,
+.native-shell .content,
+.native-shell .onboarding-shell,
+.native-shell .auth-shell {
   overscroll-behavior-x: none;
   touch-action: pan-y;
 }
