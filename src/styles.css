@@ -6142,37 +6142,58 @@ select {
 
 /* Real device lock: no desktop rail, no x-axis drift. */
 .native-shell {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
   overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .native-shell body,
 .native-shell #root {
   position: fixed;
   inset: 0;
-  width: 100%;
-  min-width: 0;
+  width: 100vw;
+  max-width: 100vw;
+  min-width: 0 !important;
   overflow: hidden;
   overscroll-behavior-x: none;
+}
+
+.native-shell *,
+.native-shell *::before,
+.native-shell *::after {
+  box-sizing: border-box;
 }
 
 .native-shell .app-shell,
 .native-shell .phone-frame {
   position: fixed;
   inset: 0;
-  width: auto;
-  max-width: none;
+  width: 100vw;
+  max-width: 100vw;
   min-width: 0;
   height: auto;
   max-height: none;
   overflow: hidden;
 }
 
+.native-shell .phone-frame {
+  display: flex;
+  flex-direction: column;
+}
+
 .native-shell .content {
   box-sizing: border-box;
-  width: auto;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100vw;
   min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
   overflow-y: auto;
-  overflow-x: clip;
+  overflow-x: hidden;
   overscroll-behavior-x: none;
   touch-action: pan-y;
 }
@@ -6215,6 +6236,7 @@ select {
   min-width: 0;
   margin-left: 0;
   margin-right: 0;
+  padding: 14px;
 }
 
 .native-shell .panel-title {
@@ -6240,8 +6262,60 @@ select {
 }
 
 .native-shell .daily-deposit-panel p {
-  font-size: clamp(1rem, 4.7vw, 1.18rem);
-  line-height: 1.45;
+  font-size: 0.98rem;
+  line-height: 1.46;
+}
+
+.native-shell .focus-question {
+  padding: 13px;
+}
+
+.native-shell .today-focus-panel .focus-question strong {
+  font-size: 0.98rem;
+  line-height: 1.34;
+}
+
+.native-shell .progress-scoreboard {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.native-shell .progress-scoreboard span {
+  min-width: 0;
+  min-height: 66px;
+  padding: 9px;
+}
+
+.native-shell .bottom-nav {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  padding: 7px max(8px, env(safe-area-inset-left)) max(9px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
+  overflow: hidden;
+}
+
+.native-shell .nav-item {
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 2px;
+  border-radius: 13px;
+}
+
+.native-shell .nav-item svg {
+  width: 18px;
+  height: 18px;
+}
+
+.native-shell .nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.56rem;
+  line-height: 1.05;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 /* Native onboarding: direct, safe-area aware, and locked to the device width. */
