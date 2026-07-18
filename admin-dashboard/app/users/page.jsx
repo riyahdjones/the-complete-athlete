@@ -65,10 +65,8 @@ export default async function UsersPage() {
                   <summary>Delete</summary>
                   <form action={deleteUserAccount} className="delete-user-form">
                     <input type="hidden" name="id" value={profile.id} />
-                    <input type="hidden" name="email" value={profile.email} />
                     <input type="hidden" name="role" value={profile.role} />
-                    <label htmlFor={`delete-${profile.id}`}>Type email to confirm</label>
-                    <input id={`delete-${profile.id}`} name="confirmation" type="email" placeholder={profile.email} />
+                    <p>This permanently removes the account and connected app data.</p>
                     <button className="danger-button" type="submit">Delete Account</button>
                   </form>
                 </details>

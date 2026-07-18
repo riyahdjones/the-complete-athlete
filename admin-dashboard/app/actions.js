@@ -62,16 +62,10 @@ export async function deleteDailyDeposit(formData) {
 export async function deleteUserAccount(formData) {
   await requireAdmin();
   const id = text(formData, 'id');
-  const email = text(formData, 'email');
   const role = text(formData, 'role');
-  const confirmation = text(formData, 'confirmation');
 
   if (!id) return;
   if (role === 'admin') throw new Error('Admin accounts are protected from this screen.');
-  if (!email || email === 'No email found') throw new Error('This account does not have an email to confirm against.');
-  if (confirmation.toLowerCase() !== email.toLowerCase()) {
-    throw new Error('Type the exact email before deleting this account.');
-  }
 
   const { error } = await supabaseAdmin().auth.admin.deleteUser(id);
   if (error) throw new Error(error.message);
