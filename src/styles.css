@@ -875,7 +875,7 @@ p {
 .check-row {
   min-height: 48px;
   display: grid;
-  grid-template-columns: 30px 1fr minmax(82px, 0.52fr) 36px;
+  grid-template-columns: 30px minmax(0, 1fr) minmax(82px, 0.52fr) minmax(68px, auto);
   align-items: center;
   gap: 11px;
   padding: 10px 11px;
@@ -892,9 +892,27 @@ p {
   background: #fff4c2;
 }
 
-.check-row > span {
+.check-row > span,
+.standard-task-copy {
   display: grid;
   gap: 3px;
+}
+
+.standard-task-copy strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.18;
+}
+
+.standard-edit-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  background: #ffffff;
+  font-weight: 850;
 }
 
 .check-row em {
@@ -934,7 +952,8 @@ p {
 }
 
 .standard-toggle,
-.remove-standard {
+.remove-standard,
+.standard-action-button {
   display: grid;
   place-items: center;
   background: transparent;
@@ -952,7 +971,21 @@ p {
   color: var(--muted);
 }
 
-.remove-standard:hover {
+.standard-action-button {
+  width: 32px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--muted);
+}
+
+.standard-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.remove-standard:hover,
+.standard-action-button:hover {
   color: var(--ink);
   background: rgba(16, 22, 20, 0.08);
 }
@@ -3681,7 +3714,7 @@ body {
 
 .check-row {
   min-height: 44px;
-  grid-template-columns: 28px 1fr minmax(80px, 0.5fr) 32px;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(80px, 0.5fr) minmax(64px, auto);
   gap: 9px;
   padding: 9px 10px;
 }

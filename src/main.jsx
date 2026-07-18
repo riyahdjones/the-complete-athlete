@@ -2592,6 +2592,8 @@ function HomeScreen({
   const [standardsFeedback, setStandardsFeedback] = useState('');
   const [standardsHistoryOpen, setStandardsHistoryOpen] = useState(false);
   const [scoreInfoOpen, setScoreInfoOpen] = useState(false);
+  const [editingStandardId, setEditingStandardId] = useState(null);
+  const [editingStandardDraft, setEditingStandardDraft] = useState('');
   const completedStandards = standards.filter((standard) => standard.done);
   const allStandardsCompleted = standards.length > 0 && completedStandards.length === standards.length;
   const recentStandardsHistory = [...standardsHistory].reverse().slice(0, 7);
@@ -2618,6 +2620,38 @@ function HomeScreen({
 
   function removeStandard(id) {
     setStandards((current) => current.filter((standard) => standard.id !== id));
+    if (editingStandardId === id) {
+      setEditingStandardId(null);
+      setEditingStandardDraft('');
+    }
+    setStandardsFeedback('');
+  }
+
+  function startEditingStandard(item) {
+    setEditingStandardId(item.id);
+    setEditingStandardDraft(item.label);
+    setStandardsFeedback('');
+  }
+
+  function cancelEditingStandard() {
+    setEditingStandardId(null);
+    setEditingStandardDraft('');
+    setStandardsFeedback('');
+  }
+
+  function saveEditingStandard(id) {
+    const label = editingStandardDraft.trim();
+    if (!label) {
+      setStandardsFeedback('Add a task name before saving.');
+      return;
+    }
+    setStandards((current) =>
+      current.map((standard) =>
+        standard.id === id ? { ...standard, label } : standard
+      )
+    );
+    setEditingStandardId(null);
+    setEditingStandardDraft('');
     setStandardsFeedback('');
   }
 
@@ -2922,8 +2956,22 @@ function HomeScreen({
                 >
                   <span className="check-box">{item.done && <Check size={14} />}</span>
                 </button>
-                <span>
-                  {item.label}
+                <span className="standard-task-copy">
+                  {editingStandardId === item.id ? (
+                    <input
+                      className="standard-edit-input"
+                      value={editingStandardDraft}
+                      onChange={(event) => setEditingStandardDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') saveEditingStandard(item.id);
+                        if (event.key === 'Escape') cancelEditingStandard();
+                      }}
+                      aria-label={`Edit ${item.label}`}
+                      autoFocus
+                    />
+                  ) : (
+                    <strong>{item.label}</strong>
+                  )}
                   <em>{goals.find((goal) => goal.id === item.goalId)?.label ?? 'No goal linked'}</em>
                 </span>
                 <select
@@ -2938,9 +2986,27 @@ function HomeScreen({
                     </option>
                   ))}
                 </select>
-                <button className="remove-standard" onClick={() => removeStandard(item.id)} type="button" aria-label={`Remove ${item.label}`}>
-                  <Trash2 size={16} />
-                </button>
+                <div className="standard-row-actions">
+                  {editingStandardId === item.id ? (
+                    <>
+                      <button className="standard-action-button" onClick={() => saveEditingStandard(item.id)} type="button" aria-label={`Save ${item.label}`}>
+                        <Check size={16} />
+                      </button>
+                      <button className="standard-action-button" onClick={cancelEditingStandard} type="button" aria-label={`Cancel editing ${item.label}`}>
+                        <X size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="standard-action-button" onClick={() => startEditingStandard(item)} type="button" aria-label={`Edit ${item.label}`}>
+                        <PenLine size={16} />
+                      </button>
+                      <button className="remove-standard" onClick={() => removeStandard(item.id)} type="button" aria-label={`Remove ${item.label}`}>
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
