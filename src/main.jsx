@@ -48,10 +48,45 @@ if (typeof window !== 'undefined') {
         element.scrollLeft = 0;
       });
     };
+    const containNativeOverflow = () => {
+      const viewportWidth = Math.floor(window.innerWidth || document.documentElement.clientWidth || 390);
+      const offenders = [];
 
-    window.addEventListener('scroll', lockHorizontalScroll, { passive: true });
-    document.addEventListener('scroll', lockHorizontalScroll, { passive: true, capture: true });
-    document.addEventListener('DOMContentLoaded', lockHorizontalScroll, { once: true });
+      document.querySelectorAll('body *').forEach((element) => {
+        if (!(element instanceof HTMLElement)) return;
+        if (element.closest('svg')) return;
+        const rect = element.getBoundingClientRect();
+        if (!rect.width || rect.height === 0) return;
+
+        const overflowRight = rect.right - viewportWidth;
+        const overflowLeft = 0 - rect.left;
+        const tooWide = rect.width > viewportWidth;
+        if (overflowRight > 1 || overflowLeft > 1 || tooWide) {
+          offenders.push({
+            tag: element.tagName.toLowerCase(),
+            className: element.className,
+            width: Math.round(rect.width),
+            left: Math.round(rect.left),
+            right: Math.round(rect.right)
+          });
+          element.classList.add('native-contained-overflow');
+        }
+      });
+
+      window.__tcaOverflowReport = offenders.slice(0, 20);
+      lockHorizontalScroll();
+    };
+    const runNativeLayoutPass = () => {
+      lockHorizontalScroll();
+      requestAnimationFrame(containNativeOverflow);
+    };
+
+    window.addEventListener('scroll', runNativeLayoutPass, { passive: true });
+    window.addEventListener('resize', runNativeLayoutPass, { passive: true });
+    document.addEventListener('scroll', runNativeLayoutPass, { passive: true, capture: true });
+    document.addEventListener('DOMContentLoaded', runNativeLayoutPass, { once: true });
+    window.setTimeout(runNativeLayoutPass, 120);
+    window.setTimeout(runNativeLayoutPass, 650);
   }
 }
 

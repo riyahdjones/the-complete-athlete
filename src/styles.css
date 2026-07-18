@@ -6147,6 +6147,7 @@ select {
   height: 100%;
   font-size: 14px;
   overflow: hidden;
+  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -6160,6 +6161,10 @@ select {
   min-width: 0 !important;
   overflow: hidden;
   overscroll-behavior-x: none;
+}
+
+.native-shell body {
+  min-width: 0;
 }
 
 .native-shell *,
@@ -6197,6 +6202,20 @@ select {
   overflow-x: hidden;
   overscroll-behavior-x: none;
   touch-action: pan-y;
+}
+
+.native-shell .content > *,
+.native-shell .onboarding-form > *,
+.native-shell .auth-card > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.native-shell .native-contained-overflow {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  transform: translateX(0) !important;
 }
 
 .native-shell .rail {
