@@ -4468,7 +4468,7 @@ function CoachScreen({
 
         {coachStatus && <p className="coach-status">{coachStatus}</p>}
         <div className="composer">
-          <input
+          <textarea
             value={messageDraft}
             onChange={(event) => setMessageDraft(event.target.value)}
             onFocus={(event) => {
@@ -4481,10 +4481,14 @@ function CoachScreen({
               setTimeout(() => setCoachComposerFocused(false), 140);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') sendMessage();
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+              }
             }}
             disabled={coachThinking}
             placeholder="Ask your coach..."
+            rows={2}
           />
           <button className="icon-button dark" onClick={sendMessage} aria-label="Send message" disabled={coachThinking}>
             <Send size={18} />
