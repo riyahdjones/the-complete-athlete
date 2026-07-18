@@ -5766,18 +5766,21 @@ select {
 /* First-launch role gate: native fit and premium spacing. */
 .native-shell .role-gate-shell {
   display: block;
+  width: 100%;
+  max-width: 100%;
   min-height: 100dvh;
-  padding: 0 14px max(18px, env(safe-area-inset-bottom));
+  padding: 0 12px max(18px, env(safe-area-inset-bottom));
   overflow-x: hidden;
   background:
-    linear-gradient(180deg, #f6f8fc 0%, #eef3fb 46%, #05070b 46%, #05070b 100%);
+    linear-gradient(180deg, #f6f8fc 0%, #eef3fb 43%, #05070b 43%, #05070b 100%);
 }
 
 .native-shell .role-gate-shell .auth-brand-panel {
-  margin: 0 -14px;
-  padding: max(56px, calc(env(safe-area-inset-top) + 18px)) 22px 34px;
+  width: 100%;
+  margin: 0;
+  padding: max(54px, calc(env(safe-area-inset-top) + 16px)) 18px 28px;
   border: 0;
-  border-radius: 0 0 24px 24px;
+  border-radius: 0 0 22px 22px;
   box-shadow: 0 18px 44px rgba(5, 7, 11, 0.22);
 }
 
@@ -5788,40 +5791,41 @@ select {
 }
 
 .native-shell .role-gate-shell .auth-brand-panel h1 {
-  max-width: 10ch;
-  font-size: clamp(2.35rem, 10vw, 3.35rem);
-  line-height: 0.98;
+  max-width: 9.4ch;
+  font-size: clamp(2.05rem, 8.6vw, 2.85rem);
+  line-height: 1;
 }
 
 .native-shell .role-gate-shell .auth-brand-panel p:not(.eyebrow) {
   max-width: 31rem;
-  font-size: 1rem;
-  line-height: 1.5;
+  font-size: 0.94rem;
+  line-height: 1.45;
 }
 
 .native-shell .role-gate-shell .role-choice-card {
-  gap: 10px;
-  margin: 18px 0 0;
-  padding: 14px;
-  border-radius: 18px;
+  width: 100%;
+  gap: 9px;
+  margin: 14px 0 0;
+  padding: 12px;
+  border-radius: 16px;
   box-shadow: 0 16px 42px rgba(5, 7, 11, 0.22);
 }
 
 .native-shell .role-gate-shell .role-choice-button {
-  min-height: 126px;
-  gap: 8px;
-  padding: 16px;
-  border-radius: 16px;
+  min-height: 112px;
+  gap: 7px;
+  padding: 14px;
+  border-radius: 14px;
 }
 
 .native-shell .role-gate-shell .role-choice-button strong {
-  font-size: 1.28rem;
+  font-size: 1.18rem;
 }
 
 .native-shell .role-gate-shell .role-choice-button em {
   max-width: 24rem;
-  font-size: 0.9rem;
-  line-height: 1.36;
+  font-size: 0.84rem;
+  line-height: 1.34;
 }
 
 .native-shell .role-gate-links {
@@ -5850,21 +5854,20 @@ select {
 
 @media (max-width: 390px) {
   .native-shell .role-gate-shell {
-    padding-inline: 12px;
+    padding-inline: 10px;
   }
 
   .native-shell .role-gate-shell .auth-brand-panel {
-    margin-inline: -12px;
-    padding-inline: 18px;
-    padding-bottom: 28px;
+    padding-inline: 16px;
+    padding-bottom: 24px;
   }
 
   .native-shell .role-gate-shell .role-choice-card {
-    padding: 12px;
+    padding: 10px;
   }
 
   .native-shell .role-gate-shell .role-choice-button {
-    min-height: 116px;
-    padding: 14px;
+    min-height: 106px;
+    padding: 12px;
   }
 }

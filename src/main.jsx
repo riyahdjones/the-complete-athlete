@@ -2116,12 +2116,12 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
           <button className="role-choice-button" onClick={() => chooseRole('athlete')} type="button">
             <span><Trophy size={18} /> Athlete</span>
             <strong>I’m an Athlete</strong>
-            <em>Build goals, productivity habits, plans, journals, and mindset coaching.</em>
+            <em>Build goals, track daily work, train plans, journal, and use mindset coaching.</em>
           </button>
           <button className="role-choice-button" onClick={() => chooseRole('parent')} type="button">
             <span><Users size={18} /> Parent</span>
             <strong>I’m a Parent</strong>
-            <em>Follow your athlete’s progress and support the same performance plans.</em>
+            <em>Follow progress, support the plans, and stay connected to your athlete’s growth.</em>
           </button>
           <div className="auth-legal-links role-gate-links">
             <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
