@@ -2301,8 +2301,8 @@ function OnboardingScreen({ completeOnboarding }) {
     <main className="onboarding-shell" aria-label="The Complete Athlete onboarding">
       <section className="onboarding-hero">
         <p className="eyebrow">The Complete Athlete</p>
-        <h1>Build the day before it starts.</h1>
-        <p>Build the first version of the athlete experience: who they are, what they are chasing, and what they can prove today.</p>
+        <h1>Set your foundation.</h1>
+        <p>Add the details that shape your experience: who you are, what you are working toward, and the daily work you want to track.</p>
       </section>
 
       <form className="onboarding-form" onSubmit={startOnboarding}>
