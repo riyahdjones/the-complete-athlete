@@ -5697,3 +5697,68 @@ select {
     padding-right: 16px;
   }
 }
+
+/* Device polish: native screens should never feel horizontally scrollable. */
+.native-shell * {
+  max-width: 100%;
+}
+
+.native-shell .plan-category-strip,
+.native-shell .parent-lesson-list {
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  padding-right: 0;
+}
+
+.native-shell .plan-category-strip button {
+  flex: 1 1 auto;
+}
+
+.native-shell .parent-lesson-list button {
+  flex: 1 1 min(180px, 48%);
+}
+
+.native-shell .series-overview.has-cover .series-cover,
+.native-shell .parent-plans-banner .series-cover {
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 8px;
+}
+
+.native-shell .notification-tray {
+  left: 14px;
+  right: 14px;
+  max-width: calc(100% - 28px);
+}
+
+.native-shell .bottom-sheet-backdrop {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+@media (min-width: 768px) {
+  .native-shell .content {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-inline: 24px;
+  }
+
+  .native-shell .topbar {
+    justify-content: center;
+    padding-inline: 24px;
+  }
+
+  .native-shell .topbar > div {
+    width: min(100%, 860px);
+  }
+}
+
+@media (max-width: 430px) {
+  .native-shell .content {
+    padding-inline: 12px;
+  }
+
+  .native-shell .panel {
+    border-radius: 14px;
+  }
+}
