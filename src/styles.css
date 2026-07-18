@@ -3348,6 +3348,26 @@ textarea,
   white-space: nowrap;
 }
 
+/* iOS zoom guard: fields must render at 16px or Safari/WebView zooms on focus. */
+@media (max-width: 720px) {
+  input,
+  textarea,
+  select,
+  .text-field,
+  .select-field,
+  .standard-form input,
+  .composer input,
+  .goal-card input,
+  .goal-card textarea,
+  .auth-login-shell .text-field,
+  .onboarding-shell .text-field,
+  .mobile-native-frame input,
+  .mobile-native-frame textarea,
+  .mobile-native-frame select {
+    font-size: 16px !important;
+  }
+}
+
 @media (max-width: 400px) {
   .metric-grid {
     grid-template-columns: 1fr;
