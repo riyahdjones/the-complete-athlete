@@ -97,6 +97,8 @@ if (typeof window !== 'undefined') {
       nativeTouchStartY = touch.clientY;
     };
     const blockNativeHorizontalPan = (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.type === 'range') return;
       const touch = event.touches?.[0];
       if (!touch) return;
       const dx = Math.abs(touch.clientX - nativeTouchStartX);
@@ -2669,11 +2671,6 @@ function HomeScreen({
       return;
     }
 
-    if (!allStandardsCompleted) {
-      setStandardsFeedback('Finish today’s productivity list before locking in your day.');
-      return;
-    }
-
     if (submittedToday) {
       setStandardsFeedback('Your day is locked in. Start fresh tomorrow.');
       return;
@@ -2681,7 +2678,7 @@ function HomeScreen({
 
     const submissionDate = todayKey();
     const nextStreak = lastSubmittedDate === addDays(submissionDate, -1) ? streakCount + 1 : 1;
-    const completedGoalIds = [...new Set(standards.map((standard) => standard.goalId).filter(Boolean))];
+    const completedGoalIds = [...new Set(completedStandards.map((standard) => standard.goalId).filter(Boolean))];
     setStreakCount(nextStreak);
     setLastSubmittedDate(submissionDate);
     setReadinessHistory((current) => saveReadinessScore(current, submissionDate, confidenceAverage));
@@ -2716,11 +2713,13 @@ function HomeScreen({
       metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus }
     });
     setStandardsFeedback('');
-    celebrate(awarded ? `Day locked in. +${standardsPoints} points.` : 'Day locked in. Stack another one tomorrow.');
+    celebrate(awarded ? `Day locked in. +${standardsPoints} points.` : 'Day submitted. Finish every item to earn productivity points.');
 
     notifyUser(
-      'Productivity tracker locked',
-      `Your day is locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`,
+      allStandardsCompleted ? 'Productivity tracker locked' : 'Productivity submitted',
+      allStandardsCompleted
+        ? `Your day is locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`
+        : `You submitted ${completedStandards.length} of ${standards.length} items. Complete every item to earn productivity points.`,
       'success'
     );
 

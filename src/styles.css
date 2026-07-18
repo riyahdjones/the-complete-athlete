@@ -2385,6 +2385,7 @@ textarea {
 
 .slider-row input {
   accent-color: var(--gold);
+  touch-action: pan-x;
 }
 
 .compact p {
@@ -5835,6 +5836,7 @@ select {
 .slider-row input {
   width: 100%;
   min-width: 0;
+  touch-action: pan-x;
 }
 
 .slider-row strong {
