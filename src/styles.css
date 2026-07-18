@@ -6495,3 +6495,172 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* Phone layout fallback: applies even if Capacitor native detection is late or unavailable. */
+@media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  body {
+    background: #f4f6fb;
+    overscroll-behavior-x: none;
+  }
+
+  .app-shell {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 100svh;
+    padding: 0;
+    overflow-x: hidden;
+    background: #f4f6fb;
+  }
+
+  .rail {
+    display: none !important;
+  }
+
+  .phone-frame {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 100svh;
+    max-height: none;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .topbar {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: max(56px, calc(env(safe-area-inset-top) + 18px)) 12px 12px;
+    overflow: hidden;
+  }
+
+  .topbar > div {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .topbar > .icon-button {
+    display: none;
+  }
+
+  .topbar h1,
+  .top-greeting {
+    max-width: 100%;
+    font-size: clamp(1.12rem, 5.2vw, 1.42rem);
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+  }
+
+  .content {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0 8px max(14px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
+  }
+
+  .panel,
+  .goal-card,
+  .profile-head,
+  .chat-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  .panel-title {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .panel-title span {
+    min-width: 0;
+    font-size: 0.72rem;
+    overflow-wrap: anywhere;
+  }
+
+  .panel-title em {
+    max-width: max-content;
+    white-space: nowrap;
+    font-size: 0.68rem;
+  }
+
+  .daily-deposit-panel p {
+    font-size: 0.84rem;
+    line-height: 1.4;
+  }
+
+  .today-focus-panel .focus-question strong {
+    font-size: 0.84rem;
+    line-height: 1.34;
+  }
+
+  .progress-scoreboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bottom-nav {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 3px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 6px max(6px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-right));
+    overflow: hidden;
+  }
+
+  .nav-item {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 2px;
+  }
+
+  .nav-item svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .nav-item span {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 0.52rem;
+    line-height: 1.05;
+    white-space: nowrap;
+  }
+
+  .onboarding-shell,
+  .auth-shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+}
