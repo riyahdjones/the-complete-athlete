@@ -19,6 +19,13 @@ const sportsLeagues = {
   mls: { label: 'MLS', sport: 'soccer', league: 'usa.1' }
 };
 
+const sportsTeamPatterns = {
+  mlb: /\b(dodgers|yankees|mets|red sox|redsox|cubs|white sox|whitesox|giants|padres|angels|athletics|a's|astros|rangers|mariners|orioles|blue jays|bluejays|rays|guardians|tigers|twins|royals|braves|phillies|nationals|marlins|brewers|cardinals|reds|pirates|diamondbacks|dbacks|rockies)\b/i,
+  nba: /\b(lakers|clippers|warriors|celtics|knicks|nets|heat|magic|hawks|hornets|bulls|cavaliers|cavs|pistons|pacers|bucks|timberwolves|wolves|thunder|nuggets|jazz|blazers|trail blazers|kings|suns|mavericks|mavs|rockets|spurs|grizzlies|pelicans|raptors|sixers|76ers|wizards)\b/i,
+  nfl: /\b(chiefs|eagles|cowboys|giants|jets|patriots|dolphins|bills|ravens|steelers|bengals|browns|texans|colts|titans|jaguars|broncos|raiders|chargers|commanders|packers|bears|lions|vikings|falcons|panthers|saints|buccaneers|bucs|cardinals|rams|seahawks|49ers|niners)\b/i,
+  mls: /\b(inter miami|lafc|la galaxy|galaxy|atlanta united|austin fc|charlotte fc|chicago fire|colorado rapids|columbus crew|dc united|d\.c\. united|fc cincinnati|fc dallas|houston dynamo|sporting kc|sporting kansas city|minnesota united|cf montreal|nashville sc|new england revolution|nycfc|new york city fc|orlando city|philadelphia union|portland timbers|real salt lake|san jose earthquakes|seattle sounders|st louis city|st\. louis city|toronto fc|vancouver whitecaps)\b/i
+};
+
 const crisisPattern =
   /\b(kill myself|end my life|suicide|suicidal|hurt myself|self harm|self-harm|i want to die|don't want to live|cut myself)\b/i;
 
@@ -40,6 +47,7 @@ Your role:
 - If a Performance Plan is locked, explain that it unlocks after the prior plan is completed and the next day arrives. Do not give locked-plan steps as if they are available today.
 - Do not claim the athlete completed a deposit, plan, goal, productivity item, or reflection unless the provided data says so.
 - When the athlete asks about current professional sports scores, schedules, standings, or news in MLB, MLS, NBA, or NFL, use the provided live sports context. If live sports context is not available or does not answer the question, say that you cannot verify the live update from inside the app right now instead of guessing.
+- For sports-score questions, answer directly inside the chat from the provided context. Do not send athletes to ESPN, MLB, NBA, NFL, MLS, another app, or another website.
 - Keep sports-news answers short and practical. Give source names only from the provided sports context, and do not quote long article text.
 
 Safety boundaries:
@@ -161,8 +169,9 @@ function isCurriculumQuestion(message) {
 function isSportsCurrentQuestion(message) {
   const lower = String(message ?? '').toLowerCase();
   const hasLeague = /\b(mlb|baseball|nba|basketball|nfl|football|mls|soccer)\b/i.test(lower);
-  const hasCurrentIntent = /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|trade|traded|draft|news|headline|today|tonight|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat)\b/i.test(lower);
-  return hasLeague && hasCurrentIntent;
+  const hasKnownTeam = Object.values(sportsTeamPatterns).some((pattern) => pattern.test(lower));
+  const hasCurrentIntent = /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|trade|traded|draft|news|headline|today|tonight|last night|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat)\b/i.test(lower);
+  return (hasLeague || hasKnownTeam) && hasCurrentIntent;
 }
 
 function requestedSportsLeagues(message) {
@@ -172,10 +181,25 @@ function requestedSportsLeagues(message) {
   if (/\bnfl\b|football/.test(lower)) leagues.add('nfl');
   if (/\bmlb\b|baseball/.test(lower)) leagues.add('mlb');
   if (/\bmls\b|soccer/.test(lower)) leagues.add('mls');
+  Object.entries(sportsTeamPatterns).forEach(([league, pattern]) => {
+    if (pattern.test(lower)) leagues.add(league);
+  });
   if (!leagues.size && isSportsCurrentQuestion(message)) {
     Object.keys(sportsLeagues).forEach((league) => leagues.add(league));
   }
   return [...leagues];
+}
+
+function sportsDateParams(message) {
+  const lower = String(message ?? '').toLowerCase();
+  const today = new Date();
+  const offset = /\b(yesterday|last night)\b/i.test(lower) ? -1 : 0;
+  const target = new Date(today);
+  target.setDate(today.getDate() + offset);
+  const yyyy = target.getFullYear();
+  const mm = String(target.getMonth() + 1).padStart(2, '0');
+  const dd = String(target.getDate()).padStart(2, '0');
+  return [`${yyyy}${mm}${dd}`];
 }
 
 async function fetchJsonWithTimeout(url, timeoutMs = SPORTS_FETCH_TIMEOUT_MS) {
@@ -232,13 +256,15 @@ async function getSportsContext(message) {
   if (!isSportsCurrentQuestion(message)) return '';
 
   const keys = requestedSportsLeagues(message).slice(0, 4);
+  const dates = sportsDateParams(message);
   const sections = await Promise.all(keys.map(async (key) => {
     const league = sportsLeagues[key];
     if (!league) return '';
 
     const baseUrl = `https://site.api.espn.com/apis/site/v2/sports/${league.sport}/${league.league}`;
+    const scoreboardUrl = `${baseUrl}/scoreboard?dates=${dates.join(',')}`;
     const [scoreboard, news] = await Promise.all([
-      fetchJsonWithTimeout(`${baseUrl}/scoreboard`),
+      fetchJsonWithTimeout(scoreboardUrl),
       fetchJsonWithTimeout(`${baseUrl}/news`)
     ]);
     const lines = [
