@@ -89,16 +89,17 @@ function DepositRow({ deposit, editable = false }) {
   );
 }
 
-function DepositQueueSummary({ deposits }) {
+function DepositQueueSummary({ deposits, totalCount }) {
   const scheduledCount = deposits.filter((deposit) => deposit.status === 'scheduled').length;
   const draftCount = deposits.filter((deposit) => deposit.status === 'draft').length;
   const publishedCount = deposits.filter((deposit) => deposit.status === 'posted').length;
   const nextDeposit = deposits[0];
+  const queueCount = totalCount ?? deposits.length;
 
   return (
     <div className="deposit-queue-summary">
       <span>
-        <strong>{deposits.length}</strong>
+        <strong>{queueCount}</strong>
         Future deposits
       </span>
       <span>
@@ -132,7 +133,7 @@ export default async function DailyDepositsPage() {
 
   const [
     { data: recentDeposits = [], error: recentError },
-    { data: futureDeposits = [], error: futureError }
+    { data: futureDeposits = [], error: futureError, count: futureDepositCount }
   ] = await Promise.all([
     supabase
       .from('daily_deposits')
@@ -142,10 +143,10 @@ export default async function DailyDepositsPage() {
       .limit(30),
     supabase
       .from('daily_deposits')
-      .select('id, title, body, focus_question, release_date, status, created_at')
+      .select('id, title, body, focus_question, release_date, status, created_at', { count: 'exact' })
       .gt('release_date', today)
       .order('release_date', { ascending: true })
-      .limit(120)
+      .range(0, 999)
   ]);
 
   const error = recentError || futureError;
@@ -177,10 +178,13 @@ export default async function DailyDepositsPage() {
         </div>
         {futureDeposits.length ? (
           <>
-            <DepositQueueSummary deposits={futureDeposits} />
+            <DepositQueueSummary deposits={futureDeposits} totalCount={futureDepositCount} />
             <div className="deposit-list future-deposit-list">
               {futureDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />)}
             </div>
+            {futureDepositCount > futureDeposits.length && (
+              <p className="empty-row">Showing the first {futureDeposits.length} future deposits. More are queued in the database.</p>
+            )}
           </>
         ) : (
           <p className="empty-state">No future deposits are queued yet.</p>
