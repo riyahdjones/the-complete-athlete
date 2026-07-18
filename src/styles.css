@@ -6149,6 +6149,8 @@ select {
 .native-shell #root {
   position: fixed;
   inset: 0;
+  width: 100%;
+  min-width: 0;
   overflow: hidden;
   overscroll-behavior-x: none;
 }
@@ -6159,12 +6161,16 @@ select {
   inset: 0;
   width: auto;
   max-width: none;
+  min-width: 0;
   height: auto;
   max-height: none;
   overflow: hidden;
 }
 
 .native-shell .content {
+  box-sizing: border-box;
+  width: auto;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: clip;
   overscroll-behavior-x: none;
@@ -6196,6 +6202,48 @@ select {
   margin-bottom: 0;
 }
 
+.native-shell .panel,
+.native-shell .goal-card,
+.native-shell .profile-head,
+.native-shell .chat-panel,
+.native-shell .daily-deposit-panel,
+.native-shell .today-focus-panel,
+.native-shell .progress-snapshot {
+  box-sizing: border-box;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.native-shell .panel-title {
+  min-width: 0;
+}
+
+.native-shell .panel-title span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.native-shell .panel-title em {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.native-shell .daily-deposit-panel p,
+.native-shell .today-focus-panel strong,
+.native-shell .progress-snapshot,
+.native-shell .panel p {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.native-shell .daily-deposit-panel p {
+  font-size: clamp(1rem, 4.7vw, 1.18rem);
+  line-height: 1.45;
+}
+
 /* Native onboarding: direct, safe-area aware, and locked to the device width. */
 .native-shell .onboarding-shell {
   position: fixed;
@@ -6218,7 +6266,7 @@ select {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: max(86px, calc(env(safe-area-inset-top) + 54px)) 18px 26px;
+  padding: max(72px, calc(env(safe-area-inset-top) + 38px)) 18px 22px;
   border: 0;
   border-radius: 0 0 8px 8px;
   background:
@@ -6229,22 +6277,22 @@ select {
 .native-shell .onboarding-hero .eyebrow {
   margin: 0;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   font-weight: 900;
   overflow-wrap: anywhere;
 }
 
 .native-shell .onboarding-hero h1 {
-  max-width: 9.5ch;
-  font-size: clamp(2.45rem, 14vw, 4.75rem);
-  line-height: 0.98;
+  max-width: 14ch;
+  font-size: clamp(2rem, 9.6vw, 3rem);
+  line-height: 1;
   overflow-wrap: normal;
 }
 
 .native-shell .onboarding-hero p:last-child {
   max-width: 32ch;
   color: rgba(255, 255, 255, 0.8);
-  font-size: clamp(1rem, 4.35vw, 1.32rem);
+  font-size: clamp(0.98rem, 4vw, 1.14rem);
   line-height: 1.42;
 }
 
