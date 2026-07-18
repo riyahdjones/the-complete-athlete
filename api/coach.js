@@ -8,6 +8,16 @@ const MAX_MEMORY_ITEMS = 8;
 const MAX_CURRICULUM_PLANS = 18;
 const MAX_CURRICULUM_STEPS = 10;
 const DAILY_COACH_MESSAGE_LIMIT = 15;
+const SPORTS_FETCH_TIMEOUT_MS = 3500;
+const SPORTS_MAX_EVENTS_PER_LEAGUE = 6;
+const SPORTS_MAX_NEWS_PER_LEAGUE = 5;
+
+const sportsLeagues = {
+  nba: { label: 'NBA', sport: 'basketball', league: 'nba' },
+  nfl: { label: 'NFL', sport: 'football', league: 'nfl' },
+  mlb: { label: 'MLB', sport: 'baseball', league: 'mlb' },
+  mls: { label: 'MLS', sport: 'soccer', league: 'usa.1' }
+};
 
 const crisisPattern =
   /\b(kill myself|end my life|suicide|suicidal|hurt myself|self harm|self-harm|i want to die|don't want to live|cut myself)\b/i;
@@ -29,6 +39,8 @@ Your role:
 - When answering about a Performance Plan, mention the athlete's current plan day when available, such as "Day 1 of 7," and anchor the advice to that day's steps.
 - If a Performance Plan is locked, explain that it unlocks after the prior plan is completed and the next day arrives. Do not give locked-plan steps as if they are available today.
 - Do not claim the athlete completed a deposit, plan, goal, productivity item, or reflection unless the provided data says so.
+- When the athlete asks about current professional sports scores, schedules, standings, or news in MLB, MLS, NBA, or NFL, use the provided live sports context. If live sports context is not available or does not answer the question, say that you cannot verify the live update from inside the app right now instead of guessing.
+- Keep sports-news answers short and practical. Give source names only from the provided sports context, and do not quote long article text.
 
 Safety boundaries:
 - You are not a therapist, doctor, lawyer, or crisis counselor.
@@ -146,6 +158,101 @@ function isCurriculumQuestion(message) {
   return /\b(daily deposit|deposit|today'?s focus|focus question|performance plan|plan|challenge|lesson|step|what does this mean|explain this|how do i use this)\b/i.test(message);
 }
 
+function isSportsCurrentQuestion(message) {
+  const lower = String(message ?? '').toLowerCase();
+  const hasLeague = /\b(mlb|baseball|nba|basketball|nfl|football|mls|soccer)\b/i.test(lower);
+  const hasCurrentIntent = /\b(score|scores|scored|schedule|game|games|playoff|standings|rankings|record|injury report|trade|traded|draft|news|headline|today|tonight|yesterday|tomorrow|latest|current|live|who won|winning|lost|beat)\b/i.test(lower);
+  return hasLeague && hasCurrentIntent;
+}
+
+function requestedSportsLeagues(message) {
+  const lower = String(message ?? '').toLowerCase();
+  const leagues = new Set();
+  if (/\bnba\b|basketball/.test(lower)) leagues.add('nba');
+  if (/\bnfl\b|football/.test(lower)) leagues.add('nfl');
+  if (/\bmlb\b|baseball/.test(lower)) leagues.add('mlb');
+  if (/\bmls\b|soccer/.test(lower)) leagues.add('mls');
+  if (!leagues.size && isSportsCurrentQuestion(message)) {
+    Object.keys(sportsLeagues).forEach((league) => leagues.add(league));
+  }
+  return [...leagues];
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs = SPORTS_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'The Complete Athlete Coach/1.0'
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function summarizeScoreboard(data, leagueLabel) {
+  const events = asArray(data?.events).slice(0, SPORTS_MAX_EVENTS_PER_LEAGUE);
+  if (!events.length) return [`${leagueLabel} scoreboard: no current games returned.`];
+
+  return events.map((event) => {
+    const competition = asArray(event.competitions)[0] || {};
+    const competitors = asArray(competition.competitors);
+    const teams = competitors.map((competitor) => {
+      const name = competitor.team?.shortDisplayName || competitor.team?.displayName || competitor.team?.abbreviation || 'Team';
+      const score = competitor.score ?? '';
+      return score !== '' ? `${name} ${score}` : name;
+    });
+    const status = event.status?.type?.shortDetail || event.status?.type?.description || event.status?.type?.state || '';
+    const venue = competition.venue?.fullName ? ` at ${competition.venue.fullName}` : '';
+    return `${leagueLabel}: ${teams.join(' vs ')}${status ? ` - ${status}` : ''}${venue}`;
+  });
+}
+
+function summarizeNews(data, leagueLabel) {
+  const articles = asArray(data?.articles).slice(0, SPORTS_MAX_NEWS_PER_LEAGUE);
+  if (!articles.length) return [`${leagueLabel} news: no current headlines returned.`];
+
+  return articles.map((article) => {
+    const headline = cleanMessage(article.headline || article.title, 180);
+    const description = cleanMessage(article.description, 220);
+    const source = cleanMessage(article.source || article.provider || 'ESPN', 40);
+    return `${leagueLabel} news from ${source}: ${headline}${description ? ` - ${description}` : ''}`;
+  });
+}
+
+async function getSportsContext(message) {
+  if (!isSportsCurrentQuestion(message)) return '';
+
+  const keys = requestedSportsLeagues(message).slice(0, 4);
+  const sections = await Promise.all(keys.map(async (key) => {
+    const league = sportsLeagues[key];
+    if (!league) return '';
+
+    const baseUrl = `https://site.api.espn.com/apis/site/v2/sports/${league.sport}/${league.league}`;
+    const [scoreboard, news] = await Promise.all([
+      fetchJsonWithTimeout(`${baseUrl}/scoreboard`),
+      fetchJsonWithTimeout(`${baseUrl}/news`)
+    ]);
+    const lines = [
+      ...summarizeScoreboard(scoreboard, league.label),
+      ...summarizeNews(news, league.label)
+    ];
+
+    return [`${league.label} live context source: ESPN public sports data.`, ...lines].join('\n');
+  }));
+
+  const context = sections.filter(Boolean).join('\n\n');
+  return context || 'Live sports lookup was requested, but no current sports data returned.';
+}
+
 function isCasualCheckIn(message) {
   return /^(yo+|hey+|hi+|hello+|sup|what'?s up|you there|are you there|u there|can you help|help me|coach|mindset coach)[\s?.!]*$/i.test(message);
 }
@@ -248,7 +355,7 @@ function buildCurriculumContext(curriculum) {
   return [...depositLines, '', ...planLines].join('\n');
 }
 
-function buildInput({ message, history, athlete, memory, curriculum }) {
+function buildInput({ message, history, athlete, memory, curriculum, sportsContext }) {
   const goals = asArray(athlete?.goals).filter(Boolean);
   const standards = asArray(athlete?.standards).filter(Boolean);
   const context = [
@@ -271,7 +378,7 @@ function buildInput({ message, history, athlete, memory, curriculum }) {
   return [
     {
       role: 'developer',
-      content: `${coachInstructions}\n\nAthlete context:\n${context}\n\nApp curriculum context:\n${buildCurriculumContext(curriculum)}\n\nPrivate coach growth memory:\n${buildMemoryContext(memory)}`
+      content: `${coachInstructions}\n\nAthlete context:\n${context}\n\nApp curriculum context:\n${buildCurriculumContext(curriculum)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nPrivate coach growth memory:\n${buildMemoryContext(memory)}`
     },
     ...messages,
     {
@@ -772,9 +879,10 @@ export default async function handler(req, res) {
     });
   }
 
-  const [athleteContext, curriculumContext] = await Promise.all([
+  const [athleteContext, curriculumContext, sportsContext] = await Promise.all([
     getAthleteContext(user.id, token, profile, body.athlete),
-    getCurriculumContext(token, body.curriculum, user.id)
+    getCurriculumContext(token, body.curriculum, user.id),
+    getSportsContext(message)
   ]);
 
   if (!isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
@@ -811,7 +919,8 @@ export default async function handler(req, res) {
         history: body.history,
         athlete: athleteContext,
         memory,
-        curriculum: curriculumContext
+        curriculum: curriculumContext,
+        sportsContext
       }),
       max_output_tokens: 450
     })
