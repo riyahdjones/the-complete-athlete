@@ -21,6 +21,10 @@ export default async function handler(req, res) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const openAiKey = process.env.OPENAI_API_KEY;
   const coachModel = process.env.OPENAI_COACH_MODEL || 'gpt-4.1-mini';
+  const apnsTeamId = process.env.APNS_TEAM_ID;
+  const apnsKeyId = process.env.APNS_KEY_ID;
+  const apnsPrivateKey = process.env.APNS_PRIVATE_KEY;
+  const apnsBundleId = process.env.APNS_BUNDLE_ID || process.env.IOS_BUNDLE_ID;
 
   const checks = {
     supabase: {
@@ -37,6 +41,17 @@ export default async function handler(req, res) {
     },
     account: {
       deletionEnabled: configured(supabaseUrl) && configured(supabaseAnonKey) && configured(serviceRoleKey)
+    },
+    notifications: {
+      inAppEnabled: configured(supabaseUrl) && configured(supabaseAnonKey),
+      deviceRegistrationEnabled: configured(supabaseUrl) && configured(supabaseAnonKey),
+      scheduledPushEnabled: configured(supabaseUrl) && configured(serviceRoleKey),
+      nativePushEnabled:
+        configured(apnsTeamId) &&
+        configured(apnsKeyId) &&
+        configured(apnsPrivateKey) &&
+        configured(apnsBundleId),
+      bundleId: apnsBundleId || ''
     }
   };
 

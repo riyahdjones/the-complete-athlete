@@ -2,5 +2,7 @@
 	"appId": "com.riyahdjones.thecompleteathlete",
 	"appName": "The Complete Athlete",
 	"webDir": "dist",
-	"packageClassList": []
+	"packageClassList": [
+		"PushNotificationsPlugin"
+	]
 }

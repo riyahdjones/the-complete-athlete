@@ -50,3 +50,44 @@ create policy "Users manage their own notification preferences"
   with check (auth.uid() = user_id);
 
 grant select, insert, update, delete on public.notification_preferences to authenticated;
+
+create table if not exists public.push_devices (
+  token text primary key,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  platform text not null default 'ios',
+  app_version text,
+  enabled boolean not null default true,
+  last_seen_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_devices_user_enabled_idx
+  on public.push_devices (user_id, enabled, last_seen_at desc);
+
+alter table public.push_devices enable row level security;
+
+drop policy if exists "Users can view their own push devices" on public.push_devices;
+drop policy if exists "Users can register their own push devices" on public.push_devices;
+drop policy if exists "Users can update their own push devices" on public.push_devices;
+
+create policy "Users can view their own push devices"
+  on public.push_devices
+  for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "Users can register their own push devices"
+  on public.push_devices
+  for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own push devices"
+  on public.push_devices
+  for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+grant select, insert, update on public.push_devices to authenticated;

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
 import {
   BadgeCheck,
@@ -171,6 +172,10 @@ function appApiUrl(path) {
   const host = window.location.host;
   const isProductionWeb = host === 'the-complete-athlete.vercel.app';
   return isProductionWeb ? cleanPath : `${productionApiOrigin}${cleanPath}`;
+}
+
+function isNativePushRuntime() {
+  return typeof window !== 'undefined' && Boolean(Capacitor?.isNativePlatform?.());
 }
 
 const pointValues = {
@@ -1145,6 +1150,51 @@ function App() {
   }, [authSession?.id]);
 
   useEffect(() => {
+    if (!authSession?.id || !isNativePushRuntime()) return undefined;
+    let active = true;
+    const listenerHandles = [];
+
+    async function configureNativePush() {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        const registration = await PushNotifications.addListener('registration', (token) => {
+          if (active && token?.value) registerPushDeviceToken(token.value, 'ios');
+        });
+        const registrationError = await PushNotifications.addListener('registrationError', () => {
+          setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+        });
+        const received = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          if (!active) return;
+          notifyUser(
+            notification.title || 'The Complete Athlete',
+            notification.body || 'You have a new update.',
+            'info',
+            {
+              type: 'general',
+              id: `native-push-${Date.now()}`
+            }
+          );
+        });
+        listenerHandles.push(registration, registrationError, received);
+
+        const permission = await PushNotifications.checkPermissions();
+        if (notificationPreferences.browserPush && permission.receive === 'granted') {
+          await PushNotifications.register();
+        }
+      } catch {
+        setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+      }
+    }
+
+    configureNativePush();
+
+    return () => {
+      active = false;
+      listenerHandles.forEach((handle) => handle.remove());
+    };
+  }, [authSession?.id, notificationPreferences.browserPush]);
+
+  useEffect(() => {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete') {
       setSupabaseAthleteDataReady(false);
       return;
@@ -1993,9 +2043,42 @@ function App() {
   }
 
   async function requestBrowserNotifications() {
+    if (isNativePushRuntime()) {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        const permission = await PushNotifications.requestPermissions();
+        const granted = permission.receive === 'granted';
+        setNotificationPreferences((current) => ({ ...current, browserPush: granted }));
+        if (granted) await PushNotifications.register();
+      } catch {
+        setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+      }
+      return;
+    }
+
     if (!('Notification' in window)) return;
     const permission = await Notification.requestPermission();
     setNotificationPreferences((current) => ({ ...current, browserPush: permission === 'granted' }));
+  }
+
+  async function registerPushDeviceToken(token, platform) {
+    if (!token || !isSupabaseConfigured || !authSession?.id) return;
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) return;
+
+    await fetch(appApiUrl('/api/register-push-token'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        token,
+        platform,
+        appVersion: '1.0.0'
+      })
+    }).catch(() => {});
   }
 
   function updateNotificationPreference(field, value) {
