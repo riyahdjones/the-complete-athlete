@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     const prefs = preferences.get(device.user_id) ?? {};
 
     if (deposit && prefs.daily_deposits !== false) {
-      const body = String(deposit.focus_question || deposit.body || 'Today’s Daily Deposit is ready.').slice(0, 180);
+      const body = String(deposit.body || deposit.focus_question || 'Today’s Daily Deposit is ready.').slice(0, 180);
       sent.push(sendToDevice(device, {
         id: `push-daily-deposit-${date}-${device.user_id}`,
         type: 'dailyDeposits',
