@@ -4981,6 +4981,68 @@ function ProfileScreen({
           </label>
         </div>
       </section>
+      <section className="panel notification-settings-panel">
+        <PanelTitle icon={<Bell size={18} />} title="Notifications" action="iPhone alerts" />
+        <div className="privacy-list notification-settings-list">
+          <label>
+            <span>iPhone lock-screen notifications</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.browserPush}
+              onChange={(event) => toggleBrowserPush(event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Daily Deposit reminders</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.dailyDeposits}
+              onChange={(event) => updateNotificationPreference('dailyDeposits', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>New performance plans</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.performancePlans}
+              onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Plan unlocks and completions</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.planUnlocks}
+              onChange={(event) => updateNotificationPreference('planUnlocks', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Streak reminders</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.streaks}
+              onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Productivity updates</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.productivity}
+              onChange={(event) => updateNotificationPreference('productivity', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Points earned</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.points}
+              onChange={(event) => updateNotificationPreference('points', event.target.checked)}
+            />
+          </label>
+        </div>
+        <p className="privacy-note">Turn on iPhone notifications here, then accept the Apple permission popup when it appears.</p>
+      </section>
       <section className="panel achievements-panel">
         <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Share" />
         <label className="journal-label" htmlFor="parent-contact">
@@ -5046,68 +5108,6 @@ function ProfileScreen({
           <span>Journal is private unless you choose to share it.</span>
           <span>My Mindset Coach chats stay private.</span>
         </div>
-      </section>
-      <section className="panel notification-settings-panel">
-        <PanelTitle icon={<Bell size={18} />} title="Notifications" action="Athlete controlled" />
-        <div className="privacy-list notification-settings-list">
-          <label>
-            <span>Daily Deposit reminders</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.dailyDeposits}
-              onChange={(event) => updateNotificationPreference('dailyDeposits', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>New performance plans</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.performancePlans}
-              onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Plan unlocks and completions</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.planUnlocks}
-              onChange={(event) => updateNotificationPreference('planUnlocks', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Streak reminders</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.streaks}
-              onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Productivity updates</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.productivity}
-              onChange={(event) => updateNotificationPreference('productivity', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Points earned</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.points}
-              onChange={(event) => updateNotificationPreference('points', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Browser push while using the app</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.browserPush}
-              onChange={(event) => toggleBrowserPush(event.target.checked)}
-            />
-          </label>
-        </div>
-        <p className="privacy-note">Lock-screen push notifications will use Apple/phone credentials when we finish the native App Store setup.</p>
       </section>
     </>
   );
