@@ -4191,15 +4191,27 @@ function sectionLinesToBlocks(lines) {
   }
 
   lines.forEach((line) => {
+    const previousBody = bodyBuffer[bodyBuffer.length - 1] ?? '';
+    const previousBullet = bulletBuffer[bulletBuffer.length - 1] ?? '';
+    const previousQuote = quoteBuffer[quoteBuffer.length - 1] ?? '';
+    const isWrappedLine =
+      /^[a-z]/.test(line) &&
+      !/^[•✓]/.test(line) &&
+      !/[.!?:;"”)]$/.test(previousBody || previousBullet || previousQuote);
+
     if (quoteBuffer.length) {
+      if (isWrappedLine) {
+        quoteBuffer[quoteBuffer.length - 1] = `${previousQuote} ${line}`;
+        return;
+      }
       quoteBuffer.push(line);
       if (/["”]$/.test(line)) flushQuote();
       return;
     }
 
     if (bulletBuffer.length) {
-      if (/^[a-z]/.test(line) && !/[.!?]$/.test(bulletBuffer[bulletBuffer.length - 1])) {
-        bulletBuffer.push(line);
+      if (isWrappedLine) {
+        bulletBuffer[bulletBuffer.length - 1] = `${previousBullet} ${line}`;
         return;
       }
       flushBullet();
@@ -4227,6 +4239,11 @@ function sectionLinesToBlocks(lines) {
       flushBody();
     }
 
+    if (bodyBuffer.length && isWrappedLine) {
+      bodyBuffer[bodyBuffer.length - 1] = `${previousBody} ${line}`;
+      return;
+    }
+
     bodyBuffer.push(line);
     if (bodyBuffer.length >= 4 || bodyBuffer.join(' ').length > 460) {
       flushBody();
@@ -4241,27 +4258,31 @@ function sectionLinesToBlocks(lines) {
 
 function explicitPlanReaderSections(body) {
   const lines = planReaderBody(body)
-    .split(/\n{2,}/)
+    .split(/\n+/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-  if (!lines.some((line) => explicitPlanSectionHeadings.has(line))) return [];
+  if (!lines.some((line) => explicitPlanSectionHeadings.has(line) || /^Next Chapter:/i.test(line))) return [];
 
   const sections = [];
   let current = null;
 
   lines.forEach((line) => {
-    if (explicitPlanSectionHeadings.has(line)) {
+    if (explicitPlanSectionHeadings.has(line) || /^Next Chapter:/i.test(line)) {
       const sectionTitleMap = {
         'Mental Model': '',
         Opening: 'Start Here',
         'Pull Back the Curtain': 'Deeper Look',
         Story: 'Athlete Story',
-        'The Story': 'Athlete Story'
+        'The Story': 'Athlete Story',
+        Journal: 'Film Room'
       };
-      const title = sectionTitleMap[line] ?? line;
+      const title = /^Next Chapter:/i.test(line) ? 'What You Will Learn Next Chapter' : sectionTitleMap[line] ?? line;
       current = { title, tone: line === 'Mental Model' ? 'model' : sectionTone(title), lines: [] };
       sections.push(current);
+      if (/^Next Chapter:/i.test(line)) {
+        current.lines.push(line.replace(/^Next Chapter:\s*/i, '').trim());
+      }
       return;
     }
 
