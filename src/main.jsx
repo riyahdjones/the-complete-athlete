@@ -1405,7 +1405,7 @@ function App() {
         const nextLesson = nextLessons.find((lesson) => String(lesson.id) === String(nextLessonId));
         setSelectedLessonId(nextLessonId);
         if (nextLesson) {
-          notifyUser('Daily Deposit ready', 'Today’s Daily Deposit is available.', 'info', {
+          notifyUser('Daily Deposit', 'Today’s Daily Deposit is available.', 'info', {
             type: 'dailyDeposits',
             id: `daily-deposit-${dailyDate}-${nextLesson.id}`
           });

@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       sent.push(sendToDevice(device, {
         id: `push-daily-deposit-${date}-${device.user_id}`,
         type: 'dailyDeposits',
-        title: 'Daily Deposit ready',
+        title: 'Daily Deposit',
         body,
         tone: 'info'
       }));
