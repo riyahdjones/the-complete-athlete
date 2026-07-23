@@ -633,11 +633,20 @@ function normalizePlan(plan) {
   };
 }
 
+function shouldPreferSeedPlan(planId) {
+  const id = String(planId ?? '');
+  return id.startsWith('imagination-station-day-') || id.startsWith('compete-differently-day-');
+}
+
 function mergeWithSeedPlans(sourcePlans) {
   const nextPlans = Array.isArray(sourcePlans) ? sourcePlans.map(normalizePlan) : [];
-  const existingIds = new Set(nextPlans.map((plan) => String(plan.id)));
   plansSeed.map(normalizePlan).forEach((plan) => {
-    if (!existingIds.has(String(plan.id))) {
+    const existingIndex = nextPlans.findIndex((sourcePlan) => String(sourcePlan.id) === String(plan.id));
+    if (existingIndex >= 0 && shouldPreferSeedPlan(plan.id)) {
+      nextPlans[existingIndex] = plan;
+      return;
+    }
+    if (existingIndex < 0) {
       nextPlans.push(plan);
     }
   });
@@ -824,7 +833,7 @@ function parentMessageFromSupabase(row) {
 function loadPlans() {
   try {
     const saved = JSON.parse(localStorage.getItem(plansStorageKey) ?? '[]');
-    const savedPlans = Array.isArray(saved) ? saved.map(normalizePlan) : [];
+    const savedPlans = mergeWithSeedPlans(Array.isArray(saved) ? saved.map(normalizePlan) : []);
     const hasCurrentNinetyPlan = savedPlans.some((plan) => String(plan.id).startsWith('ninety-percent-day-'));
     const hasDocumentStructuredNinetyPlan = savedPlans.some((plan) =>
       String(plan.id).startsWith('ninety-percent-day-') &&
