@@ -229,6 +229,24 @@ function messageMentionsAlias(message, aliases) {
   });
 }
 
+function competitorAliases(competitor) {
+  const team = competitor?.team || {};
+  return [
+    team.displayName,
+    team.shortDisplayName,
+    team.name,
+    team.nickname,
+    team.abbreviation,
+    team.location
+  ].filter(Boolean);
+}
+
+function eventMatchesMessageTeam(event, message) {
+  const competition = asArray(event?.competitions)[0] || {};
+  const competitors = asArray(competition.competitors);
+  return competitors.some((competitor) => messageMentionsAlias(message, competitorAliases(competitor)));
+}
+
 function staticSportsLeaguesForMessage(message) {
   const lower = String(message ?? '').toLowerCase();
   const leagues = new Set();
@@ -321,8 +339,10 @@ async function fetchJsonWithTimeout(url, timeoutMs = SPORTS_FETCH_TIMEOUT_MS) {
   }
 }
 
-function summarizeScoreboard(data, leagueLabel) {
-  const events = asArray(data?.events).slice(0, SPORTS_MAX_EVENTS_PER_LEAGUE);
+function summarizeScoreboard(data, leagueLabel, message) {
+  const allEvents = asArray(data?.events);
+  const teamEvents = allEvents.filter((event) => eventMatchesMessageTeam(event, message));
+  const events = (teamEvents.length ? teamEvents : allEvents).slice(0, SPORTS_MAX_EVENTS_PER_LEAGUE);
   if (!events.length) return [`${leagueLabel} scoreboard: no current games returned.`];
 
   return events.map((event) => {
@@ -465,7 +485,7 @@ async function getSportsContext(message) {
       fetchJsonWithTimeout(`${baseUrl}/news`)
     ]);
     const lines = [
-      ...summarizeScoreboard(scoreboard, league.label),
+      ...summarizeScoreboard(scoreboard, league.label, message),
       ...summarizeNews(news, league.label)
     ];
 
@@ -1109,7 +1129,9 @@ export default async function handler(req, res) {
     getSportsContext(message)
   ]);
 
-  if (!isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
+  const sportsKnowledgeQuestion = hasSportsKnowledgeIntent(message);
+
+  if (!sportsKnowledgeQuestion && !isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
     const reply = clarifyingResponse(message, athleteContext);
     await saveCoachSession({
       userId: user.id,
