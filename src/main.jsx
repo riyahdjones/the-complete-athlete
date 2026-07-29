@@ -3893,6 +3893,9 @@ function planCoverImage(seriesTitle) {
   if (normalized.includes('lock in') || normalized.includes('focus')) {
     return '/plan-covers/lock-in-banner.jpg';
   }
+  if (normalized.includes('boring wins')) {
+    return '/plan-covers/boring-wins-banner.jpg';
+  }
   return '/plan-covers/90-percent-blueprint.jpg';
 }
 
@@ -3915,6 +3918,9 @@ function planThumbnailImage(seriesTitle) {
   }
   if (normalized.includes('lock in') || normalized.includes('focus')) {
     return '/plan-covers/lock-in-thumbnail.jpg';
+  }
+  if (normalized.includes('boring wins')) {
+    return '/plan-covers/boring-wins-thumbnail.jpg';
   }
   return planCoverImage(seriesTitle);
 }
@@ -3943,6 +3949,9 @@ function planCoverPosition(seriesTitle) {
     return '60% 50%';
   }
   if (normalized.includes('lock in') || normalized.includes('focus')) {
+    return '50% 52%';
+  }
+  if (normalized.includes('boring wins')) {
     return '50% 52%';
   }
   return '70% 50%';
