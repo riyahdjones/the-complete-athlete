@@ -3890,6 +3890,9 @@ function planCoverImage(seriesTitle) {
   if (normalized.includes('compete differently') || normalized.includes('faith')) {
     return '/plan-covers/compete-differently-banner.png';
   }
+  if (normalized.includes('lock in') || normalized.includes('focus')) {
+    return '/plan-covers/lock-in-banner.jpg';
+  }
   return '/plan-covers/90-percent-blueprint.jpg';
 }
 
@@ -3909,6 +3912,9 @@ function planThumbnailImage(seriesTitle) {
   }
   if (normalized.includes('compete differently') || normalized.includes('faith')) {
     return '/plan-covers/compete-differently-thumbnail.png';
+  }
+  if (normalized.includes('lock in') || normalized.includes('focus')) {
+    return '/plan-covers/lock-in-thumbnail.jpg';
   }
   return planCoverImage(seriesTitle);
 }
@@ -3935,6 +3941,9 @@ function planCoverPosition(seriesTitle) {
   }
   if (normalized.includes('compete differently') || normalized.includes('faith')) {
     return '60% 50%';
+  }
+  if (normalized.includes('lock in') || normalized.includes('focus')) {
+    return '50% 52%';
   }
   return '70% 50%';
 }
@@ -4154,6 +4163,9 @@ const explicitPlanSectionHeadings = new Set([
   'Your Championship Habit Blueprint',
   'Film Room',
   'Complete Athlete Principle',
+  'Daily Challenge',
+  'Key Takeaway',
+  'Closing the Plan',
   'Next Chapter',
   'The Complete Athlete Declaration',
   'One Last Thought',
@@ -4167,10 +4179,11 @@ const explicitPlanSectionHeadings = new Set([
 function sectionTone(title) {
   const normalized = title.toLowerCase();
   if (normalized.includes('practice') || normalized.includes('blueprint')) return 'practice';
+  if (normalized.includes('daily challenge')) return 'practice';
   if (normalized.includes('journal') || normalized.includes('reflection')) return 'practice';
   if (normalized.includes('film') || normalized.includes('story') || normalized.includes('curtain')) return 'film';
-  if (normalized.includes('principle') || normalized.includes('declaration')) return 'principle';
-  if (normalized.includes('next') || normalized.includes('last') || normalized.includes('finale') || normalized.includes('final thoughts')) return 'next';
+  if (normalized.includes('principle') || normalized.includes('declaration') || normalized.includes('key takeaway')) return 'principle';
+  if (normalized.includes('closing') || normalized.includes('next') || normalized.includes('last') || normalized.includes('finale') || normalized.includes('final thoughts')) return 'next';
   if (normalized.includes('mental') || normalized.includes('system') || normalized.includes('mirror')) return 'system';
   return 'body';
 }
