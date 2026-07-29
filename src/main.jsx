@@ -3896,6 +3896,9 @@ function planCoverImage(seriesTitle) {
   if (normalized.includes('boring wins')) {
     return '/plan-covers/boring-wins-banner.jpg';
   }
+  if (normalized.includes('next play')) {
+    return '/plan-covers/next-play-banner.jpg';
+  }
   return '/plan-covers/90-percent-blueprint.jpg';
 }
 
@@ -3921,6 +3924,9 @@ function planThumbnailImage(seriesTitle) {
   }
   if (normalized.includes('boring wins')) {
     return '/plan-covers/boring-wins-thumbnail.jpg';
+  }
+  if (normalized.includes('next play')) {
+    return '/plan-covers/next-play-thumbnail.jpg';
   }
   return planCoverImage(seriesTitle);
 }
@@ -3953,6 +3959,9 @@ function planCoverPosition(seriesTitle) {
   }
   if (normalized.includes('boring wins')) {
     return '50% 52%';
+  }
+  if (normalized.includes('next play')) {
+    return '55% 50%';
   }
   return '70% 50%';
 }
@@ -4175,6 +4184,8 @@ const explicitPlanSectionHeadings = new Set([
   'Daily Challenge',
   'Key Takeaway',
   'Closing the Plan',
+  'Closing Thought',
+  'The RESET Framework',
   'Next Chapter',
   'The Complete Athlete Declaration',
   'One Last Thought',
@@ -4187,7 +4198,7 @@ const explicitPlanSectionHeadings = new Set([
 
 function sectionTone(title) {
   const normalized = title.toLowerCase();
-  if (normalized.includes('practice') || normalized.includes('blueprint')) return 'practice';
+  if (normalized.includes('practice') || normalized.includes('blueprint') || normalized.includes('reset framework')) return 'practice';
   if (normalized.includes('daily challenge')) return 'practice';
   if (normalized.includes('journal') || normalized.includes('reflection')) return 'practice';
   if (normalized.includes('film') || normalized.includes('story') || normalized.includes('curtain')) return 'film';
