@@ -46,7 +46,18 @@ if (typeof window !== 'undefined') {
     window.location.protocol === 'capacitor:' ||
     Boolean(window.Capacitor?.isNativePlatform?.()) ||
     Boolean(window.Capacitor?.getPlatform && window.Capacitor.getPlatform() !== 'web');
+  const isTextEntryActive = () => {
+    const element = document.activeElement;
+    return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element?.isContentEditable;
+  };
+  const updateKeyboardState = () => {
+    const viewportHeight = window.visualViewport?.height || window.innerHeight || 0;
+    const keyboardLikelyOpen = isTextEntryActive() && viewportHeight > 0 && window.innerHeight - viewportHeight > 120;
+    document.documentElement.classList.toggle('keyboard-open', keyboardLikelyOpen);
+    return keyboardLikelyOpen;
+  };
   const syncAppViewportHeight = () => {
+    if (updateKeyboardState()) return;
     const viewportHeight = Math.floor(window.visualViewport?.height || window.innerHeight || 0);
     if (viewportHeight > 0) {
       document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
@@ -94,6 +105,10 @@ if (typeof window !== 'undefined') {
       lockHorizontalScroll();
     };
     const runNativeLayoutPass = () => {
+      if (updateKeyboardState()) {
+        lockHorizontalScroll();
+        return;
+      }
       syncAppViewportHeight();
       lockHorizontalScroll();
       requestAnimationFrame(containNativeOverflow);
@@ -126,6 +141,8 @@ if (typeof window !== 'undefined') {
     document.addEventListener('touchstart', rememberNativeTouchStart, { passive: true, capture: true });
     document.addEventListener('touchmove', blockNativeHorizontalPan, { passive: false, capture: true });
     document.addEventListener('touchend', runNativeLayoutPass, { passive: true, capture: true });
+    document.addEventListener('focusin', runNativeLayoutPass, { passive: true });
+    document.addEventListener('focusout', () => window.setTimeout(runNativeLayoutPass, 180), { passive: true });
     document.addEventListener('DOMContentLoaded', runNativeLayoutPass, { once: true });
     syncAppViewportHeight();
     window.setTimeout(runNativeLayoutPass, 120);
@@ -1045,9 +1062,15 @@ function App() {
     const refreshViewport = () => {
       const phoneViewport = window.matchMedia('(max-width: 720px)').matches;
       const viewportHeight = Math.floor(window.visualViewport?.height || window.innerHeight || 0);
+      const textEntryActive =
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement ||
+        document.activeElement?.isContentEditable;
+      const keyboardLikelyOpen = textEntryActive && viewportHeight > 0 && window.innerHeight - viewportHeight > 120;
       setIsPhoneViewport(phoneViewport);
       setViewportRevision((current) => current + 1);
-      if (viewportHeight > 0) {
+      document.documentElement.classList.toggle('keyboard-open', keyboardLikelyOpen);
+      if (!keyboardLikelyOpen && viewportHeight > 0) {
         document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
       }
       document.documentElement.scrollLeft = 0;

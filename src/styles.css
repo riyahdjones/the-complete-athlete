@@ -7123,3 +7123,40 @@ select {
     overflow-x: hidden;
   }
 }
+
+/* Native keyboard mode: keep typing calm instead of resizing the whole shell. */
+.native-shell.keyboard-open body,
+.native-shell.keyboard-open #root {
+  overflow: hidden;
+}
+
+.native-shell.keyboard-open .bottom-nav {
+  display: none;
+}
+
+.native-shell.keyboard-open .content {
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+}
+
+.native-shell.keyboard-open .auth-login-shell {
+  min-height: 100svh;
+  overflow-y: auto;
+  background: #f3f6fb;
+}
+
+.native-shell.keyboard-open .auth-login-shell .auth-brand-panel {
+  display: none;
+}
+
+.native-shell.keyboard-open .auth-login-shell .auth-card {
+  margin-top: max(54px, calc(env(safe-area-inset-top) + 18px));
+}
+
+.native-shell.keyboard-open .coach-conversation {
+  min-height: 0;
+}
+
+.native-shell.keyboard-open .coach-conversation .composer {
+  position: relative;
+  z-index: 5;
+}
