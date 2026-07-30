@@ -2,7 +2,7 @@ let configuredUserId = '';
 
 export const revenueCatConfig = {
   iosApiKey: import.meta.env.VITE_REVENUECAT_IOS_API_KEY || 'appl_YMfeRvFoCfgIxAuTsqJVayljlkv',
-  entitlementId: import.meta.env.VITE_REVENUECAT_ENTITLEMENT_ID || 'premium',
+  entitlementId: import.meta.env.VITE_REVENUECAT_ENTITLEMENT_ID || 'The Complete Athlete Pro',
   premiumRequired: import.meta.env.VITE_PREMIUM_REQUIRED === 'true'
 };
 
@@ -11,7 +11,13 @@ export function canUseNativePurchases() {
 }
 
 function simplifyCustomerInfo(customerInfo, entitlementId = revenueCatConfig.entitlementId) {
-  const entitlement = customerInfo?.entitlements?.active?.[entitlementId] ?? null;
+  const activeEntitlements = customerInfo?.entitlements?.active ?? {};
+  const entitlement =
+    activeEntitlements[entitlementId] ??
+    activeEntitlements.premium ??
+    activeEntitlements['The Complete Athlete Pro'] ??
+    Object.values(activeEntitlements)[0] ??
+    null;
   return {
     active: Boolean(entitlement?.isActive),
     entitlement,
