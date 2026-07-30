@@ -7,7 +7,7 @@ export const revenueCatConfig = {
 };
 
 export function canUseNativePurchases() {
-  return typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.());
+  return false;
 }
 
 function simplifyCustomerInfo(customerInfo, entitlementId = revenueCatConfig.entitlementId) {
@@ -54,57 +54,25 @@ export async function loadRevenueCatSubscription({ userId, email, name }) {
     };
   }
 
-  if (!canUseNativePurchases()) {
-    return {
-      configured: true,
-      native: false,
-      active: false,
-      package: null,
-      message: 'Subscriptions are available inside the iPhone app.'
-    };
-  }
-
-  const { Purchases } = await import('@revenuecat/purchases-capacitor');
-
-  if (configuredUserId !== userId) {
-    await Purchases.configure({
-      apiKey: revenueCatConfig.iosApiKey,
-      appUserID: userId
-    });
-    configuredUserId = userId;
-  }
-
-  if (email) await Purchases.setEmail({ email });
-  if (name) await Purchases.setDisplayName({ displayName: name });
-
-  const [{ customerInfo }, offerings] = await Promise.all([
-    Purchases.getCustomerInfo(),
-    Purchases.getOfferings()
-  ]);
-  const subscription = simplifyCustomerInfo(customerInfo);
-
   return {
     configured: true,
-    native: true,
-    active: subscription.active,
-    expirationDate: subscription.expirationDate,
-    managementURL: subscription.managementURL,
-    package: packageSummary(selectPackage(offerings)),
-    message: subscription.active ? 'Premium access is active.' : 'Premium access is ready to start.'
+    native: false,
+    active: false,
+    package: {
+      identifier: 'monthly',
+      productIdentifier: 'the_complete_athlete_monthly',
+      title: 'The Complete Athlete Premium',
+      price: '$5.99',
+      description: 'Full access to The Complete Athlete.'
+    },
+    message: 'Subscriptions are being connected before launch.'
   };
 }
 
 export async function purchaseRevenueCatSubscription() {
-  const { Purchases } = await import('@revenuecat/purchases-capacitor');
-  const offerings = await Purchases.getOfferings();
-  const selectedPackage = selectPackage(offerings);
-  if (!selectedPackage) throw new Error('No subscription offering found in RevenueCat.');
-  const { customerInfo } = await Purchases.purchasePackage({ aPackage: selectedPackage });
-  return simplifyCustomerInfo(customerInfo);
+  throw new Error('Subscriptions are being connected before launch.');
 }
 
 export async function restoreRevenueCatSubscription() {
-  const { Purchases } = await import('@revenuecat/purchases-capacitor');
-  const { customerInfo } = await Purchases.restorePurchases();
-  return simplifyCustomerInfo(customerInfo);
+  throw new Error('Subscriptions are being connected before launch.');
 }
