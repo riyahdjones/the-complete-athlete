@@ -86,12 +86,37 @@ input:disabled {
 }
 
 .auth-brand-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
   gap: 16px;
   padding: 28px;
   color: #ffffff;
   background: #111111;
   border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.auth-photo-panel {
+  background:
+    linear-gradient(180deg, rgba(8, 17, 31, 0.44) 0%, rgba(5, 7, 11, 0.74) 52%, rgba(5, 7, 11, 0.92) 100%),
+    url("/assets/onboarding-athlete-hero.png") center 42% / cover no-repeat;
+}
+
+.auth-photo-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(47, 109, 246, 0.28), transparent 36%),
+    linear-gradient(145deg, rgba(28, 61, 126, 0.24), rgba(5, 7, 11, 0.18) 52%);
+  pointer-events: none;
+}
+
+.auth-brand-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .auth-brand-panel .eyebrow {
@@ -6354,10 +6379,14 @@ select {
   width: auto;
   max-width: none;
   margin: 0;
-  padding: 0;
+  min-height: min(43svh, 350px);
+  align-content: end;
+  padding: max(58px, calc(env(safe-area-inset-top) + 18px)) 18px 22px;
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(8, 17, 31, 0.18) 0%, rgba(5, 7, 11, 0.52) 48%, rgba(5, 7, 11, 0.94) 100%),
+    url("/assets/onboarding-athlete-hero.png") center 40% / cover no-repeat;
   box-shadow: none;
 }
 
@@ -6474,10 +6503,14 @@ select {
 
 .native-shell .auth-login-shell .auth-brand-panel {
   margin: 0;
-  padding: 0;
+  min-height: min(38svh, 310px);
+  align-content: end;
+  padding: max(54px, calc(env(safe-area-inset-top) + 16px)) 18px 18px;
   border: 0;
-  border-radius: 0;
-  background: transparent;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(8, 17, 31, 0.16) 0%, rgba(5, 7, 11, 0.58) 48%, rgba(5, 7, 11, 0.94) 100%),
+    url("/assets/onboarding-athlete-hero.png") center 38% / cover no-repeat;
   box-shadow: none;
 }
 

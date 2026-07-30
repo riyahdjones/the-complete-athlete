@@ -2696,7 +2696,7 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
   if (!role) {
     return (
       <main className="auth-shell role-gate-shell" aria-label="Choose The Complete Athlete role">
-        <section className="auth-brand-panel">
+        <section className="auth-brand-panel auth-photo-panel">
           <p className="eyebrow">The Complete Athlete</p>
           <h1>How are you using the app?</h1>
           <p>Start in the space built for your role. Athletes train the habits. Parents stay connected to the growth.</p>
@@ -2724,7 +2724,7 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
 
   return (
     <main className="auth-shell auth-login-shell" aria-label="The Complete Athlete login">
-      <section className="auth-brand-panel">
+      <section className="auth-brand-panel auth-photo-panel">
         <p className="eyebrow">The Complete Athlete</p>
         <h1>Access the side built for you.</h1>
         <p>Athletes build the day. Parents support the day.</p>
