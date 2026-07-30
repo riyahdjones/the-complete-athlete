@@ -3,6 +3,7 @@
 	"appName": "The Complete Athlete",
 	"webDir": "dist",
 	"packageClassList": [
-		"PushNotificationsPlugin"
+		"PushNotificationsPlugin",
+		"PurchasesPlugin"
 	]
 }

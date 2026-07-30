@@ -31,6 +31,13 @@ import {
   X
 } from 'lucide-react';
 import { createPerformancePlanSeeds } from './performancePlans';
+import {
+  canUseNativePurchases,
+  loadRevenueCatSubscription,
+  purchaseRevenueCatSubscription,
+  restoreRevenueCatSubscription,
+  revenueCatConfig
+} from './revenueCat';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import './styles.css';
 
@@ -988,10 +995,19 @@ function App() {
   const [celebration, setCelebration] = useState('');
   const [lessonLibrary, setLessonLibrary] = useState(loadLessons);
   const [selectedLessonId, setSelectedLessonId] = useState(() => dailyLessonId(loadLessons(), todayKey()));
+  const [subscription, setSubscription] = useState({
+    configured: Boolean(revenueCatConfig.iosApiKey),
+    native: canUseNativePurchases(),
+    active: false,
+    loading: false,
+    package: null,
+    message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
+  });
 
   const activeLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
   const effectiveSession = authSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
   const isAuthed = Boolean(effectiveSession);
+  const premiumAccessAllowed = !revenueCatConfig.premiumRequired || !subscription.configured || subscription.active;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
 
@@ -2252,6 +2268,83 @@ function App() {
     if (effectiveSession.role === 'parent' && view !== 'parent') setView('parent');
   }, [effectiveSession, view]);
 
+  useEffect(() => {
+    if (!effectiveSession?.id) return;
+    let active = true;
+
+    const loadSubscription = async () => {
+      setSubscription((current) => ({ ...current, loading: true }));
+      try {
+        const status = await loadRevenueCatSubscription({
+          userId: effectiveSession.id,
+          email: effectiveSession.email,
+          name: effectiveSession.name
+        });
+        if (active) setSubscription((current) => ({ ...current, ...status, loading: false }));
+      } catch (error) {
+        if (active) {
+          setSubscription((current) => ({
+            ...current,
+            configured: Boolean(revenueCatConfig.iosApiKey),
+            native: canUseNativePurchases(),
+            loading: false,
+            message: error?.message || 'Premium access could not be checked yet.'
+          }));
+        }
+      }
+    };
+
+    loadSubscription();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveSession?.email, effectiveSession?.id, effectiveSession?.name]);
+
+  async function startPremiumSubscription() {
+    setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
+    try {
+      const status = await purchaseRevenueCatSubscription();
+      setSubscription((current) => ({
+        ...current,
+        active: status.active,
+        expirationDate: status.expirationDate,
+        managementURL: status.managementURL,
+        loading: false,
+        message: status.active ? 'Premium access is active.' : 'Purchase finished, but premium access is not active yet.'
+      }));
+      if (status.active) notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
+    } catch (error) {
+      const cancelled = Boolean(error?.userCancelled);
+      setSubscription((current) => ({
+        ...current,
+        loading: false,
+        message: cancelled ? 'Purchase canceled.' : error?.message || 'Purchase could not be completed yet.'
+      }));
+    }
+  }
+
+  async function restorePremiumSubscription() {
+    setSubscription((current) => ({ ...current, loading: true, message: 'Restoring purchases...' }));
+    try {
+      const status = await restoreRevenueCatSubscription();
+      setSubscription((current) => ({
+        ...current,
+        active: status.active,
+        expirationDate: status.expirationDate,
+        managementURL: status.managementURL,
+        loading: false,
+        message: status.active ? 'Premium access restored.' : 'No active subscription was found.'
+      }));
+    } catch (error) {
+      setSubscription((current) => ({
+        ...current,
+        loading: false,
+        message: error?.message || 'Purchases could not be restored yet.'
+      }));
+    }
+  }
+
   const content = useMemo(() => {
     if (view === 'parent') {
       return (
@@ -2313,14 +2406,23 @@ function App() {
         />
       ),
       plans: (
-        <PlansScreen
-          plans={plans}
-          planProgress={planProgress}
-          setPlanProgress={setPlanProgress}
-          awardPoints={awardPoints}
-          notifyUser={notifyUser}
-          persistPlanCompletion={persistPlanCompletion}
-        />
+        premiumAccessAllowed ? (
+          <PlansScreen
+            plans={plans}
+            planProgress={planProgress}
+            setPlanProgress={setPlanProgress}
+            awardPoints={awardPoints}
+            notifyUser={notifyUser}
+            persistPlanCompletion={persistPlanCompletion}
+          />
+        ) : (
+          <PremiumAccessPanel
+            compact={false}
+            restorePremiumSubscription={restorePremiumSubscription}
+            startPremiumSubscription={startPremiumSubscription}
+            subscription={subscription}
+          />
+        )
       ),
       journal: (
         <JournalScreen
@@ -2342,24 +2444,33 @@ function App() {
         />
       ),
       coach: (
-        <CoachScreen
-          activeCoachSessionId={activeCoachSessionId}
-          athleteProfile={athleteProfile}
-          authSession={authSession}
-          coachSessions={coachSessions}
-          lesson={activeLesson}
-          goals={goals}
-          messages={messages}
-          planProgress={planProgress}
-          plans={plans}
-          standards={standards}
-          setActiveCoachSessionId={setActiveCoachSessionId}
-          setCoachSessions={setCoachSessions}
-          setMessages={setMessages}
-          messageDraft={messageDraft}
-          setMessageDraft={setMessageDraft}
-          setCoachComposerFocused={setCoachComposerFocused}
-        />
+        premiumAccessAllowed ? (
+          <CoachScreen
+            activeCoachSessionId={activeCoachSessionId}
+            athleteProfile={athleteProfile}
+            authSession={authSession}
+            coachSessions={coachSessions}
+            lesson={activeLesson}
+            goals={goals}
+            messages={messages}
+            planProgress={planProgress}
+            plans={plans}
+            standards={standards}
+            setActiveCoachSessionId={setActiveCoachSessionId}
+            setCoachSessions={setCoachSessions}
+            setMessages={setMessages}
+            messageDraft={messageDraft}
+            setMessageDraft={setMessageDraft}
+            setCoachComposerFocused={setCoachComposerFocused}
+          />
+        ) : (
+          <PremiumAccessPanel
+            compact={false}
+            restorePremiumSubscription={restorePremiumSubscription}
+            startPremiumSubscription={startPremiumSubscription}
+            subscription={subscription}
+          />
+        )
       ),
       profile: (
         <ProfileScreen
@@ -2371,6 +2482,9 @@ function App() {
           setAthleteProfile={setAthleteProfile}
           setNotificationPreferences={setNotificationPreferences}
           setPrivacySettings={setPrivacySettings}
+          restorePremiumSubscription={restorePremiumSubscription}
+          startPremiumSubscription={startPremiumSubscription}
+          subscription={subscription}
           updateNotificationPreference={updateNotificationPreference}
         />
       )
@@ -2398,6 +2512,7 @@ function App() {
     messages,
     notificationPreferences,
     parentMessage,
+    premiumAccessAllowed,
     planProgress,
     plans,
     recentPointEvents,
@@ -2410,6 +2525,7 @@ function App() {
     standards,
     standardsHistory,
     standardsCompleted,
+    subscription,
     streakCount,
     submittedToday,
     tab,
@@ -4906,15 +5022,69 @@ function CoachScreen({
   );
 }
 
+function PremiumAccessPanel({
+  compact = true,
+  restorePremiumSubscription,
+  startPremiumSubscription,
+  subscription
+}) {
+  const product = subscription.package;
+  const statusLabel = subscription.active ? 'Active' : revenueCatConfig.premiumRequired ? 'Required' : 'Testing';
+  const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
+  const canPurchase = subscription.configured && subscription.native && product && !subscription.active;
+  const canRestore = subscription.configured && subscription.native;
+
+  return (
+    <section className={compact ? 'panel premium-panel compact' : 'panel premium-panel'}>
+      <PanelTitle icon={<Sparkles size={18} />} title="Premium Access" action={statusLabel} />
+      <div className="premium-status-row">
+        <span>{subscription.active ? 'Premium is active' : '7-day free trial'}</span>
+        <strong>{subscription.active ? 'Unlocked' : priceLine}</strong>
+      </div>
+      <p className="privacy-note">
+        Unlock the full Complete Athlete experience with plans, mindset coaching, daily growth tools, and future member features.
+      </p>
+      {subscription.message && <p className="inline-note">{subscription.message}</p>}
+      <div className="premium-actions">
+        {!subscription.active && (
+          <button
+            className="primary-action full"
+            disabled={!canPurchase || subscription.loading}
+            onClick={startPremiumSubscription}
+            type="button"
+          >
+            <LockKeyhole size={18} />
+            {subscription.loading ? 'Checking...' : 'Start Free Trial'}
+          </button>
+        )}
+        <button
+          className="secondary-action inline"
+          disabled={!canRestore || subscription.loading}
+          onClick={restorePremiumSubscription}
+          type="button"
+        >
+          Restore Purchase
+        </button>
+      </div>
+      {!subscription.native && (
+        <p className="privacy-note">Purchases are handled by Apple inside the iPhone app.</p>
+      )}
+    </section>
+  );
+}
+
 function ProfileScreen({
   authSession,
   athleteProfile,
   notificationPreferences,
   privacySettings,
   requestBrowserNotifications,
+  restorePremiumSubscription,
   setAthleteProfile,
   setNotificationPreferences,
   setPrivacySettings,
+  startPremiumSubscription,
+  subscription,
   updateNotificationPreference
 }) {
   const [shareFeedback, setShareFeedback] = useState('');
@@ -5106,6 +5276,11 @@ function ProfileScreen({
         </div>
         <p className="privacy-note">Turn on iPhone notifications here, then accept the Apple permission popup when it appears.</p>
       </section>
+      <PremiumAccessPanel
+        restorePremiumSubscription={restorePremiumSubscription}
+        startPremiumSubscription={startPremiumSubscription}
+        subscription={subscription}
+      />
       <section className="panel achievements-panel">
         <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Share" />
         <label className="journal-label" htmlFor="parent-contact">
