@@ -5210,7 +5210,7 @@ function ProfileScreen({
         </div>
       </section>
       <section className="panel add-goal-panel">
-        <PanelTitle icon={<UserRound size={18} />} title="Profile Details" action="Athlete controlled" />
+        <PanelTitle icon={<UserRound size={18} />} title="Profile Details" />
         <div className="account-email-card">
           <span>Registered email</span>
           <strong>{accountEmail}</strong>
