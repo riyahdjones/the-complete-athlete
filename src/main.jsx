@@ -3216,7 +3216,7 @@ function HomeScreen({
   return (
     <>
       <section className="panel daily-deposit-panel">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" action={lesson.time} />
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
         {lesson.title && <h2>{lesson.title}</h2>}
         <p>{lesson.body}</p>
       </section>
@@ -5750,7 +5750,7 @@ function PanelTitle({ icon, title, action }) {
         {icon}
         {title}
       </span>
-      <em>{action}</em>
+      {action ? <em>{action}</em> : null}
     </div>
   );
 }
