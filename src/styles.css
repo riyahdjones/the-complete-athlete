@@ -2282,6 +2282,72 @@ textarea {
   accent-color: var(--gold);
 }
 
+.collapsible-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-trigger {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.collapsible-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.collapsible-title > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.collapsible-title em {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, #2f6df6 0%, #0f172a 90%),
+    #0f172a;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.collapsible-trigger > svg:last-child {
+  color: var(--muted);
+  transition: transform 180ms ease;
+}
+
+.collapsible-panel.open .collapsible-trigger > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
 .privacy-boundaries {
   display: grid;
   gap: 8px;

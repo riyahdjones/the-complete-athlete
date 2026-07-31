@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Camera,
   Check,
+  ChevronDown,
   CircleHelp,
   Copy,
   Goal,
@@ -5118,6 +5119,7 @@ function ProfileScreen({
   updateNotificationPreference
 }) {
   const [shareFeedback, setShareFeedback] = useState('');
+  const [openProfileSections, setOpenProfileSections] = useState({ notifications: false, privacy: false });
   const accountEmail = authSession?.email || 'No email found';
 
   function updateAthleteProfile(field, value) {
@@ -5157,6 +5159,10 @@ function ProfileScreen({
       return;
     }
     setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+  }
+
+  function toggleProfileSection(section) {
+    setOpenProfileSections((current) => ({ ...current, [section]: !current[section] }));
   }
 
   const parentInviteUrl = `${window.location.origin}${window.location.pathname}?role=parent&parentCode=${encodeURIComponent(athleteProfile.parentAccessCode)}`;
@@ -5247,67 +5253,85 @@ function ProfileScreen({
           </label>
         </div>
       </section>
-      <section className="panel notification-settings-panel">
-        <PanelTitle icon={<Bell size={18} />} title="Notifications" action="iPhone alerts" />
-        <div className="privacy-list notification-settings-list">
-          <label>
-            <span>iPhone lock-screen notifications</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.browserPush}
-              onChange={(event) => toggleBrowserPush(event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Daily Deposit reminders</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.dailyDeposits}
-              onChange={(event) => updateNotificationPreference('dailyDeposits', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>New performance plans</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.performancePlans}
-              onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Plan unlocks and completions</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.planUnlocks}
-              onChange={(event) => updateNotificationPreference('planUnlocks', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Streak reminders</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.streaks}
-              onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Productivity updates</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.productivity}
-              onChange={(event) => updateNotificationPreference('productivity', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Points earned</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.points}
-              onChange={(event) => updateNotificationPreference('points', event.target.checked)}
-            />
-          </label>
-        </div>
-        <p className="privacy-note">Turn on iPhone notifications here, then accept the Apple permission popup when it appears.</p>
+      <section className={openProfileSections.notifications ? 'panel notification-settings-panel collapsible-panel open' : 'panel notification-settings-panel collapsible-panel'}>
+        <button
+          className="collapsible-trigger"
+          type="button"
+          aria-expanded={openProfileSections.notifications}
+          onClick={() => toggleProfileSection('notifications')}
+        >
+          <span className="collapsible-title">
+            <span>
+              <Bell size={18} />
+              Notifications
+            </span>
+            <em>iPhone alerts</em>
+          </span>
+          <ChevronDown size={18} />
+        </button>
+        {openProfileSections.notifications && (
+          <div className="collapsible-content">
+            <div className="privacy-list notification-settings-list">
+              <label>
+                <span>iPhone lock-screen notifications</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.browserPush}
+                  onChange={(event) => toggleBrowserPush(event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Daily Deposit reminders</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.dailyDeposits}
+                  onChange={(event) => updateNotificationPreference('dailyDeposits', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>New performance plans</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.performancePlans}
+                  onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Plan unlocks and completions</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.planUnlocks}
+                  onChange={(event) => updateNotificationPreference('planUnlocks', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Streak reminders</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.streaks}
+                  onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Productivity updates</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.productivity}
+                  onChange={(event) => updateNotificationPreference('productivity', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Points earned</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.points}
+                  onChange={(event) => updateNotificationPreference('points', event.target.checked)}
+                />
+              </label>
+            </div>
+            <p className="privacy-note">Turn on iPhone notifications here, then accept the Apple permission popup when it appears.</p>
+          </div>
+        )}
       </section>
       <PremiumAccessPanel
         restorePremiumSubscription={restorePremiumSubscription}
@@ -5347,38 +5371,56 @@ function ProfileScreen({
         </div>
         {shareFeedback && <p className="inline-note">{shareFeedback}</p>}
       </section>
-      <section className="panel privacy-controls-panel">
-        <PanelTitle icon={<Shield size={18} />} title="Privacy Controls" action="Parent view" />
-        <div className="privacy-list">
-          <label>
-            <span>Readiness trend visible to parent</span>
-            <input
-              type="checkbox"
-              checked={privacySettings.readinessVisible}
-              onChange={(event) => updatePrivacy('readinessVisible', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Productivity tracker visible to parent</span>
-            <input
-              type="checkbox"
-              checked={privacySettings.standardsVisible}
-              onChange={(event) => updatePrivacy('standardsVisible', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Goals summary visible to parent</span>
-            <input
-              type="checkbox"
-              checked={privacySettings.goalsVisible}
-              onChange={(event) => updatePrivacy('goalsVisible', event.target.checked)}
-            />
-          </label>
-        </div>
-        <div className="privacy-boundaries">
-          <span>Journal is private unless you choose to share it.</span>
-          <span>My Mindset Coach chats stay private.</span>
-        </div>
+      <section className={openProfileSections.privacy ? 'panel privacy-controls-panel collapsible-panel open' : 'panel privacy-controls-panel collapsible-panel'}>
+        <button
+          className="collapsible-trigger"
+          type="button"
+          aria-expanded={openProfileSections.privacy}
+          onClick={() => toggleProfileSection('privacy')}
+        >
+          <span className="collapsible-title">
+            <span>
+              <Shield size={18} />
+              Privacy Controls
+            </span>
+            <em>Parent view</em>
+          </span>
+          <ChevronDown size={18} />
+        </button>
+        {openProfileSections.privacy && (
+          <div className="collapsible-content">
+            <div className="privacy-list">
+              <label>
+                <span>Readiness trend visible to parent</span>
+                <input
+                  type="checkbox"
+                  checked={privacySettings.readinessVisible}
+                  onChange={(event) => updatePrivacy('readinessVisible', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Productivity tracker visible to parent</span>
+                <input
+                  type="checkbox"
+                  checked={privacySettings.standardsVisible}
+                  onChange={(event) => updatePrivacy('standardsVisible', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Goals summary visible to parent</span>
+                <input
+                  type="checkbox"
+                  checked={privacySettings.goalsVisible}
+                  onChange={(event) => updatePrivacy('goalsVisible', event.target.checked)}
+                />
+              </label>
+            </div>
+            <div className="privacy-boundaries">
+              <span>Journal is private unless you choose to share it.</span>
+              <span>My Mindset Coach chats stay private.</span>
+            </div>
+          </div>
+        )}
       </section>
     </>
   );
