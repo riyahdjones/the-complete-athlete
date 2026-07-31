@@ -1021,11 +1021,29 @@ function App() {
     package: null,
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
   });
+  const [backendPremiumAccess, setBackendPremiumAccess] = useState({
+    hasAccess: false,
+    source: 'none',
+    sponsorUserId: null,
+    expiresAt: ''
+  });
 
   const activeLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
   const effectiveSession = authSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
   const isAuthed = Boolean(effectiveSession);
-  const premiumAccessAllowed = !revenueCatConfig.premiumRequired || !subscription.configured || subscription.active;
+  const effectiveSubscription = {
+    ...subscription,
+    active: subscription.active || backendPremiumAccess.hasAccess,
+    accessSource: backendPremiumAccess.source,
+    sponsorUserId: backendPremiumAccess.sponsorUserId,
+    expirationDate: subscription.expirationDate || backendPremiumAccess.expiresAt,
+    message: backendPremiumAccess.hasAccess
+      ? backendPremiumAccess.source === 'parent'
+        ? 'Premium access is covered by a linked parent account.'
+        : 'Premium access is active.'
+      : subscription.message
+  };
+  const premiumAccessAllowed = !revenueCatConfig.premiumRequired || !effectiveSubscription.configured || effectiveSubscription.active;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
 
@@ -2325,6 +2343,38 @@ function App() {
     };
   }, [effectiveSession?.email, effectiveSession?.id, effectiveSession?.name]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured || !effectiveSession?.id || String(effectiveSession.id).startsWith('demo-')) {
+      setBackendPremiumAccess({
+        hasAccess: false,
+        source: 'none',
+        sponsorUserId: null,
+        expiresAt: ''
+      });
+      return;
+    }
+
+    let active = true;
+
+    async function loadBackendPremiumAccess() {
+      const { data, error } = await supabase.rpc('user_has_premium_access', { target_user_id: effectiveSession.id });
+      if (!active) return;
+      const access = Array.isArray(data) ? data[0] : data;
+      setBackendPremiumAccess({
+        hasAccess: !error && Boolean(access?.has_access),
+        source: access?.access_source || 'none',
+        sponsorUserId: access?.sponsor_user_id || null,
+        expiresAt: access?.expires_at || ''
+      });
+    }
+
+    loadBackendPremiumAccess();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveSession?.id]);
+
   async function startPremiumSubscription() {
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
     try {
@@ -2444,7 +2494,7 @@ function App() {
             compact={false}
             restorePremiumSubscription={restorePremiumSubscription}
             startPremiumSubscription={startPremiumSubscription}
-            subscription={subscription}
+            subscription={effectiveSubscription}
           />
         )
       ),
@@ -2492,7 +2542,7 @@ function App() {
             compact={false}
             restorePremiumSubscription={restorePremiumSubscription}
             startPremiumSubscription={startPremiumSubscription}
-            subscription={subscription}
+            subscription={effectiveSubscription}
           />
         )
       ),
@@ -2509,7 +2559,7 @@ function App() {
           setPrivacySettings={setPrivacySettings}
           restorePremiumSubscription={restorePremiumSubscription}
           startPremiumSubscription={startPremiumSubscription}
-          subscription={subscription}
+          subscription={effectiveSubscription}
           updateNotificationPreference={updateNotificationPreference}
         />
       )
@@ -2531,6 +2581,7 @@ function App() {
     lastSubmittedDate,
     activeCoachSessionId,
     athleteProfile,
+    backendPremiumAccess,
     coachSessions,
     coachComposerFocused,
     messageDraft,
@@ -2550,7 +2601,7 @@ function App() {
     standards,
     standardsHistory,
     standardsCompleted,
-    subscription,
+    effectiveSubscription,
     streakCount,
     submittedToday,
     tab,
@@ -5059,7 +5110,8 @@ function PremiumAccessPanel({
   subscription
 }) {
   const product = subscription.package;
-  const statusLabel = subscription.active ? 'Active' : revenueCatConfig.premiumRequired ? 'Required' : 'Testing';
+  const coveredByParent = subscription.active && subscription.accessSource === 'parent';
+  const statusLabel = subscription.active ? (coveredByParent ? 'Parent covered' : 'Active') : revenueCatConfig.premiumRequired ? 'Required' : 'Testing';
   const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
   const canPurchase = subscription.configured && subscription.native && product && !subscription.active;
   const canRestore = subscription.configured && subscription.native;
@@ -5068,7 +5120,7 @@ function PremiumAccessPanel({
     <section className={compact ? 'panel premium-panel compact' : 'panel premium-panel'}>
       <PanelTitle icon={<Sparkles size={18} />} title="Premium Access" action={statusLabel} />
       <div className="premium-status-row">
-        <span>{subscription.active ? 'Premium is active' : '7-day free trial'}</span>
+        <span>{subscription.active ? (coveredByParent ? 'Covered by parent' : 'Premium is active') : '7-day free trial'}</span>
         <strong>{subscription.active ? 'Unlocked' : priceLine}</strong>
       </div>
       <p className="privacy-note">
