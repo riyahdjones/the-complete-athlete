@@ -100,7 +100,7 @@ input:disabled {
 .auth-photo-panel {
   background:
     linear-gradient(180deg, rgba(8, 17, 31, 0.44) 0%, rgba(5, 7, 11, 0.74) 52%, rgba(5, 7, 11, 0.92) 100%),
-    url("/assets/onboarding-athlete-hero.png") center 42% / cover no-repeat;
+    url("/assets/onboarding-athlete-hero.png") center 28% / cover no-repeat;
 }
 
 .auth-photo-panel::after {
@@ -6379,14 +6379,14 @@ select {
   width: auto;
   max-width: none;
   margin: 0;
-  min-height: min(43svh, 350px);
+  min-height: min(40svh, 330px);
   align-content: end;
   padding: max(58px, calc(env(safe-area-inset-top) + 18px)) 18px 22px;
   border: 0;
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(8, 17, 31, 0.18) 0%, rgba(5, 7, 11, 0.52) 48%, rgba(5, 7, 11, 0.94) 100%),
-    url("/assets/onboarding-athlete-hero.png") center 40% / cover no-repeat;
+    url("/assets/onboarding-athlete-hero.png") center 24% / cover no-repeat;
   box-shadow: none;
 }
 
@@ -6503,14 +6503,14 @@ select {
 
 .native-shell .auth-login-shell .auth-brand-panel {
   margin: 0;
-  min-height: min(38svh, 310px);
+  min-height: min(36svh, 300px);
   align-content: end;
   padding: max(54px, calc(env(safe-area-inset-top) + 16px)) 18px 18px;
   border: 0;
   border-radius: 20px;
   background:
     linear-gradient(180deg, rgba(8, 17, 31, 0.16) 0%, rgba(5, 7, 11, 0.58) 48%, rgba(5, 7, 11, 0.94) 100%),
-    url("/assets/onboarding-athlete-hero.png") center 38% / cover no-repeat;
+    url("/assets/onboarding-athlete-hero.png") center 22% / cover no-repeat;
   box-shadow: none;
 }
 
