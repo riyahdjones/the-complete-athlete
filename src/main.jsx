@@ -2502,6 +2502,7 @@ function App() {
           notificationPreferences={notificationPreferences}
           privacySettings={privacySettings}
           requestBrowserNotifications={requestBrowserNotifications}
+          logoutUser={logoutUser}
           setAthleteProfile={setAthleteProfile}
           setNotificationPreferences={setNotificationPreferences}
           setPrivacySettings={setPrivacySettings}
@@ -5104,6 +5105,7 @@ function PremiumAccessPanel({
 function ProfileScreen({
   authSession,
   athleteProfile,
+  logoutUser,
   notificationPreferences,
   privacySettings,
   requestBrowserNotifications,
@@ -5207,6 +5209,9 @@ function ProfileScreen({
           <span>Registered email</span>
           <strong>{accountEmail}</strong>
         </div>
+        <button className="secondary-action inline account-signout-button" onClick={logoutUser} type="button">
+          Sign Out
+        </button>
         <div className="photo-actions">
           <label className="photo-upload">
             <Camera size={18} />

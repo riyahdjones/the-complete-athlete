@@ -2131,6 +2131,11 @@ textarea {
   font-weight: 900;
 }
 
+.account-signout-button {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
 .premium-panel {
   overflow: hidden;
   border-color: rgba(55, 107, 220, 0.28);
