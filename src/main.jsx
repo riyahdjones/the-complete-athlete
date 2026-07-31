@@ -3230,7 +3230,7 @@ function HomeScreen({
       </section>
 
       <section className="panel progress-snapshot">
-        <PanelTitle icon={<BarChart3 size={18} />} title="Progress Snapshot" action={submittedToday ? 'Locked' : 'Today'} />
+        <PanelTitle icon={<BarChart3 size={18} />} title="Progress Snapshot" />
         <div className="progress-scoreboard">
           <span>
             <strong>{completion}%</strong>
@@ -3337,7 +3337,7 @@ function HomeScreen({
       )}
 
       <section className="panel readiness-panel">
-        <PanelTitle icon={<LineChart size={18} />} title="Morning Readiness Check-In" action="Daily" />
+        <PanelTitle icon={<LineChart size={18} />} title="Morning Readiness Check-In" />
         {Object.entries(scores).map(([key, value]) => (
           <label className="slider-row" key={key}>
             <span>{key}</span>
