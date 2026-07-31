@@ -6293,18 +6293,18 @@ select {
 
 @media (min-width: 768px) {
   .native-shell .content {
-    max-width: 860px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     padding-inline: 24px;
   }
 
   .native-shell .topbar {
-    justify-content: center;
+    justify-content: stretch;
     padding-inline: 24px;
   }
 
   .native-shell .topbar > div {
-    width: min(100%, 860px);
+    width: 100%;
   }
 }
 

@@ -45,6 +45,7 @@ import './styles.css';
 if (typeof window !== 'undefined') {
   const isNativeShell =
     window.location.protocol === 'capacitor:' ||
+    new URLSearchParams(window.location.search).has('nativePreview') ||
     Boolean(window.Capacitor?.isNativePlatform?.()) ||
     Boolean(window.Capacitor?.getPlatform && window.Capacitor.getPlatform() !== 'web');
   const isTextEntryActive = () => {
