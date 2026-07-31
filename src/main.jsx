@@ -4856,6 +4856,7 @@ function CoachScreen({
     if (!response.ok) {
       const error = new Error(payload.error || 'Coach backend unavailable.');
       error.code = payload.code;
+      error.status = response.status;
       error.messageCount = payload.messageCount;
       error.messageLimit = payload.messageLimit;
       throw error;
@@ -4904,7 +4905,11 @@ function CoachScreen({
         setCoachStatus('Local coach backend is not connected, so this chat used the prototype coach.');
         saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
       } else {
-        setCoachStatus('My Mindset Coach could not connect to the backend. Try again in a moment.');
+        const backendMessage =
+          error.status === 401
+            ? 'Sign out and log back in, then try My Mindset Coach again.'
+            : error.message || 'My Mindset Coach could not connect. Try again in a moment.';
+        setCoachStatus(backendMessage);
         saveCoachSession(sessionId, sessionTitle, nextMessages);
       }
     } finally {
