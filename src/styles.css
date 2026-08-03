@@ -3625,7 +3625,7 @@ textarea,
 .native-shell .mobile-native-frame .parent-bottom-nav,
 .mobile-native-frame .parent-bottom-nav,
 .parent-bottom-nav {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 /* True mobile app shell: React uses this instead of the desktop mockup frame. */

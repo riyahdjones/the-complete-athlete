@@ -5773,6 +5773,14 @@ function ParentDashboard({
   return (
     <>
       {parentTab === 'overview' && (
+      <section className="panel daily-deposit-panel parent-daily-deposit-panel">
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
+        <h2>{lesson.title}</h2>
+        <p>{lesson.body}</p>
+      </section>
+      )}
+
+      {parentTab === 'overview' && (
       <section className="panel parent-progress-panel">
         <PanelTitle icon={<BarChart3 size={18} />} title="Athlete Progress" action={athleteName} />
         <div className="parent-progress-hero">
@@ -5796,50 +5804,7 @@ function ParentDashboard({
             Plans completed
           </span>
         </div>
-      </section>
-      )}
-
-      {parentTab === 'overview' && (
-      <div className="metric-grid">
-        <Metric icon={<Trophy size={18} />} label="Athlete Score" value={athleteScore} />
-        {privacySettings.standardsVisible && (
-          <Metric icon={<BadgeCheck size={18} />} label="Productivity" value={`${standardsCompleted}/${standardsTotal}`} />
-        )}
-        {!privacySettings.standardsVisible && (
-          <Metric icon={<Shield size={18} />} label="Privacy" value="Limited" />
-        )}
-      </div>
-      )}
-
-      {parentTab === 'overview' && (
-      <section className="panel parent-current-plan-panel">
-        <PanelTitle icon={<BookOpen size={18} />} title="Current Plan" action={currentPlan.dayLabel} />
-        <div className="parent-current-plan">
-          <span>{currentPlan.seriesTitle}</span>
-          <strong>{currentPlan.lessonTitle}</strong>
-          <Progress value={currentPlan.totalCount ? Math.round((currentPlan.completedCount / currentPlan.totalCount) * 100) : 0} />
-          <p>{currentPlan.completedCount}/{currentPlan.totalCount} lessons completed</p>
-          {currentPlan.nextUnlock && <em>Next lesson opens {currentPlan.nextUnlock}.</em>}
-        </div>
-        <div className="parent-cue-card">
-          <strong>Tonight’s conversation starter</strong>
-          <span>{currentPlan.cue}</span>
-        </div>
-      </section>
-      )}
-
-      {parentTab === 'overview' && (
-      <section className="panel daily-deposit-panel parent-daily-deposit-panel">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
-        <h2>{lesson.title}</h2>
-        <p>{lesson.body}</p>
-      </section>
-      )}
-
-      {parentTab === 'support' && (
-      <section className="panel parent-actions-panel">
-        <PanelTitle icon={<Sparkles size={18} />} title="Parent Actions" action="Support" />
-        <div className="parent-action-grid">
+        <div className="parent-action-grid parent-action-grid-inline">
           <button onClick={() => sendParentEncouragement('effort')} type="button">
             <BadgeCheck size={18} />
             <strong>Encourage effort</strong>
@@ -5857,6 +5822,23 @@ function ParentDashboard({
           </button>
         </div>
         {actionFeedback && <p className="inline-note">{actionFeedback}</p>}
+      </section>
+      )}
+
+      {parentTab === 'overview' && (
+      <section className="panel parent-current-plan-panel">
+        <PanelTitle icon={<BookOpen size={18} />} title="Your Athlete’s Current Plan" action={currentPlan.dayLabel} />
+        <div className="parent-current-plan">
+          <span>{currentPlan.seriesTitle}</span>
+          <strong>{currentPlan.lessonTitle}</strong>
+          <Progress value={currentPlan.totalCount ? Math.round((currentPlan.completedCount / currentPlan.totalCount) * 100) : 0} />
+          <p>{currentPlan.completedCount}/{currentPlan.totalCount} lessons completed</p>
+          {currentPlan.nextUnlock && <em>Next lesson opens {currentPlan.nextUnlock}.</em>}
+        </div>
+        <div className="parent-cue-card">
+          <strong>Tonight’s conversation starter</strong>
+          <span>{currentPlan.cue}</span>
+        </div>
       </section>
       )}
 
@@ -5892,14 +5874,14 @@ function ParentDashboard({
       </section>
       )}
 
-      {parentTab === 'content' && (
+      {parentTab === 'parent-corner' && (
       <>
       <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
       <ParentPlanLibrary plans={plans} planProgress={planProgress} />
       </>
       )}
 
-      {parentTab === 'support' && privacySettings.goalsVisible && (
+      {parentTab === 'overview' && privacySettings.goalsVisible && (
         <section className="panel parent-goal-panel">
           <PanelTitle icon={<Goal size={18} />} title="Goal Snapshot" action={`${goals.length} goals`} />
           <div className="parent-goals">
@@ -6218,8 +6200,7 @@ function BottomNav({ tab, setTab }) {
 function ParentBottomNav({ tab, setTab }) {
   const items = [
     ['overview', BarChart3, 'overview'],
-    ['support', Sparkles, 'support'],
-    ['content', BookOpen, 'content'],
+    ['parent-corner', BookOpen, 'parent corner'],
     ['settings', Bell, 'settings']
   ];
   return (
