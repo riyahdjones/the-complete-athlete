@@ -5782,7 +5782,7 @@ function ParentDashboard({
 
       {parentTab === 'overview' && (
       <section className="panel parent-progress-panel">
-        <PanelTitle icon={<BarChart3 size={18} />} title="Athlete Progress" action={athleteName} />
+        <PanelTitle icon={<BarChart3 size={18} />} title="Athlete Progress" />
         <div className="parent-progress-hero">
           <div>
             <span>Complete Athlete Score</span>
@@ -5827,7 +5827,7 @@ function ParentDashboard({
 
       {parentTab === 'overview' && (
       <section className="panel parent-current-plan-panel">
-        <PanelTitle icon={<BookOpen size={18} />} title="Your Athlete’s Current Plan" action={currentPlan.dayLabel} />
+        <PanelTitle icon={<BookOpen size={18} />} title="Your Athlete’s Current Plan" />
         <div className="parent-current-plan">
           <span>{currentPlan.seriesTitle}</span>
           <strong>{currentPlan.lessonTitle}</strong>
