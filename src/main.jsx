@@ -1098,6 +1098,7 @@ function App() {
   const [dailyDate, setDailyDate] = useState(initialDailyState.date);
   const [view, setView] = useState('athlete');
   const [tab, setTab] = useState('home');
+  const [parentTab, setParentTab] = useState('overview');
   const [standards, setStandards] = useState(initialDailyState.standards);
   const [standardDraft, setStandardDraft] = useState('');
   const [standardGoalId, setStandardGoalId] = useState('');
@@ -2578,6 +2579,7 @@ function App() {
     if (view === 'parent') {
       return (
         <ParentDashboard
+          parentTab={parentTab}
           athleteScore={athleteScore}
           standardsCompleted={standardsCompleted}
           standardsTotal={standards.length}
@@ -2754,6 +2756,7 @@ function App() {
     messages,
     notificationPreferences,
     parentGuides,
+    parentTab,
     parentMessage,
     premiumAccessAllowed,
     planProgress,
@@ -2858,6 +2861,7 @@ function App() {
         <section className="content">{content}</section>
 
         {view === 'athlete' && !coachTypingMode && <BottomNav tab={tab} setTab={setTab} />}
+        {view === 'parent' && <ParentBottomNav tab={parentTab} setTab={setParentTab} />}
       </main>
     </div>
   );
@@ -5658,6 +5662,7 @@ function ProfileScreen({
 }
 
 function ParentDashboard({
+  parentTab,
   athleteScore,
   athleteProfile,
   goals,
@@ -5767,6 +5772,7 @@ function ParentDashboard({
 
   return (
     <>
+      {parentTab === 'overview' && (
       <section className="panel parent-progress-panel">
         <PanelTitle icon={<BarChart3 size={18} />} title="Athlete Progress" action={athleteName} />
         <div className="parent-progress-hero">
@@ -5791,20 +5797,21 @@ function ParentDashboard({
           </span>
         </div>
       </section>
+      )}
 
+      {parentTab === 'overview' && (
       <div className="metric-grid">
         <Metric icon={<Trophy size={18} />} label="Athlete Score" value={athleteScore} />
         {privacySettings.standardsVisible && (
           <Metric icon={<BadgeCheck size={18} />} label="Productivity" value={`${standardsCompleted}/${standardsTotal}`} />
         )}
-        {privacySettings.standardsVisible && (
-          <Metric icon={<BookOpen size={18} />} label="Plans Completed" value={`${planSeriesStats.completed}/${planSeriesStats.total}`} />
-        )}
         {!privacySettings.standardsVisible && (
           <Metric icon={<Shield size={18} />} label="Privacy" value="Limited" />
         )}
       </div>
+      )}
 
+      {parentTab === 'overview' && (
       <section className="panel parent-current-plan-panel">
         <PanelTitle icon={<BookOpen size={18} />} title="Current Plan" action={currentPlan.dayLabel} />
         <div className="parent-current-plan">
@@ -5819,32 +5826,17 @@ function ParentDashboard({
           <span>{currentPlan.cue}</span>
         </div>
       </section>
+      )}
 
-      <section className="panel parent-weekly-panel">
-        <PanelTitle icon={<LineChart size={18} />} title="Weekly Growth" action="Snapshot" />
-        <div className="parent-weekly-grid">
-          <span>
-            <strong>{weeklySnapshot.activeDays}</strong>
-            Active days
-          </span>
-          {privacySettings.readinessVisible && (
-            <span>
-              <strong>{weeklySnapshot.readinessAverage}/10</strong>
-              Readiness average
-            </span>
-          )}
-          <span>
-            <strong>{weeklySnapshot.journalCount}</strong>
-            Journal activity
-          </span>
-          <span>
-            <strong>{weeklySnapshot.plansCompleted}</strong>
-            Lessons finished
-          </span>
-        </div>
-        <p className="privacy-note">Journal and coach conversations stay private. This snapshot shows activity patterns, not private words.</p>
+      {parentTab === 'overview' && (
+      <section className="panel daily-deposit-panel parent-daily-deposit-panel">
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
+        <h2>{lesson.title}</h2>
+        <p>{lesson.body}</p>
       </section>
+      )}
 
+      {parentTab === 'support' && (
       <section className="panel parent-actions-panel">
         <PanelTitle icon={<Sparkles size={18} />} title="Parent Actions" action="Support" />
         <div className="parent-action-grid">
@@ -5866,13 +5858,9 @@ function ParentDashboard({
         </div>
         {actionFeedback && <p className="inline-note">{actionFeedback}</p>}
       </section>
+      )}
 
-      <section className="panel daily-deposit-panel parent-daily-deposit-panel">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
-        <h2>{lesson.title}</h2>
-        <p>{lesson.body}</p>
-      </section>
-
+      {parentTab === 'settings' && (
       <section className="panel parent-notifications-panel">
         <PanelTitle icon={<Bell size={18} />} title="Parent Notifications" action={notificationPreferences.parentUpdates ? 'On' : 'Off'} />
         <div className="privacy-list">
@@ -5902,18 +5890,16 @@ function ParentDashboard({
           </label>
         </div>
       </section>
+      )}
 
-      <section className="panel parent-privacy-panel">
-        <PanelTitle icon={<Shield size={18} />} title="Privacy Boundaries" action="Athlete trust" />
-        <div className="privacy-boundaries">
-          <span>Visible: score, streaks, plan progress, daily productivity, and growth patterns.</span>
-          <span>Private: journal words and coach conversations unless the athlete chooses to share.</span>
-        </div>
-      </section>
-
+      {parentTab === 'content' && (
+      <>
       <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
       <ParentPlanLibrary plans={plans} planProgress={planProgress} />
-      {privacySettings.goalsVisible && (
+      </>
+      )}
+
+      {parentTab === 'support' && privacySettings.goalsVisible && (
         <section className="panel parent-goal-panel">
           <PanelTitle icon={<Goal size={18} />} title="Goal Snapshot" action={`${goals.length} goals`} />
           <div className="parent-goals">
@@ -6219,6 +6205,25 @@ function BottomNav({ tab, setTab }) {
   ];
   return (
     <nav className="bottom-nav" aria-label="Primary navigation">
+      {items.map(([id, Icon, label]) => (
+        <button className={tab === id ? 'nav-item active' : 'nav-item'} key={id} onClick={() => setTab(id)}>
+          <Icon size={19} />
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function ParentBottomNav({ tab, setTab }) {
+  const items = [
+    ['overview', BarChart3, 'overview'],
+    ['support', Sparkles, 'support'],
+    ['content', BookOpen, 'content'],
+    ['settings', Bell, 'settings']
+  ];
+  return (
+    <nav className="bottom-nav parent-bottom-nav" aria-label="Parent navigation">
       {items.map(([id, Icon, label]) => (
         <button className={tab === id ? 'nav-item active' : 'nav-item'} key={id} onClick={() => setTab(id)}>
           <Icon size={19} />
