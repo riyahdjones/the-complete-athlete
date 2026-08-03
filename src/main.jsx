@@ -870,6 +870,31 @@ function parentGuideFromSupabase(row) {
   };
 }
 
+function parentGuideCoverImage(seriesTitle) {
+  const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('home court advantage')) {
+    return '/parent-guides/home-court-advantage-banner.jpg';
+  }
+  return '/parent-guides/home-court-advantage-banner.jpg';
+}
+
+function parentGuideThumbnailImage(seriesTitle) {
+  const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('home court advantage')) {
+    return '/parent-guides/home-court-advantage-thumbnail.jpg';
+  }
+  return parentGuideCoverImage(seriesTitle);
+}
+
+function parentGuideCoverPosition(seriesTitle) {
+  const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('home court advantage')) {
+    return '50% 48%';
+  }
+  return '50% 50%';
+}
+
+
 function loadPlans() {
   try {
     const saved = JSON.parse(localStorage.getItem(plansStorageKey) ?? '[]');
@@ -5625,7 +5650,10 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
       promise: guide.subject,
       steps: guide.steps,
       guideDay: guide.guideDay,
-      guideLength: guide.guideLength
+      guideLength: guide.guideLength,
+      coverImage: parentGuideCoverImage(guide.seriesTitle),
+      thumbnailImage: parentGuideThumbnailImage(guide.seriesTitle),
+      coverPosition: parentGuideCoverPosition(guide.seriesTitle)
     }))
     : [
       {
@@ -5637,7 +5665,10 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
         promise: parentMessage.body,
         ask: parentMessage.conversationCue,
         avoid: parentMessage.avoid,
-        steps: []
+        steps: [],
+        coverImage: parentGuideCoverImage('Parent Corner'),
+        thumbnailImage: parentGuideThumbnailImage('Parent Corner'),
+        coverPosition: parentGuideCoverPosition('Parent Corner')
       }
     ];
   const selectedContent = parentContent.find((item) => item.id === selectedParentContentId);
@@ -5686,11 +5717,19 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
 
       <section className="panel parent-corner-library">
         <PanelTitle icon={<Sparkles size={18} />} title="Continue Parent Guide" action={latestGuide.date} />
-        <button className="continue-plan-card parent-guide-card" onClick={() => setSelectedParentContentId(latestGuide.id)} type="button">
-          <span>{latestGuide.category}</span>
-          <strong>{latestGuide.seriesTitle}</strong>
-          <em>{latestGuide.title}</em>
-          <p>{latestGuide.promise}</p>
+        <button
+          className="continue-plan-card parent-guide-card has-cover"
+          onClick={() => setSelectedParentContentId(latestGuide.id)}
+          style={{ '--plan-cover': `url(${latestGuide.coverImage})`, '--plan-cover-position': latestGuide.coverPosition }}
+          type="button"
+        >
+          <div className="plan-cover" aria-hidden="true" />
+          <div className="plan-card-copy">
+            <span>{latestGuide.category}</span>
+            <strong>{latestGuide.seriesTitle}</strong>
+            <em>{latestGuide.title}</em>
+            <p>{latestGuide.promise}</p>
+          </div>
         </button>
       </section>
 
@@ -5702,7 +5741,14 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
         </div>
         <div className="plan-list">
           {parentContent.map((item) => (
-            <button className="plan-list-row parent-guide-row" key={item.id} onClick={() => setSelectedParentContentId(item.id)} type="button">
+            <button
+              className="plan-list-row parent-guide-row has-cover"
+              key={item.id}
+              onClick={() => setSelectedParentContentId(item.id)}
+              style={{ '--plan-cover': `url(${item.coverImage})`, '--plan-thumb': `url(${item.thumbnailImage})`, '--plan-cover-position': item.coverPosition }}
+              type="button"
+            >
+              <div className="plan-cover-thumb" aria-hidden="true" />
               <span>{item.category}</span>
               <strong>{item.seriesTitle}</strong>
               <p>{item.promise}</p>
