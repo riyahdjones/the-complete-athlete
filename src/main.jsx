@@ -4092,6 +4092,9 @@ function planCoverImage(seriesTitle) {
   if (normalized.includes('next play')) {
     return '/plan-covers/next-play-banner.jpg';
   }
+  if (normalized.includes('thermostat')) {
+    return '/plan-covers/thermostat-banner.jpg';
+  }
   return '/plan-covers/90-percent-blueprint.jpg';
 }
 
@@ -4120,6 +4123,9 @@ function planThumbnailImage(seriesTitle) {
   }
   if (normalized.includes('next play')) {
     return '/plan-covers/next-play-thumbnail.jpg';
+  }
+  if (normalized.includes('thermostat')) {
+    return '/plan-covers/thermostat-thumbnail.jpg';
   }
   return planCoverImage(seriesTitle);
 }
