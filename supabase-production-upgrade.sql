@@ -85,8 +85,24 @@ create table if not exists public.parent_messages (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.parent_guides (
+  id uuid primary key default gen_random_uuid(),
+  series_title text not null,
+  title text not null,
+  category text not null default 'Parent Support',
+  subject text not null default '',
+  steps jsonb not null default '[]'::jsonb,
+  release_date date not null default current_date,
+  guide_day text not null default '',
+  guide_length integer not null default 1,
+  status text not null default 'draft' check (status in ('draft', 'scheduled', 'published')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.athlete_privacy_settings enable row level security;
 alter table public.parent_messages enable row level security;
+alter table public.parent_guides enable row level security;
 
 revoke update on public.profiles from authenticated;
 grant update (full_name) on public.profiles to authenticated;
@@ -298,6 +314,19 @@ using (status in ('scheduled', 'sent') and send_date <= current_date);
 
 create policy "Admins manage parent messages"
 on public.parent_messages for all
+to authenticated
+using (public.current_user_is_admin())
+with check (public.current_user_is_admin());
+
+drop policy if exists "Published parent guides are readable" on public.parent_guides;
+create policy "Published parent guides are readable"
+on public.parent_guides for select
+to authenticated
+using (status = 'published' and release_date <= current_date);
+
+drop policy if exists "Admins manage parent guides" on public.parent_guides;
+create policy "Admins manage parent guides"
+on public.parent_guides for all
 to authenticated
 using (public.current_user_is_admin())
 with check (public.current_user_is_admin());
@@ -550,6 +579,9 @@ on public.performance_plans (release_date);
 create index if not exists parent_messages_status_send_idx
 on public.parent_messages (status, send_date desc);
 
+create index if not exists parent_guides_release_status_idx
+on public.parent_guides (release_date, status);
+
 create table if not exists public.user_subscriptions (
   user_id uuid not null references public.profiles(id) on delete cascade,
   provider text not null default 'revenuecat',
@@ -661,6 +693,7 @@ grant execute on function public.user_has_premium_access(uuid) to authenticated;
 
 grant select, insert, update, delete on public.athlete_privacy_settings to authenticated;
 grant select, insert, update, delete on public.parent_messages to authenticated;
+grant select, insert, update, delete on public.parent_guides to authenticated;
 grant select on public.user_subscriptions to authenticated;
 grant select on public.coach_daily_usage to authenticated;
 grant select, insert, update, delete on public.performance_plan_progress to authenticated;

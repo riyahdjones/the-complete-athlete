@@ -856,6 +856,20 @@ function parentMessageFromSupabase(row) {
   };
 }
 
+function parentGuideFromSupabase(row) {
+  return {
+    id: row.id,
+    seriesTitle: row.series_title ?? 'Parent Guide',
+    title: row.title ?? '',
+    category: row.category ?? 'Parent Support',
+    subject: row.subject ?? '',
+    steps: Array.isArray(row.steps) ? row.steps : [],
+    releaseDate: row.release_date ?? todayKey(),
+    guideDay: row.guide_day ?? '',
+    guideLength: Number(row.guide_length) || 1
+  };
+}
+
 function loadPlans() {
   try {
     const saved = JSON.parse(localStorage.getItem(plansStorageKey) ?? '[]');
@@ -1003,6 +1017,7 @@ function App() {
   const [messageDraft, setMessageDraft] = useState('');
   const [coachComposerFocused, setCoachComposerFocused] = useState(false);
   const [parentMessage, setParentMessage] = useState(parentMessageSeed);
+  const [parentGuides, setParentGuides] = useState([]);
   const [parentAccessDraft, setParentAccessDraft] = useState('');
   const [parentLinkFeedback, setParentLinkFeedback] = useState('');
   const [parentLinkChecked, setParentLinkChecked] = useState(false);
@@ -1438,7 +1453,7 @@ function App() {
     let cancelled = false;
 
     async function loadSharedContent() {
-      const [lessonsResult, plansResult, parentMessageResult] = await Promise.all([
+      const [lessonsResult, plansResult, parentMessageResult, parentGuidesResult] = await Promise.all([
         supabase
           .from('daily_deposits')
           .select('id, title, body, focus_question, release_date, status')
@@ -1452,7 +1467,13 @@ function App() {
           .select('title, body, conversation_cue, avoid, send_date, status')
           .order('send_date', { ascending: false })
           .limit(1)
-          .maybeSingle()
+          .maybeSingle(),
+        supabase
+          .from('parent_guides')
+          .select('id, series_title, title, category, subject, steps, release_date, guide_day, guide_length, status')
+          .eq('status', 'published')
+          .lte('release_date', dailyDate)
+          .order('release_date', { ascending: true })
       ]);
 
       if (cancelled) return;
@@ -1485,6 +1506,10 @@ function App() {
 
       if (!parentMessageResult.error && parentMessageResult.data) {
         setParentMessage(parentMessageFromSupabase(parentMessageResult.data));
+      }
+
+      if (!parentGuidesResult.error && Array.isArray(parentGuidesResult.data)) {
+        setParentGuides(parentGuidesResult.data.map(parentGuideFromSupabase));
       }
 
     }
@@ -2432,6 +2457,7 @@ function App() {
           parentAccessDraft={parentAccessDraft}
           parentLinkChecked={parentLinkChecked}
           parentLinkFeedback={parentLinkFeedback}
+          parentGuides={parentGuides}
           parentMessage={parentMessage}
           planProgress={planProgress}
           plans={plans}
@@ -2588,6 +2614,7 @@ function App() {
     messageDraft,
     messages,
     notificationPreferences,
+    parentGuides,
     parentMessage,
     premiumAccessAllowed,
     planProgress,
@@ -4371,6 +4398,10 @@ const explicitPlanSectionHeadings = new Set([
   'Pull Back the Curtain',
   'Story',
   'The Story',
+  'Deeper Look',
+  'The Living Room',
+  'This Week at Home',
+  "Today's Challenge",
   'Why This Matters',
   'The Turning Point',
   'Mirror Check',
@@ -4497,7 +4528,7 @@ function sectionLinesToBlocks(lines) {
   return blocks;
 }
 
-function explicitPlanReaderSections(body) {
+function explicitPlanReaderSections(body, preserveHeadings = false) {
   const lines = planReaderBody(body)
     .split(/\n+/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
@@ -4518,7 +4549,9 @@ function explicitPlanReaderSections(body) {
         'The Story': 'Athlete Story',
         Journal: 'Film Room'
       };
-      const title = /^Next Chapter:/i.test(line) ? 'What You Will Learn Next Chapter' : sectionTitleMap[line] ?? line;
+      const title = preserveHeadings
+        ? line
+        : /^Next Chapter:/i.test(line) ? 'What You Will Learn Next Chapter' : sectionTitleMap[line] ?? line;
       current = { title, tone: line === 'Mental Model' ? 'model' : sectionTone(title), lines: [] };
       sections.push(current);
       if (/^Next Chapter:/i.test(line)) {
@@ -4528,7 +4561,7 @@ function explicitPlanReaderSections(body) {
     }
 
     if (!current) {
-      current = { title: 'System Update', tone: 'system', lines: [] };
+      current = { title: preserveHeadings ? '' : 'System Update', tone: 'system', lines: [] };
       sections.push(current);
     }
     current.lines.push(line);
@@ -4569,9 +4602,9 @@ function episodeDisplayLabel(label) {
   return label;
 }
 
-function PlanEpisode({ steps, planId }) {
+function PlanEpisode({ steps, planId, preserveHeadings = false }) {
   const body = steps.join('\n\n');
-  const sections = explicitPlanReaderSections(body);
+  const sections = explicitPlanReaderSections(body, preserveHeadings);
   const readerSections = sections.length ? sections : buildPlanReaderSections(planReaderBlocks(body), planId);
 
   return (
@@ -5494,6 +5527,7 @@ function ParentDashboard({
   parentAccessDraft,
   parentLinkChecked,
   parentLinkFeedback,
+  parentGuides,
   parentMessage,
   planProgress,
   plans,
@@ -5536,7 +5570,7 @@ function ParentDashboard({
           </form>
           {parentLinkFeedback && <p className="inline-note">{parentLinkFeedback}</p>}
         </section>
-        <ParentCornerSection parentMessage={parentMessage} />
+        <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
       </>
     );
   }
@@ -5560,7 +5594,7 @@ function ParentDashboard({
         <h2>{lesson.title}</h2>
         <p>{lesson.body}</p>
       </section>
-      <ParentCornerSection parentMessage={parentMessage} />
+      <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
       <ParentPlanLibrary plans={plans} planProgress={planProgress} />
       {privacySettings.goalsVisible && (
         <section className="panel parent-goal-panel">
@@ -5579,20 +5613,35 @@ function ParentDashboard({
   );
 }
 
-function ParentCornerSection({ parentMessage }) {
+function ParentCornerSection({ parentGuides = [], parentMessage }) {
   const [selectedParentContentId, setSelectedParentContentId] = useState('');
-  const parentContent = [
-    {
-      id: 'daily-parent-corner',
-      category: 'Mindset Support',
-      title: parentMessage.title,
-      date: parentMessage.sendDate,
-      promise: parentMessage.body,
-      ask: parentMessage.conversationCue,
-      avoid: parentMessage.avoid
-    }
-  ];
+  const parentContent = parentGuides.length
+    ? parentGuides.map((guide) => ({
+      id: guide.id,
+      category: guide.category,
+      seriesTitle: guide.seriesTitle,
+      title: guide.title,
+      date: guide.guideDay || guide.releaseDate,
+      promise: guide.subject,
+      steps: guide.steps,
+      guideDay: guide.guideDay,
+      guideLength: guide.guideLength
+    }))
+    : [
+      {
+        id: 'daily-parent-corner',
+        category: 'Mindset Support',
+        seriesTitle: 'Parent Corner',
+        title: parentMessage.title,
+        date: parentMessage.sendDate,
+        promise: parentMessage.body,
+        ask: parentMessage.conversationCue,
+        avoid: parentMessage.avoid,
+        steps: []
+      }
+    ];
   const selectedContent = parentContent.find((item) => item.id === selectedParentContentId);
+  const latestGuide = parentContent[0];
 
   if (selectedContent) {
     return (
@@ -5600,18 +5649,26 @@ function ParentCornerSection({ parentMessage }) {
         <button className="plan-back-button" onClick={() => setSelectedParentContentId('')} type="button">
           Back to Parent Corner
         </button>
-        <PanelTitle icon={<Users size={18} />} title={selectedContent.title} action={selectedContent.date} />
-        <p>{selectedContent.promise}</p>
-        <div className="parent-cues">
-          <span>
-            <strong>Ask</strong>
-            {selectedContent.ask}
-          </span>
-          <span>
-            <strong>Avoid</strong>
-            {selectedContent.avoid}
-          </span>
+        <PanelTitle icon={<Users size={18} />} title={selectedContent.seriesTitle} action={selectedContent.date} />
+        <div className="parent-guide-read-header">
+          <span>{selectedContent.category}</span>
+          <h2>{selectedContent.title}</h2>
+          <p>{selectedContent.promise}</p>
         </div>
+        {selectedContent.steps.length ? (
+          <PlanEpisode steps={selectedContent.steps} planId={selectedContent.id} preserveHeadings />
+        ) : (
+          <div className="parent-cues">
+            <span>
+              <strong>Ask</strong>
+              {selectedContent.ask}
+            </span>
+            <span>
+              <strong>Avoid</strong>
+              {selectedContent.avoid}
+            </span>
+          </div>
+        )}
       </section>
     );
   }
@@ -5619,21 +5676,21 @@ function ParentCornerSection({ parentMessage }) {
   return (
     <>
       <section className="panel parent-corner-hero">
-        <PanelTitle icon={<Users size={18} />} title="Parent Corner" action={`${parentContent.length} guide`} />
-        <h2>Support the daily work behind the scenes.</h2>
+        <PanelTitle icon={<Users size={18} />} title="Parent Corner" action={`${parentContent.length} ${parentContent.length === 1 ? 'guide' : 'guides'}`} />
+        <h2>Lead the home environment with purpose.</h2>
         <div className="goal-reminder">
           <strong>How to use this</strong>
-          <span>Read the parent guide, then use the conversation cue to help your athlete think through the day without taking over the work.</span>
+          <span>Open a parent guide when you want a clear framework for supporting your athlete without crowding their process.</span>
         </div>
       </section>
 
       <section className="panel parent-corner-library">
-        <PanelTitle icon={<Sparkles size={18} />} title="Continue Parent Guide" action={parentMessage.sendDate} />
-        <button className="continue-plan-card parent-guide-card" onClick={() => setSelectedParentContentId(parentContent[0].id)} type="button">
-          <span>{parentContent[0].category}</span>
-          <strong>{parentContent[0].title}</strong>
-          <em>Today’s parent focus</em>
-          <p>{parentContent[0].promise}</p>
+        <PanelTitle icon={<Sparkles size={18} />} title="Continue Parent Guide" action={latestGuide.date} />
+        <button className="continue-plan-card parent-guide-card" onClick={() => setSelectedParentContentId(latestGuide.id)} type="button">
+          <span>{latestGuide.category}</span>
+          <strong>{latestGuide.seriesTitle}</strong>
+          <em>{latestGuide.title}</em>
+          <p>{latestGuide.promise}</p>
         </button>
       </section>
 
@@ -5641,13 +5698,13 @@ function ParentCornerSection({ parentMessage }) {
         <PanelTitle icon={<Target size={18} />} title="Browse Parent Content" action={`${parentContent.length} shown`} />
         <div className="plan-category-strip" aria-label="Parent content categories">
           <button className="active" type="button">All</button>
-          <button type="button">Mindset Support</button>
+          <button type="button">Home Support</button>
         </div>
         <div className="plan-list">
           {parentContent.map((item) => (
             <button className="plan-list-row parent-guide-row" key={item.id} onClick={() => setSelectedParentContentId(item.id)} type="button">
               <span>{item.category}</span>
-              <strong>{item.title}</strong>
+              <strong>{item.seriesTitle}</strong>
               <p>{item.promise}</p>
               <em>{item.date}</em>
             </button>

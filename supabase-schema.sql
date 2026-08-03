@@ -98,6 +98,21 @@ create table if not exists public.performance_plans (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.parent_guides (
+  id uuid primary key default gen_random_uuid(),
+  series_title text not null,
+  title text not null,
+  category text not null default 'Parent Support',
+  subject text not null default '',
+  steps jsonb not null default '[]'::jsonb,
+  release_date date not null default current_date,
+  guide_day text not null default '',
+  guide_length integer not null default 1,
+  status text not null default 'draft' check (status in ('draft', 'scheduled', 'published')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.performance_plan_progress (
   athlete_user_id uuid not null references public.profiles(id) on delete cascade,
   plan_id text not null,
@@ -212,6 +227,9 @@ on public.daily_deposits (release_date desc, status);
 create index if not exists performance_plans_release_idx
 on public.performance_plans (release_date);
 
+create index if not exists parent_guides_release_status_idx
+on public.parent_guides (release_date, status);
+
 create index if not exists performance_plan_progress_athlete_idx
 on public.performance_plan_progress (athlete_user_id, completed_at desc);
 
@@ -234,6 +252,7 @@ alter table public.readiness_checks enable row level security;
 alter table public.journal_entries enable row level security;
 alter table public.daily_deposits enable row level security;
 alter table public.performance_plans enable row level security;
+alter table public.parent_guides enable row level security;
 alter table public.performance_plan_progress enable row level security;
 alter table public.athlete_points_ledger enable row level security;
 alter table public.coach_daily_usage enable row level security;
@@ -299,6 +318,11 @@ create policy "Released plans are readable"
 on public.performance_plans for select
 to authenticated
 using (release_date <= current_date);
+
+create policy "Published parent guides are readable"
+on public.parent_guides for select
+to authenticated
+using (status = 'published' and release_date <= current_date);
 
 create policy "Athletes manage their plan progress"
 on public.performance_plan_progress for all

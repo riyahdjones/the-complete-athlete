@@ -2061,6 +2061,36 @@ textarea {
   color: #ffffff;
 }
 
+.parent-guide-read-header {
+  display: grid;
+  gap: 8px;
+}
+
+.parent-guide-read-header span {
+  width: fit-content;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.parent-guide-read-header h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
+.parent-guide-read-header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  line-height: 1.5;
+}
+
 .parent-cues span {
   display: grid;
   gap: 4px;
