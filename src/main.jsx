@@ -872,6 +872,9 @@ function parentGuideFromSupabase(row) {
 
 function parentGuideCoverImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('raising a complete athlete')) {
+    return '/parent-guides/raising-complete-athlete-banner.png';
+  }
   if (normalized.includes('home court advantage')) {
     return '/parent-guides/home-court-advantage-banner.jpg';
   }
@@ -880,6 +883,9 @@ function parentGuideCoverImage(seriesTitle) {
 
 function parentGuideThumbnailImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('raising a complete athlete')) {
+    return '/parent-guides/raising-complete-athlete-thumbnail.png';
+  }
   if (normalized.includes('home court advantage')) {
     return '/parent-guides/home-court-advantage-thumbnail.jpg';
   }
@@ -888,6 +894,9 @@ function parentGuideThumbnailImage(seriesTitle) {
 
 function parentGuideCoverPosition(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('raising a complete athlete')) {
+    return '58% 50%';
+  }
   if (normalized.includes('home court advantage')) {
     return '50% 48%';
   }
@@ -4677,13 +4686,13 @@ function explicitPlanReaderSections(body, preserveHeadings = false) {
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-  if (!lines.some((line) => explicitPlanSectionHeadings.has(line) || /^Next Chapter:/i.test(line))) return [];
+  if (!lines.some((line) => explicitPlanSectionHeadings.has(line) || /^Day\s+\d+:/i.test(line) || /^Next Chapter:/i.test(line))) return [];
 
   const sections = [];
   let current = null;
 
   lines.forEach((line) => {
-    if (explicitPlanSectionHeadings.has(line) || /^Next Chapter:/i.test(line)) {
+    if (explicitPlanSectionHeadings.has(line) || /^Day\s+\d+:/i.test(line) || /^Next Chapter:/i.test(line)) {
       const sectionTitleMap = {
         'Mental Model': '',
         Opening: 'Start Here',
@@ -4716,7 +4725,7 @@ function explicitPlanReaderSections(body, preserveHeadings = false) {
       tone: section.tone,
       blocks: sectionLinesToBlocks(section.lines)
     }))
-    .filter((section) => section.blocks.length);
+    .filter((section) => section.blocks.length || /^Day\s+\d+:/i.test(section.title));
 }
 
 function episodeTone(label) {
