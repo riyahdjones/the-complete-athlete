@@ -5707,9 +5707,9 @@ function ParentDashboard({
         title: 'Talk through the plan',
         body: `${athleteName}, take one idea from your current plan and bring it into today.`
       },
-      reset: {
-        title: 'Fresh start',
-        body: `${athleteName}, one missed day does not define you. Win the next controllable.`
+      goals: {
+        title: 'Stay locked on your goals',
+        body: `${athleteName}, remember what you are building toward. Match today’s choices to the goals you set.`
       }
     };
     const message = encouragements[type] ?? encouragements.effort;
@@ -5815,10 +5815,10 @@ function ParentDashboard({
             <strong>Talk through plan</strong>
             <span>Use today’s lesson as the bridge.</span>
           </button>
-          <button onClick={() => sendParentEncouragement('reset')} type="button">
-            <Shield size={18} />
-            <strong>Help reset</strong>
-            <span>Give them a clean next-play message.</span>
+          <button onClick={() => sendParentEncouragement('goals')} type="button">
+            <Goal size={18} />
+            <strong>Hold accountable</strong>
+            <span>Point them back to the goals they chose.</span>
           </button>
         </div>
         {actionFeedback && <p className="inline-note">{actionFeedback}</p>}
