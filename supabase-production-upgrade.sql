@@ -698,4 +698,85 @@ grant select on public.user_subscriptions to authenticated;
 grant select on public.coach_daily_usage to authenticated;
 grant select, insert, update, delete on public.performance_plan_progress to authenticated;
 grant select, insert, update, delete on public.athlete_points_ledger to authenticated;
+
+create or replace function public.parent_linked_athletes()
+returns table(
+  athlete_user_id uuid,
+  full_name text,
+  sport text,
+  age text,
+  location text,
+  linked_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+  select
+    parent_links.athlete_user_id,
+    profiles.full_name,
+    athlete_profiles.sport,
+    athlete_profiles.age,
+    athlete_profiles.location,
+    parent_links.created_at as linked_at
+  from public.parent_links
+  join public.profiles
+    on profiles.id = parent_links.athlete_user_id
+  left join public.athlete_profiles
+    on athlete_profiles.user_id = parent_links.athlete_user_id
+  where parent_links.parent_user_id = auth.uid()
+  order by parent_links.created_at desc;
+$$;
+
+revoke all on function public.parent_linked_athletes() from public;
+grant execute on function public.parent_linked_athletes() to authenticated;
+
+create or replace function public.create_parent_athlete_notification(
+  target_athlete_id uuid,
+  notice_title text,
+  notice_body text,
+  notice_type text default 'parentUpdates'
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_id uuid := auth.uid();
+  notification_id text;
+begin
+  if caller_id is null then
+    raise exception 'Sign in before sending encouragement.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.parent_links
+    where parent_user_id = caller_id
+      and athlete_user_id = target_athlete_id
+  ) then
+    raise exception 'Parent is not linked to this athlete.';
+  end if;
+
+  notification_id := 'parent-update-' || target_athlete_id::text || '-' || extract(epoch from now())::bigint::text || '-' || floor(random() * 100000)::text;
+
+  insert into public.app_notifications (id, user_id, notification_type, title, body, tone, read, created_at)
+  values (
+    notification_id,
+    target_athlete_id,
+    coalesce(nullif(notice_type, ''), 'parentUpdates'),
+    left(coalesce(nullif(notice_title, ''), 'Parent encouragement'), 80),
+    left(coalesce(nullif(notice_body, ''), 'Your parent sent encouragement.'), 220),
+    'success',
+    false,
+    now()
+  );
+
+  return target_athlete_id;
+end;
+$$;
+
+revoke all on function public.create_parent_athlete_notification(uuid, text, text, text) from public;
+grant execute on function public.create_parent_athlete_notification(uuid, text, text, text) to authenticated;
 grant execute on function public.reserve_coach_message(integer) to authenticated;

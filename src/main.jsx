@@ -951,6 +951,89 @@ function latestPointEvents(ledger, count = 3) {
     .slice(0, count);
 }
 
+function averagePercent(entries, count = 7) {
+  const recentEntries = [...normalizeStandardsHistory(entries)].slice(-count);
+  if (!recentEntries.length) return 0;
+  return Math.round(recentEntries.reduce((total, entry) => total + Number(entry.percent || 0), 0) / recentEntries.length);
+}
+
+function weeklyParentSnapshot({ standardsHistory, readinessHistory, journalEntries, pointsLedger, planProgress, date = todayKey() }) {
+  const weekStart = addDays(date, -6);
+  const standardsWeek = normalizeStandardsHistory(standardsHistory).filter((entry) => entry.date >= weekStart && entry.date <= date);
+  const readinessWeek = normalizeReadinessHistory(readinessHistory).filter((entry) => entry.date >= weekStart && entry.date <= date);
+  const journalWeek = (Array.isArray(journalEntries) ? journalEntries : []).filter((entry) => entry.date >= weekStart && entry.date <= date);
+  const pointsWeek = (Array.isArray(pointsLedger) ? pointsLedger : []).filter((entry) => entry.date >= weekStart && entry.date <= date);
+  const completedPlanIds = new Set(
+    Object.entries(planProgress || {})
+      .filter(([, completedAt]) => completedAt && completedAt >= weekStart && completedAt <= date)
+      .map(([planId]) => planId)
+  );
+  const bestDay = standardsWeek
+    .filter((entry) => Number(entry.total) > 0)
+    .sort((first, second) => Number(second.percent) - Number(first.percent))[0];
+  const readinessAverage = readinessWeek.length
+    ? Math.round(readinessWeek.reduce((total, entry) => total + Number(entry.score || 0), 0) / readinessWeek.length)
+    : 0;
+
+  return {
+    productivityAverage: averagePercent(standardsWeek),
+    readinessAverage,
+    journalCount: journalWeek.length,
+    pointsEarned: pointsWeek.reduce((total, entry) => total + Number(entry.points || 0), 0),
+    plansCompleted: completedPlanIds.size,
+    activeDays: standardsWeek.length,
+    bestDay: bestDay?.date || ''
+  };
+}
+
+function parentCurrentPlanSummary(plans, planProgress, date = todayKey()) {
+  const library = buildPlanLibrary(sequencedPlanAccess(plans, planProgress, date));
+  const activeSeries = library.find((series) => series.plans.some((plan) => plan.unlocked && !plan.completedAt))
+    ?? library.find((series) => series.openCount > 0)
+    ?? library[0]
+    ?? null;
+  const activeLesson = activeSeries?.plans.find((plan) => plan.unlocked && !plan.completedAt)
+    ?? activeSeries?.plans.find((plan) => plan.unlocked)
+    ?? activeSeries?.plans[0]
+    ?? null;
+
+  if (!activeSeries || !activeLesson) {
+    return {
+      seriesTitle: 'No plan started',
+      lessonTitle: 'Open a plan with your athlete',
+      dayLabel: 'Ready',
+      completedCount: 0,
+      totalCount: 0,
+      nextUnlock: '',
+      cue: 'Choose one plan together and make the first lesson easy to start.'
+    };
+  }
+
+  const completedCount = activeSeries.completedCount;
+  const totalCount = activeSeries.plans.length;
+  const nextLocked = activeSeries.plans.find((plan) => !plan.unlocked && !plan.completedAt);
+  return {
+    seriesTitle: activeSeries.title,
+    lessonTitle: activeLesson.title,
+    dayLabel: activeLesson.completedAt ? 'Completed' : activeLesson.challengeDay || 'Current lesson',
+    completedCount,
+    totalCount,
+    nextUnlock: nextLocked?.unlockDate || '',
+    cue: `Ask what stood out from ${activeLesson.challengeDay || 'this lesson'} and where they can apply it today.`
+  };
+}
+
+function parentProgressTone(snapshot, streakCount) {
+  if (streakCount >= 7) return 'Strong rhythm. Celebrate the consistency and keep the pressure low.';
+  if (snapshot.productivityAverage >= 80) return 'The daily work is trending well. Reinforce the habits behind it.';
+  if (snapshot.activeDays >= 3) return 'They are showing up. Help them tighten one controllable this week.';
+  return 'Start simple. One calm check-in can help them rebuild rhythm.';
+}
+
+function linkedAthleteName(summary, athleteProfile) {
+  return summary?.full_name || athleteProfile?.name || 'Linked athlete';
+}
+
 const coachTopics = [
   {
     title: 'Pressure',
@@ -1047,6 +1130,7 @@ function App() {
   const [parentLinkFeedback, setParentLinkFeedback] = useState('');
   const [parentLinkChecked, setParentLinkChecked] = useState(false);
   const [linkedAthleteId, setLinkedAthleteId] = useState(null);
+  const [linkedAthleteSummary, setLinkedAthleteSummary] = useState(null);
   const [parentLinkRefreshKey, setParentLinkRefreshKey] = useState(0);
   const [privacySettings, setPrivacySettings] = useState(privacySeed);
   const [athleteProfile, setAthleteProfile] = useState(loadAthleteProfile);
@@ -1554,6 +1638,7 @@ function App() {
     if (!isSupabaseConfigured || authSession?.role !== 'parent') {
       setParentLinkChecked(false);
       setLinkedAthleteId(null);
+      setLinkedAthleteSummary(null);
       return;
     }
     let cancelled = false;
@@ -1569,12 +1654,14 @@ function App() {
       const athleteUserId = links?.[0]?.athlete_user_id;
       if (linksError || !athleteUserId || cancelled) {
         setLinkedAthleteId(null);
+        setLinkedAthleteSummary(null);
         setParentLinkChecked(true);
         return;
       }
       setLinkedAthleteId(athleteUserId);
 
-      const [profileResult, goalsResult, standardsHistoryResult, readinessResult, journalResult, privacyResult, planProgressResult, pointsLedgerResult] = await Promise.all([
+      const [linkedAthletesResult, profileResult, goalsResult, standardsHistoryResult, readinessResult, journalResult, privacyResult, planProgressResult, pointsLedgerResult] = await Promise.all([
+        supabase.rpc('parent_linked_athletes'),
         supabase
           .from('athlete_profiles')
           .select('sport, age, location, photo_url, parent_contact, parent_access_code')
@@ -1618,8 +1705,24 @@ function App() {
 
       if (cancelled) return;
 
+      if (!linkedAthletesResult.error && Array.isArray(linkedAthletesResult.data)) {
+        const linkedSummary = linkedAthletesResult.data.find((item) => item.athlete_user_id === athleteUserId) ?? linkedAthletesResult.data[0] ?? null;
+        setLinkedAthleteSummary(linkedSummary);
+      }
+
       if (!profileResult.error) {
-        setAthleteProfile((current) => profileFromSupabase(profileResult.data, current, current));
+        setAthleteProfile((current) => {
+          const linkedSummary = !linkedAthletesResult.error && Array.isArray(linkedAthletesResult.data)
+            ? linkedAthletesResult.data.find((item) => item.athlete_user_id === athleteUserId) ?? linkedAthletesResult.data[0]
+            : null;
+          return {
+            ...profileFromSupabase(profileResult.data, current, current),
+            name: linkedSummary?.full_name || current.name,
+            sport: linkedSummary?.sport ?? profileResult.data?.sport ?? current.sport,
+            age: linkedSummary?.age ?? profileResult.data?.age ?? current.age,
+            location: linkedSummary?.location ?? profileResult.data?.location ?? current.location
+          };
+        });
       }
       if (!goalsResult.error) setGoals((goalsResult.data ?? []).map(goalFromSupabase));
       if (!standardsHistoryResult.error) setStandardsHistory(standardsHistoryFromSupabase(standardsHistoryResult.data));
@@ -2085,6 +2188,7 @@ function App() {
     setParentLinkFeedback('');
     setParentLinkChecked(false);
     setLinkedAthleteId(null);
+    setLinkedAthleteSummary(null);
   }
 
   async function linkParentAccessCode(event) {
@@ -2478,6 +2582,7 @@ function App() {
           standardsCompleted={standardsCompleted}
           standardsTotal={standards.length}
           linkedAthleteId={linkedAthleteId}
+          linkedAthleteSummary={linkedAthleteSummary}
           linkParentAccessCode={linkParentAccessCode}
           parentAccessDraft={parentAccessDraft}
           parentLinkChecked={parentLinkChecked}
@@ -2486,11 +2591,20 @@ function App() {
           parentMessage={parentMessage}
           planProgress={planProgress}
           plans={plans}
+          pointsLedger={pointsLedger}
+          readinessHistory={readinessHistory}
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
           privacySettings={privacySettings}
           goals={goals}
+          athleteProfile={athleteProfile}
+          journalEntries={journalEntries}
           lesson={activeLesson}
+          notifyUser={notifyUser}
+          notificationPreferences={notificationPreferences}
+          updateNotificationPreference={updateNotificationPreference}
+          standardsHistory={standardsHistory}
+          streakCount={streakCount}
         />
       );
     }
@@ -5545,10 +5659,15 @@ function ProfileScreen({
 
 function ParentDashboard({
   athleteScore,
+  athleteProfile,
   goals,
+  journalEntries,
   lesson,
   linkedAthleteId,
+  linkedAthleteSummary,
   linkParentAccessCode,
+  notificationPreferences,
+  notifyUser,
   parentAccessDraft,
   parentLinkChecked,
   parentLinkFeedback,
@@ -5556,13 +5675,59 @@ function ParentDashboard({
   parentMessage,
   planProgress,
   plans,
+  pointsLedger,
   privacySettings,
+  readinessHistory,
   setParentAccessDraft,
   setParentLinkFeedback,
   standardsCompleted,
-  standardsTotal
+  standardsHistory,
+  standardsTotal,
+  streakCount,
+  updateNotificationPreference
 }) {
   const planSeriesStats = planSeriesCompletion(plans, planProgress);
+  const weeklySnapshot = weeklyParentSnapshot({ standardsHistory, readinessHistory, journalEntries, pointsLedger, planProgress });
+  const currentPlan = parentCurrentPlanSummary(plans, planProgress);
+  const athleteName = linkedAthleteName(linkedAthleteSummary, athleteProfile);
+  const [actionFeedback, setActionFeedback] = useState('');
+
+  async function sendParentEncouragement(type) {
+    const encouragements = {
+      effort: {
+        title: 'Keep stacking the work',
+        body: `${athleteName}, your daily work matters. Keep building the habits that travel with you.`
+      },
+      plan: {
+        title: 'Talk through the plan',
+        body: `${athleteName}, take one idea from your current plan and bring it into today.`
+      },
+      reset: {
+        title: 'Fresh start',
+        body: `${athleteName}, one missed day does not define you. Win the next controllable.`
+      }
+    };
+    const message = encouragements[type] ?? encouragements.effort;
+
+    if (isSupabaseConfigured && linkedAthleteId) {
+      const { error } = await supabase.rpc('create_parent_athlete_notification', {
+        target_athlete_id: linkedAthleteId,
+        notice_title: message.title,
+        notice_body: message.body,
+        notice_type: 'parentUpdates'
+      });
+      if (!error) {
+        setActionFeedback('Sent to your athlete.');
+        notifyUser('Encouragement sent', 'Your athlete will see it in the app.', 'success', {
+          type: 'parentUpdates',
+          id: `parent-action-${type}-${Date.now()}`
+        });
+        return;
+      }
+    }
+
+    setActionFeedback('Saved as a parent action. Athlete alerts require the live linked backend.');
+  }
 
   if (!parentLinkChecked) {
     return (
@@ -5602,6 +5767,31 @@ function ParentDashboard({
 
   return (
     <>
+      <section className="panel parent-progress-panel">
+        <PanelTitle icon={<BarChart3 size={18} />} title="Athlete Progress" action={athleteName} />
+        <div className="parent-progress-hero">
+          <div>
+            <span>Complete Athlete Score</span>
+            <strong>{athleteScore}</strong>
+          </div>
+          <p>{parentProgressTone(weeklySnapshot, streakCount)}</p>
+        </div>
+        <div className="parent-progress-grid">
+          <span>
+            <strong>{streakCount}</strong>
+            Day streak
+          </span>
+          <span>
+            <strong>{weeklySnapshot.productivityAverage}%</strong>
+            7-day work rate
+          </span>
+          <span>
+            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
+            Plans completed
+          </span>
+        </div>
+      </section>
+
       <div className="metric-grid">
         <Metric icon={<Trophy size={18} />} label="Athlete Score" value={athleteScore} />
         {privacySettings.standardsVisible && (
@@ -5614,11 +5804,113 @@ function ParentDashboard({
           <Metric icon={<Shield size={18} />} label="Privacy" value="Limited" />
         )}
       </div>
+
+      <section className="panel parent-current-plan-panel">
+        <PanelTitle icon={<BookOpen size={18} />} title="Current Plan" action={currentPlan.dayLabel} />
+        <div className="parent-current-plan">
+          <span>{currentPlan.seriesTitle}</span>
+          <strong>{currentPlan.lessonTitle}</strong>
+          <Progress value={currentPlan.totalCount ? Math.round((currentPlan.completedCount / currentPlan.totalCount) * 100) : 0} />
+          <p>{currentPlan.completedCount}/{currentPlan.totalCount} lessons completed</p>
+          {currentPlan.nextUnlock && <em>Next lesson opens {currentPlan.nextUnlock}.</em>}
+        </div>
+        <div className="parent-cue-card">
+          <strong>Tonight’s conversation starter</strong>
+          <span>{currentPlan.cue}</span>
+        </div>
+      </section>
+
+      <section className="panel parent-weekly-panel">
+        <PanelTitle icon={<LineChart size={18} />} title="Weekly Growth" action="Snapshot" />
+        <div className="parent-weekly-grid">
+          <span>
+            <strong>{weeklySnapshot.activeDays}</strong>
+            Active days
+          </span>
+          {privacySettings.readinessVisible && (
+            <span>
+              <strong>{weeklySnapshot.readinessAverage}/10</strong>
+              Readiness average
+            </span>
+          )}
+          <span>
+            <strong>{weeklySnapshot.journalCount}</strong>
+            Journal activity
+          </span>
+          <span>
+            <strong>{weeklySnapshot.plansCompleted}</strong>
+            Lessons finished
+          </span>
+        </div>
+        <p className="privacy-note">Journal and coach conversations stay private. This snapshot shows activity patterns, not private words.</p>
+      </section>
+
+      <section className="panel parent-actions-panel">
+        <PanelTitle icon={<Sparkles size={18} />} title="Parent Actions" action="Support" />
+        <div className="parent-action-grid">
+          <button onClick={() => sendParentEncouragement('effort')} type="button">
+            <BadgeCheck size={18} />
+            <strong>Encourage effort</strong>
+            <span>Reinforce the work, not just the result.</span>
+          </button>
+          <button onClick={() => sendParentEncouragement('plan')} type="button">
+            <BookOpen size={18} />
+            <strong>Talk through plan</strong>
+            <span>Use today’s lesson as the bridge.</span>
+          </button>
+          <button onClick={() => sendParentEncouragement('reset')} type="button">
+            <Shield size={18} />
+            <strong>Help reset</strong>
+            <span>Give them a clean next-play message.</span>
+          </button>
+        </div>
+        {actionFeedback && <p className="inline-note">{actionFeedback}</p>}
+      </section>
+
       <section className="panel daily-deposit-panel parent-daily-deposit-panel">
         <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
         <h2>{lesson.title}</h2>
         <p>{lesson.body}</p>
       </section>
+
+      <section className="panel parent-notifications-panel">
+        <PanelTitle icon={<Bell size={18} />} title="Parent Notifications" action={notificationPreferences.parentUpdates ? 'On' : 'Off'} />
+        <div className="privacy-list">
+          <label>
+            <span>New performance plans</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.performancePlans}
+              onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Streak and progress moments</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.streaks}
+              onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
+            />
+          </label>
+          <label>
+            <span>Parent support updates</span>
+            <input
+              type="checkbox"
+              checked={notificationPreferences.parentUpdates}
+              onChange={(event) => updateNotificationPreference('parentUpdates', event.target.checked)}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel parent-privacy-panel">
+        <PanelTitle icon={<Shield size={18} />} title="Privacy Boundaries" action="Athlete trust" />
+        <div className="privacy-boundaries">
+          <span>Visible: score, streaks, plan progress, daily productivity, and growth patterns.</span>
+          <span>Private: journal words and coach conversations unless the athlete chooses to share.</span>
+        </div>
+      </section>
+
       <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
       <ParentPlanLibrary plans={plans} planProgress={planProgress} />
       {privacySettings.goalsVisible && (
