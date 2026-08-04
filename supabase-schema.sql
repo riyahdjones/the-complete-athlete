@@ -4,6 +4,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   role text not null check (role in ('athlete', 'parent', 'admin')),
   full_name text not null default '',
+  parent_access_code text not null default ('TCA-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8))),
   created_at timestamptz not null default now()
 );
 
@@ -184,6 +185,10 @@ $$;
 
 create index if not exists profiles_role_created_idx
 on public.profiles (role, created_at desc);
+
+create unique index if not exists profiles_parent_access_code_idx
+on public.profiles (parent_access_code)
+where role = 'parent';
 
 create unique index if not exists athlete_profiles_parent_access_code_idx
 on public.athlete_profiles (parent_access_code);
@@ -452,6 +457,87 @@ begin
 end;
 $$;
 
+create or replace function public.link_parent_to_athlete(access_code text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  linked_athlete_id uuid;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and role = 'parent'
+  ) then
+    raise exception 'Only parent accounts can link to an athlete.';
+  end if;
+
+  select user_id
+  into linked_athlete_id
+  from public.athlete_profiles
+  where parent_access_code = access_code
+  limit 1;
+
+  if linked_athlete_id is null then
+    raise exception 'No athlete found for that access code.';
+  end if;
+
+  insert into public.parent_links (parent_user_id, athlete_user_id)
+  values ((select auth.uid()), linked_athlete_id)
+  on conflict (parent_user_id, athlete_user_id) do nothing;
+
+  return linked_athlete_id;
+end;
+$$;
+
+create or replace function public.link_athlete_to_parent(parent_code text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  parent_id uuid;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  if not exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and role = 'athlete'
+  ) then
+    raise exception 'Only athlete accounts can use a family access code.';
+  end if;
+
+  select id
+  into parent_id
+  from public.profiles
+  where role = 'parent'
+    and upper(trim(parent_access_code)) = upper(trim(parent_code))
+  limit 1;
+
+  if parent_id is null then
+    raise exception 'No parent found for that family access code.';
+  end if;
+
+  insert into public.parent_links (parent_user_id, athlete_user_id)
+  values (parent_id, (select auth.uid()))
+  on conflict (parent_user_id, athlete_user_id) do nothing;
+
+  return parent_id;
+end;
+$$;
+
 create policy "Users read their own subscriptions"
 on public.user_subscriptions for select
 to authenticated
@@ -459,8 +545,12 @@ using ((select auth.uid()) = user_id);
 
 revoke all on function public.subscription_is_active(text, timestamptz) from public;
 revoke all on function public.user_has_premium_access(uuid) from public;
+revoke all on function public.link_parent_to_athlete(text) from public;
+revoke all on function public.link_athlete_to_parent(text) from public;
 grant execute on function public.subscription_is_active(text, timestamptz) to authenticated;
 grant execute on function public.user_has_premium_access(uuid) to authenticated;
+grant execute on function public.link_parent_to_athlete(text) to authenticated;
+grant execute on function public.link_athlete_to_parent(text) to authenticated;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;

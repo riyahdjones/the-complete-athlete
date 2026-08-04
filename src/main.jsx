@@ -183,6 +183,7 @@ const athleteProfileStorageKey = 'the-ninety-percent-athlete-profile';
 const goalsStorageKey = 'the-ninety-percent-goals';
 const plansStorageKey = 'the-ninety-percent-performance-plans';
 const planProgressStorageKey = 'the-ninety-percent-performance-plan-progress';
+const parentGuideProgressStorageKey = 'the-ninety-percent-parent-guide-progress';
 const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
@@ -570,19 +571,15 @@ function sequencedPlanAccess(plans, planProgress, date = todayKey()) {
     });
 
   const previousBySeries = new Map();
-  const localReviewUnlock =
-    import.meta.env.DEV &&
-    typeof window !== 'undefined' &&
-    ['127.0.0.1', 'localhost'].includes(window.location.hostname);
   return sortedPlans.map((plan) => {
     const series = planSeriesTitle(plan);
     const previousPlan = previousBySeries.get(series);
     const previousCompletedAt = previousPlan ? planProgress[String(previousPlan.id)] : '';
     const completedAt = planProgress[String(plan.id)] || '';
     const released = !plan.releaseDate || plan.releaseDate <= date;
-    const sequenceUnlocked = !previousPlan || localReviewUnlock || Boolean(previousCompletedAt && addDays(previousCompletedAt, 1) <= date);
+    const sequenceUnlocked = !previousPlan || Boolean(previousCompletedAt && addDays(previousCompletedAt, 1) <= date);
     const unlocked = released && sequenceUnlocked;
-    const unlockDate = !previousPlan ? plan.releaseDate : previousCompletedAt ? addDays(previousCompletedAt, 1) : plan.releaseDate;
+    const unlockDate = !previousPlan ? plan.releaseDate : previousCompletedAt ? addDays(previousCompletedAt, 1) : '';
     previousBySeries.set(series, plan);
     return { ...plan, completedAt, unlocked, unlockDate };
   });
@@ -870,8 +867,37 @@ function parentGuideFromSupabase(row) {
   };
 }
 
+function parentGuideMergeKey(guide) {
+  const series = String(guide?.seriesTitle ?? '').toLowerCase();
+  if (series.includes('borrowed confidence')) return 'series:borrowed-confidence';
+  if (series.includes('comparison trap')) return 'series:comparison-trap';
+  if (series.includes('elite parents') || series.includes('elite athletes need elite parents')) return 'series:elite-parents';
+  if (series.includes('raising a complete athlete')) return 'series:raising-complete-athlete';
+  if (series.includes('home court advantage')) return 'series:home-court-advantage';
+  return `id:${String(guide?.id ?? '')}`;
+}
+
+function mergeParentGuidesWithSeeds(guides) {
+  const merged = new Map();
+  createParentGuideSeeds().forEach((guide) => merged.set(parentGuideMergeKey(guide), guide));
+  (Array.isArray(guides) ? guides : []).forEach((guide) => merged.set(parentGuideMergeKey(guide), guide));
+  return Array.from(merged.values()).sort((first, second) =>
+    String(first.releaseDate || '').localeCompare(String(second.releaseDate || '')) ||
+    String(first.id).localeCompare(String(second.id))
+  );
+}
+
 function parentGuideCoverImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('borrowed confidence')) {
+    return '/parent-guides/borrowed-confidence-banner.jpg';
+  }
+  if (normalized.includes('comparison trap')) {
+    return '/parent-guides/comparison-trap-banner.jpg';
+  }
+  if (normalized.includes('elite parents') || normalized.includes('elite athletes need elite parents')) {
+    return '/parent-guides/elite-parents-banner.png';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '/parent-guides/raising-complete-athlete-banner.png';
   }
@@ -883,6 +909,15 @@ function parentGuideCoverImage(seriesTitle) {
 
 function parentGuideThumbnailImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('borrowed confidence')) {
+    return '/parent-guides/borrowed-confidence-thumbnail.png';
+  }
+  if (normalized.includes('comparison trap')) {
+    return '/parent-guides/comparison-trap-thumbnail.png';
+  }
+  if (normalized.includes('elite parents') || normalized.includes('elite athletes need elite parents')) {
+    return '/parent-guides/elite-parents-thumbnail.png';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '/parent-guides/raising-complete-athlete-thumbnail.png';
   }
@@ -894,6 +929,15 @@ function parentGuideThumbnailImage(seriesTitle) {
 
 function parentGuideCoverPosition(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('borrowed confidence')) {
+    return '50% 50%';
+  }
+  if (normalized.includes('comparison trap')) {
+    return '50% 48%';
+  }
+  if (normalized.includes('elite parents') || normalized.includes('elite athletes need elite parents')) {
+    return '50% 50%';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '58% 50%';
   }
@@ -929,6 +973,15 @@ function loadPlans() {
 function loadPlanProgress() {
   try {
     const saved = JSON.parse(localStorage.getItem(planProgressStorageKey) ?? '{}');
+    return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function loadParentGuideProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(parentGuideProgressStorageKey) ?? '{}');
     return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
   } catch {
     return {};
@@ -1087,6 +1140,692 @@ const parentMessageSeed = {
   status: 'Scheduled'
 };
 
+function createParentGuideSeeds() {
+  const releaseDate = todayKey();
+  return [
+    {
+      id: 'home-court-advantage-seed',
+      seriesTitle: 'Home Court Advantage',
+      title: 'The Safe Place',
+      category: 'Home Support',
+      subject: 'A parent guide for creating the home environment young athletes need after pressure, failure, and growth moments.',
+      releaseDate,
+      guideDay: '3-Day Plan',
+      guideLength: 3,
+      steps: [
+        `Day 1: The Safe Place
+
+Story
+
+Every athlete needs a place where the scoreboard stops following them. Home should be the place where they can breathe, recover, and remember they are loved before they are evaluated.
+
+Deeper Look
+
+Young athletes already receive feedback from coaches, teammates, opponents, rankings, stats, and social media. If home becomes one more performance review, they rarely get the emotional space needed to grow.
+
+The Living Room
+
+Ask yourself what your athlete feels when they walk through the door after a hard game. Do they feel analyzed, corrected, rescued, or received?
+
+This Week at Home
+
+Give your athlete a calm landing place after competition. Start with food, rest, presence, and one simple question before advice.
+
+Today's Challenge
+
+Ask, "What do you need from me tonight: space, encouragement, or help thinking it through?"
+
+Key Takeaway
+
+Home court advantage begins when your athlete knows home is a safe place to be loved, rebuilt, and reminded who they are.`
+      ]
+    },
+    {
+      id: 'raising-complete-athlete-seed',
+      seriesTitle: 'Raising a Complete Athlete',
+      title: 'A 3-Day Parent Plan',
+      category: 'Parent Support',
+      subject: 'A three-day parent plan for building the person, mind, and heart behind the athlete.',
+      releaseDate,
+      guideDay: '3-Day Plan',
+      guideLength: 3,
+      steps: [
+        `Day 1: Build the Person
+
+Story
+
+The athlete your child is becoming matters, but the person they are becoming matters more. Sports can shape discipline, humility, courage, patience, and leadership when parents keep the bigger picture in view.
+
+Deeper Look
+
+It is easy to make the game the whole story. Complete Athlete parenting keeps character at the center, especially when the performance is loud.
+
+The Living Room
+
+What character trait is sports developing in your child right now? What trait is being tested?
+
+This Week at Home
+
+Praise one character choice before you discuss one performance detail.
+
+Today's Challenge
+
+Tell your athlete one trait you see growing in them because of sports.
+
+Key Takeaway
+
+The goal is not just a better athlete. The goal is a stronger person.`,
+        `Day 2: Build the Mind
+
+Story
+
+Confidence is not built by pretending pressure is easy. It is built by helping your athlete learn how to think when pressure shows up.
+
+Deeper Look
+
+Your words become part of your athlete's inner voice. Calm, clear, growth-minded language at home gives them a better script when the game gets hard.
+
+The Living Room
+
+What does your athlete hear most from you after mistakes?
+
+This Week at Home
+
+Replace outcome language with process language: effort, response, preparation, focus, and next-play thinking.
+
+Today's Challenge
+
+Ask, "What did you learn about how you respond?"
+
+Key Takeaway
+
+The mind grows when the home conversation points toward learning instead of fear.`,
+        `Day 3: Build the Heart
+
+Story
+
+The heart of an athlete is shaped in ordinary moments: how they treat people, how they handle disappointment, and how they carry success.
+
+Deeper Look
+
+Parents help guard the heart by keeping identity bigger than performance and purpose bigger than attention.
+
+The Living Room
+
+Where does your athlete need more peace, gratitude, or perspective right now?
+
+This Week at Home
+
+Create one moment this week that has nothing to do with sports and everything to do with connection.
+
+Today's Challenge
+
+Tell your athlete, "I love watching you grow, not just watching you play."
+
+Key Takeaway
+
+A complete athlete has more than skill. They have character, mindset, and a grounded heart.`
+      ]
+    },
+    {
+      id: 'comparison-trap-3-day-plan',
+      seriesTitle: 'The Comparison Trap',
+      title: 'A 3-Day Parent Plan',
+      category: 'Parent Support',
+      subject: 'A three-day parent plan for helping your athlete stop wearing someone else\'s armor, trust their own season, and develop the gifts God placed in them.',
+      releaseDate,
+      guideDay: '3-Day Plan',
+      guideLength: 3,
+      steps: [
+        `Day 1: Don't Wear Someone Else's Armor
+
+Story
+
+When David arrived in the Valley of Elah, he was not dressed like a soldier. He was a young shepherd bringing food to his brothers when he heard Goliath mocking the armies of God.
+
+David volunteered to fight, and Saul tried to help by placing his own armor on him. From the outside, David finally looked like a warrior. But the armor was too heavy, too unfamiliar, and too unnatural.
+
+David took it off. He picked up the weapons he knew: his staff, his sling, and five smooth stones.
+
+The crowd saw a boy with no armor. God saw a young man who finally looked like himself.
+
+Deeper Look
+
+This story is not only about armor. It is about identity.
+
+Parents often do what Saul did with good intentions. We see another athlete thriving, so we wonder if our child should train like them, compete like them, join the same team, hire the same coach, or take the same path.
+
+Before long, we can start placing someone else's armor on our own child.
+
+Comparison whispers, "Why isn't my child there yet?" "Should we be doing what they are doing?" "Are we falling behind?"
+
+But God has never created two athletes with the exact same journey. Some mature early. Some develop later. Some rely on size. Others rely on skill. Different gifts. Different paths. Different assignments.
+
+Your child does not need to become the best version of someone else. They need the freedom to become the best version of themselves.
+
+The Living Room
+
+Take a few moments to honestly reflect.
+
+1. Have I compared my child's journey to another athlete's journey?
+2. Am I unintentionally placing someone else's armor on my child?
+3. Do my conversations communicate trust in my child's journey or anxiety about keeping up?
+4. What unique strengths might I be overlooking because I am focused on someone else's gifts?
+
+This Week at Home
+
+Shift your focus from what another athlete is doing to what your own child is becoming.
+
+Notice the small improvements. Celebrate quiet victories. Point out their unique gifts: coachability, resilience, encouragement, effort, leadership, or the way they respond after mistakes.
+
+Each evening, tell your athlete one thing you noticed about their growth compared to who they were yesterday.
+
+Today's Challenge
+
+Before the next game or practice, make one commitment: do not compare your child to another athlete in your mind, your words, or your conversations with other parents.
+
+Afterward, ask your athlete, "What's one thing you're getting better at that has nothing to do with the scoreboard?"
+
+Key Takeaway
+
+Comparison places someone else's armor on your child. Elite parents have the courage to take the armor off, trust God's design, and help their athlete become who they were created to be.`,
+        `Day 2: Different Seeds. Different Seasons.
+
+Story
+
+An oak tree and Chinese bamboo grow in completely different ways.
+
+The oak grows slowly and steadily, season after season. The bamboo can appear inactive for years while the person who planted it keeps watering. Then, after its root system is ready, it can shoot upward dramatically.
+
+Neither tree is wrong. Neither tree is behind. Neither tree is trying to become the other.
+
+They grow according to their design.
+
+Deeper Look
+
+One of the greatest mistakes parents make is assuming every athlete should develop on the same timeline.
+
+Another child gets stronger, makes the all-star team, earns more playing time, or grows before everyone else. Suddenly comparison asks, "Are we behind?"
+
+But what you see on the surface is only part of the story.
+
+Some athletes mature physically at ten. Others at sixteen. Some gain confidence early. Others develop it after years of failure. Some shine in youth sports. Others do not discover their stride until later.
+
+God has never promised identical timelines. He has promised faithful growth.
+
+Not every season produces visible fruit. Some seasons produce roots: character, resilience, faith, coachability, patience, and confidence.
+
+The Living Room
+
+Take a few moments to reflect.
+
+1. Have I mistaken slow growth for no growth?
+2. Do I become discouraged when another child develops faster than mine?
+3. Am I celebrating invisible growth or only visible success?
+4. What roots might God be developing in my child during this season?
+
+This Week at Home
+
+Create a simple growth journal.
+
+Each evening, write down one way your child grew personally, not statistically. Maybe they bounced back after a mistake, encouraged a teammate, stayed positive after sitting, or worked harder than last week.
+
+At the end of the week, read the list together. You may discover growth was happening all along.
+
+Today's Challenge
+
+The next time you compare your child to another athlete, pause and ask, "Am I looking at their fruit while forgetting my child's roots?"
+
+Then thank God for one area where your child is growing, even if no one else sees it yet.
+
+Key Takeaway
+
+Comparison becomes dangerous when we expect every athlete to grow on the same timeline. Some seasons produce fruit. Others produce roots. Both are essential, and neither should be rushed.`,
+        `Day 3: Be Faithful to Your Child's Gifts
+
+Story
+
+Shohei Ohtani grew into one of Japan's brightest baseball players with two extraordinary gifts. He could pitch at an elite level, and he could hit at an elite level.
+
+Many people believed he needed to choose one. Baseball had an unwritten rule: be a pitcher or be a hitter, but do not try to be both.
+
+Shohei did not allow someone else's expectations to become the blueprint for his life. He kept developing the gifts he had been given.
+
+He became something baseball had not seen in generations, not because he copied someone else's path, but because he stayed faithful to his own.
+
+Deeper Look
+
+Comparison often begins with good intentions. We see another athlete succeeding, another family making different decisions, or another child receiving attention, and we wonder if we should do what they are doing.
+
+Sometimes that is wisdom. More often, it is fear: fear of falling behind, missing an opportunity, or taking a path that looks different.
+
+The moment comparison becomes your compass, you stop asking what is best for your child and start chasing what seems to be working for someone else.
+
+Your responsibility is not to help your child become the next great athlete everyone is talking about. Your responsibility is to help them become the fullest version of who God created them to be.
+
+The Living Room
+
+Take a few moments to reflect.
+
+1. Have I tried to shape my child into the athlete I admire instead of the athlete they were created to become?
+2. What unique gifts has God placed in my child?
+3. Do my expectations reflect my child's strengths or someone else's success?
+4. Am I helping my child discover who they are, or encouraging them to imitate someone else?
+
+This Week at Home
+
+Talk with your athlete about what makes them unique.
+
+Write down five qualities that are truly theirs: leadership, resilience, calm under pressure, encouragement, joy, coachability, toughness, humility, or love for the game.
+
+Then tell them, "God didn't create you to become someone else. He created you to faithfully develop the gifts He's already placed inside you."
+
+Today's Challenge
+
+Replace comparison with celebration.
+
+When another athlete succeeds, celebrate them. Then immediately find one unique gift in your own child to celebrate as well.
+
+Teach your athlete that someone else's success does not diminish their own potential.
+
+Key Takeaway
+
+Comparison asks your child to become the next great athlete. Elite parents help their child become the first and only version of themselves.
+
+Complete Athlete Parenting Principle
+
+Comparison distracts you from your assignment. Elite parents keep their eyes on the child God entrusted to them, trusting that His plan, His timing, and His purpose are enough.`
+      ]
+    },
+    {
+      id: 'borrowed-confidence-3-day-plan',
+      seriesTitle: 'Borrowed Confidence',
+      title: 'A 3-Day Parent Plan',
+      category: 'Parent Support',
+      subject: 'A three-day parent plan for helping your athlete borrow your words, calm, and belief until they learn to carry confidence for themselves.',
+      releaseDate,
+      guideDay: '3-Day Plan',
+      guideLength: 3,
+      steps: [
+        `Day 1: Your Words Become Their Inner Voice
+
+Story
+
+Long before Tiger Woods became one of the greatest golfers in history, he was a little boy following his dad around the course.
+
+People often point to Tiger's work ethic, talent, and competitive drive. Those things mattered. But another theme shows up again and again: Earl Woods believed in him long before the world did.
+
+Earl was not only teaching Tiger how to swing. He was teaching him how to think.
+
+He spoke confidence before confidence had fully grown. He reminded Tiger what he was capable of becoming. Eventually, his father's voice became part of Tiger's own.
+
+Deeper Look
+
+Every athlete has an inner voice.
+
+It speaks before the at-bat, free throw, pitch, race, tryout, and big moment. Sometimes it says, "I've got this." Other times it whispers, "Don't mess this up."
+
+That inner voice does not appear out of nowhere. Long before children know how to speak to themselves, they borrow the voices of the people they trust most.
+
+They borrow ours.
+
+The way we respond after mistakes, talk about challenges, celebrate effort, and describe them slowly becomes the soundtrack in their minds.
+
+One day your athlete will step onto a field, court, or into a locker room without you. When that moment comes, what voice will they hear?
+
+The Living Room
+
+Take a few moments to reflect.
+
+1. If my child repeated my words to themselves before competition, would those words build confidence or create pressure?
+2. What phrases do I say most often after mistakes?
+3. When my athlete thinks about my voice, do they hear encouragement or evaluation first?
+4. What kind of inner voice am I helping build?
+
+This Week at Home
+
+Choose one encouraging phrase and repeat it consistently, especially after struggle.
+
+Try: "I believe in you." "One play never defines you." "Keep competing." "You're growing." "Mistakes help us learn."
+
+Children do not need a new message every day. They need the right message repeated until it becomes part of them.
+
+Today's Challenge
+
+Tonight, tell your athlete something you believe about them that they may not believe yet.
+
+Be specific: "I believe you're becoming a leader." "I believe you're stronger than you realize." "I believe your best days are ahead of you."
+
+Key Takeaway
+
+Before children develop confidence of their own, they borrow yours. The words you speak today become the voice they carry into tomorrow.
+
+Complete Athlete Parenting Principle
+
+Every conversation is shaping your athlete's inner voice. Make sure the voice they carry into competition sounds like belief, not fear.`,
+        `Day 2: Your Reactions Become Their Emotional Blueprint
+
+Story
+
+Cal Ripken Jr. is remembered for playing 2,632 consecutive Major League Baseball games.
+
+People talk about his toughness, consistency, and discipline. But those traits were shaped long before the streak became famous.
+
+His father, Cal Ripken Sr., taught the game with steadiness. Whether practice went well or poorly, whether a player succeeded or failed, he stayed remarkably composed.
+
+He corrected mistakes without humiliation. He did not ride every emotional high or explode after every failure.
+
+Cal Jr. grew up watching his father respond to pressure with composure. Years later, people saw those lessons in the way Cal Jr. handled slumps, pressure, criticism, and the grind of the season.
+
+Deeper Look
+
+Every parent teaches emotional control. The question is: what are we teaching?
+
+When an umpire misses a call, your athlete is watching. When they strike out with the bases loaded, they are watching. When playing time disappoints you, they are watching.
+
+Your reaction becomes their lesson.
+
+If we panic, they learn mistakes are emergencies. If we become angry, they learn failure is something to fear. If we blame others, they learn responsibility belongs somewhere else.
+
+But when we stay calm, ask better questions, and remind them one game does not define them, we create emotional safety.
+
+Children borrow emotional stability before they develop their own.
+
+The Living Room
+
+Take a few moments to reflect.
+
+1. How would my child describe my emotions during their games?
+2. What do they usually see after a mistake: calm or frustration?
+3. Have I made one bad performance feel bigger than it really was?
+4. If my child handled adversity the way I do, would I be proud?
+
+This Week at Home
+
+Before every game, ask yourself, "What emotional environment do I want to create today?"
+
+Choose one word: calm, patient, encouraging, steady, or present.
+
+Then let that word guide your tone, face, posture, and car ride.
+
+Today's Challenge
+
+After the next game, do not talk about performance for the first ten minutes.
+
+Smile. Give them a hug. Tell them you are glad you got to watch them play. Ask if they had fun.
+
+Let the ride home become a place of peace instead of pressure.
+
+Key Takeaway
+
+Children borrow emotional stability before they develop their own. Your reactions teach your athlete whether mistakes are something to fear or opportunities to grow.
+
+Complete Athlete Parenting Principle
+
+Your athlete will not always remember what you said after the game. They will remember how you made them feel. Become the calm they can borrow.`,
+        `Day 3: Your Expectations Become Their Identity
+
+Story
+
+When A'ja Wilson arrived at the University of South Carolina, everyone knew she was talented. The expectations were enormous.
+
+Then she met Dawn Staley.
+
+Coach Staley did not lower the standard because A'ja was young. She challenged her, corrected her, pushed her, and expected more from her than she expected from herself.
+
+But A'ja never questioned one thing: Coach Staley believed in her.
+
+The standards were high, and so was the belief.
+
+That combination helped A'ja become an NCAA champion, Olympic gold medalist, WNBA champion, MVP, and one of the greatest players in women's basketball.
+
+Deeper Look
+
+One misconception about confidence is that it comes from constant praise.
+
+It does not.
+
+Real confidence is built when high expectations are matched with unwavering belief.
+
+Children need to know two truths at the same time: "I expect a lot from you" and "my love for you never depends on whether you meet those expectations."
+
+Some parents become so performance-focused that every mistake feels like disappointment. Others become so afraid of hurting confidence that they stop challenging their child.
+
+Neither produces lasting confidence.
+
+Confidence grows when children experience love and challenge together.
+
+The Living Room
+
+Reflect honestly.
+
+1. Do my expectations inspire my child or intimidate them?
+2. Does my athlete know I believe in them even when they fall short?
+3. Am I correcting behavior without attacking identity?
+4. If my child described my expectations, would they also describe my encouragement?
+
+This Week at Home
+
+Pair every correction with belief.
+
+Instead of, "That wasn't good enough," try, "I know what you're capable of, and that's why I'm challenging you."
+
+Instead of, "You have to stop making that mistake," try, "I know you're capable of more, and I'll help you get there."
+
+Make sure your athlete knows they never have to earn your love. They simply have the opportunity to keep growing.
+
+Today's Challenge
+
+Tell your athlete these two sentences:
+
+"I will always love you exactly the same."
+
+"And because I believe in you, I'll never stop helping you grow."
+
+One creates security. The other creates growth. Together, they create confidence.
+
+Key Takeaway
+
+Borrowed confidence is created when children know they are deeply loved while being consistently challenged to become everything they are capable of becoming.
+
+Complete Athlete Parenting Principle
+
+Your voice is only borrowed for a season. Speak so much life into your child that one day, when you are no longer beside them, they continue saying to themselves what you taught them to believe.`
+      ]
+    },
+    {
+      id: 'elite-parents-3-day-plan',
+      seriesTitle: 'Elite Athletes Need Elite Parents',
+      title: 'A 3-Day Framework for Elite Parents',
+      category: 'Parent Support',
+      subject: 'A three-day parent plan for leading your athlete with vision, environment, and example instead of pressure, panic, or short-term results.',
+      releaseDate,
+      guideDay: '3-Day Plan',
+      guideLength: 3,
+      steps: [
+        `Day 1: Elite Parents Have a Vision
+
+Story
+
+Long before Venus and Serena Williams became household names, there was a father with a vision. Richard Williams was not standing in the winner's circle. He was not holding championship trophies. He was simply a father who believed his daughters were capable of something extraordinary.
+
+Most parents dream. Richard planned.
+
+That vision shaped where his daughters practiced, how they trained, who influenced them, and what they did not do. When people urged him to chase more tournaments and more attention, he chose development over exposure. Growth over recognition. Purpose over popularity.
+
+He was not parenting for the next weekend. He was parenting for the next twenty years.
+
+Deeper Look
+
+One of the greatest gifts you can give your child is not a private trainer, the best travel team, or more exposure. It is a clear vision.
+
+Without vision, every game feels like the biggest game. Every strikeout feels like a crisis. Every setback feels like failure. But when you have a vision, today's game becomes one page in a much bigger story.
+
+Most parents ask, "How can I help my child become a better athlete?"
+
+Elite parents ask a better question: "Who do I want my child to become because of sports?"
+
+At The Complete Athlete, we believe sports are one of God's greatest classrooms. Discipline, resilience, humility, leadership, perseverance, and self-control are preparing our children for something much bigger than a scoreboard.
+
+The Living Room
+
+Take a few moments to think about these questions.
+
+1. What is my vision for my child beyond sports?
+2. If someone watched the way I parent at games, what would they believe my greatest priority is?
+3. Am I making decisions based on short-term success or long-term development?
+4. If my child never earned a scholarship or won a championship, would I still consider this journey a success?
+
+This Week at Home
+
+Take 15-20 minutes this week and write a vision statement for your athlete. Do not write about statistics, championships, or scholarships.
+
+Instead, finish this sentence:
+
+"When my child is 25 years old, I hope people describe them as..."
+
+Fill the page with character traits: faithful, humble, confident, disciplined, resilient, compassionate, courageous.
+
+Today's Challenge
+
+Share your vision with your athlete. Not your vision for their career. Your vision for their life.
+
+Then ask, "What kind of person do you hope sports helps you become?"
+
+Key Takeaway
+
+Elite parents do not allow today's results to define tomorrow's decisions. They lead with a vision bigger than trophies, rankings, or scholarships.`,
+        `Day 2: Elite Parents Build the Environment
+
+Story
+
+Long before the world knew Susan, Sofia, and Judit Polgar, there was a father asking a question most parents never think to ask.
+
+Can greatness be developed?
+
+Laszlo Polgar believed the answer was yes. He and his wife, Klara, intentionally created a home where learning was celebrated, curiosity was encouraged, and excellence became normal.
+
+Books filled the shelves. Chess boards were always within reach. Conversations challenged the girls' thinking. Practice was not forced. It became part of everyday life.
+
+People later saw extraordinary talent. But behind every move was an extraordinary environment.
+
+Deeper Look
+
+Every home is teaching something. The question is: what is your home teaching?
+
+Children learn how to respond to adversity by watching us. They learn how to speak to themselves by listening to us. They learn what matters most by observing what we celebrate.
+
+Some homes celebrate effort. Others celebrate outcomes. Some homes embrace mistakes as opportunities to learn. Others quietly teach children to fear failure.
+
+You do not build confidence on game day. You build it in the environment your child lives in every day.
+
+The greatest advantage your athlete may ever have might simply be coming home to an environment that reminds them:
+
+"You are loved."
+"You are capable."
+"You are growing."
+"We value character more than trophies."
+"We learn from failure."
+
+The Living Room
+
+Reflect on these questions with complete honesty.
+
+1. If someone spent one week in our home, what would they say we value most?
+2. Does our home create pressure or peace?
+3. What words do my children hear most often from me?
+4. If my child treated themselves the way I speak to them, would they become more confident or less?
+
+This Week at Home
+
+Choose one family value to strengthen this week. Maybe it is gratitude, effort, coachability, joy, discipline, faith, or encouragement.
+
+Write it somewhere visible. Then intentionally point out every time you see your athlete living out that value.
+
+The goal is not to catch them doing something wrong. It is to catch them becoming who they are capable of becoming.
+
+Today's Challenge
+
+As a family, answer this question together:
+
+"What do we want our home to be known for?"
+
+Write down three words and commit to protecting them before practices, games, and difficult seasons.
+
+Key Takeaway
+
+Elite athletes are shaped by healthy environments every single day. The culture of your home will influence your athlete long after they leave it.`,
+        `Day 3: Elite Parents Lead by Example
+
+Story
+
+In 1997, Admiral William McRaven stood before a graduating class at the University of Texas and shared a lesson from Navy SEAL training.
+
+It was about making your bed.
+
+Every morning, instructors inspected the recruits' beds with incredible attention to detail. The sheets had to be tight. The corners had to be perfect. The pillow had to be centered.
+
+To an outsider, it seemed ridiculous. But the bed was never the point. The habit was.
+
+"If you want to change the world, start off by making your bed."
+
+Not because beds change lives. Because habits do.
+
+Deeper Look
+
+Children learn far more from what they observe than from what they are told.
+
+You can tell your child to be disciplined, but if they never see discipline, the lesson will not stick. You can tell them to respect coaches, but if they hear you criticize coaches every weekend, they will believe your actions more than your words.
+
+Whether we realize it or not, we are constantly giving our children permission: permission to complain, persevere, blame, own mistakes, serve others, or quit when things get hard.
+
+Our example becomes their expectation.
+
+Elite parenting begins with a difficult question: who am I becoming?
+
+The Living Room
+
+Spend a few moments reflecting honestly.
+
+1. What habits do I hope my child develops that I do not consistently model myself?
+2. How do I respond when things do not go my way?
+3. If my child handled adversity exactly the way I do, would I be proud?
+4. What character quality do I need to strengthen before I expect it from my athlete?
+
+This Week at Home
+
+Choose one habit you want your athlete to develop. Maybe it is discipline, gratitude, self-control, kindness, faithfulness, or consistency.
+
+Then ask a harder question:
+
+"Have they seen me consistently live this?"
+
+This week, do not just talk about that habit. Demonstrate it.
+
+Today's Challenge
+
+Tonight, ask your athlete:
+
+"What's one thing you've learned from watching me?"
+
+Then just listen. Do not defend, explain, or interrupt.
+
+Finish by asking:
+
+"What's one area where I can become a better parent for you?"
+
+Key Takeaway
+
+The greatest coaching your child will ever receive may come from the life they watch you live every single day. Before you ask your athlete to become elite, be willing to become the example they deserve.
+
+Complete Athlete Parenting Principle
+
+Elite athletes do not just need great coaching. They need parents whose lives reinforce the lessons the game is trying to teach.`
+      ]
+    }
+  ];
+}
+
 const privacySeed = {
   readinessVisible: true,
   standardsVisible: true,
@@ -1105,9 +1844,17 @@ function App() {
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 720px)').matches : false
   ));
   const [dailyDate, setDailyDate] = useState(initialDailyState.date);
-  const [view, setView] = useState('athlete');
+  const [view, setView] = useState(() => (
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('role') === 'parent'
+      ? 'parent'
+      : 'athlete'
+  ));
   const [tab, setTab] = useState('home');
-  const [parentTab, setParentTab] = useState('overview');
+  const [parentTab, setParentTab] = useState(() => (
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('role') === 'parent'
+      ? 'parent-corner'
+      : 'overview'
+  ));
   const [standards, setStandards] = useState(initialDailyState.standards);
   const [standardDraft, setStandardDraft] = useState('');
   const [standardGoalId, setStandardGoalId] = useState('');
@@ -1135,13 +1882,16 @@ function App() {
   const [messageDraft, setMessageDraft] = useState('');
   const [coachComposerFocused, setCoachComposerFocused] = useState(false);
   const [parentMessage, setParentMessage] = useState(parentMessageSeed);
-  const [parentGuides, setParentGuides] = useState([]);
+  const [parentGuides, setParentGuides] = useState(() => mergeParentGuidesWithSeeds([]));
   const [parentAccessDraft, setParentAccessDraft] = useState('');
   const [parentLinkFeedback, setParentLinkFeedback] = useState('');
+  const [athleteParentAccessDraft, setAthleteParentAccessDraft] = useState('');
+  const [athleteParentLinkFeedback, setAthleteParentLinkFeedback] = useState('');
   const [parentLinkChecked, setParentLinkChecked] = useState(false);
   const [linkedAthleteId, setLinkedAthleteId] = useState(null);
   const [linkedAthleteSummary, setLinkedAthleteSummary] = useState(null);
   const [parentLinkRefreshKey, setParentLinkRefreshKey] = useState(0);
+  const [premiumAccessRefreshKey, setPremiumAccessRefreshKey] = useState(0);
   const [privacySettings, setPrivacySettings] = useState(privacySeed);
   const [athleteProfile, setAthleteProfile] = useState(loadAthleteProfile);
   const [supabaseAthleteDataReady, setSupabaseAthleteDataReady] = useState(false);
@@ -1164,7 +1914,13 @@ function App() {
   });
 
   const activeLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
-  const effectiveSession = authSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
+  const localParentInviteSession = useMemo(() => {
+    if (!import.meta.env.DEV || authSession || typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('role') !== 'parent' || params.get('parentCode') !== 'TCA-PARENT') return null;
+    return { id: 'local-parent-review', role: 'parent', name: 'App Review Parent', email: 'review-parent@example.com', parentAccessCode: 'TCA-FAMILY' };
+  }, [authSession]);
+  const effectiveSession = authSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
   const isAuthed = Boolean(effectiveSession);
   const effectiveSubscription = {
     ...subscription,
@@ -1628,7 +2384,7 @@ function App() {
       }
 
       if (!parentGuidesResult.error && Array.isArray(parentGuidesResult.data)) {
-        setParentGuides(parentGuidesResult.data.map(parentGuideFromSupabase));
+        setParentGuides(mergeParentGuidesWithSeeds(parentGuidesResult.data.map(parentGuideFromSupabase)));
       }
 
     }
@@ -1645,6 +2401,13 @@ function App() {
   }, [dailyDate, lessonLibrary]);
 
   useEffect(() => {
+    if (localParentInviteSession) {
+      setParentLinkChecked(true);
+      setLinkedAthleteId('local-athlete-review');
+      setLinkedAthleteSummary({ full_name: 'App Review Athlete' });
+      return;
+    }
+
     if (!isSupabaseConfigured || authSession?.role !== 'parent') {
       setParentLinkChecked(false);
       setLinkedAthleteId(null);
@@ -1765,7 +2528,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [authSession?.id, authSession?.role, parentLinkRefreshKey]);
+  }, [authSession?.id, authSession?.role, localParentInviteSession, parentLinkRefreshKey]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !supabaseAthleteDataReady) return;
@@ -2046,7 +2809,7 @@ function App() {
       );
   }, [authSession?.id, authSession?.role, pointsLedger, supabaseAthleteDataReady]);
 
-  async function signupUser({ role, name, email, password, parentCode }) {
+  async function signupUser({ role, name, email, password, parentCode, parentFamilyCode }) {
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) {
       return 'Email and password are required.';
@@ -2082,9 +2845,25 @@ function App() {
             return 'Account created, but the parent link could not be created. Check the access code.';
           }
         }
+        if (role === 'athlete' && parentFamilyCode) {
+          const { error: athleteLinkError } = await supabase.rpc('link_athlete_to_parent', { parent_code: parentFamilyCode.trim() });
+          if (athleteLinkError) {
+            return 'Account created, but the family access code could not be linked. Check the code with your parent.';
+          }
+        }
+
+        let parentAccessCode = '';
+        if (role === 'parent') {
+          const { data: createdProfile } = await supabase
+            .from('profiles')
+            .select('parent_access_code')
+            .eq('id', data.user.id)
+            .maybeSingle();
+          parentAccessCode = createdProfile?.parent_access_code ?? '';
+        }
 
         const fullName = name.trim() || role;
-        setAuthSession({ id: data.user.id, role, name: fullName, email: cleanEmail });
+        setAuthSession({ id: data.user.id, role, name: fullName, email: cleanEmail, parentAccessCode });
         setView(role === 'parent' ? 'parent' : 'athlete');
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -2097,7 +2876,8 @@ function App() {
       role,
       name: name.trim() || role,
       email: cleanEmail,
-      password
+      password,
+      parentAccessCode: role === 'parent' ? `TCA-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : ''
     };
     setAuthUsers((current) => [...current, nextUser]);
     setAuthSession({ id: nextUser.id, role: nextUser.role, name: nextUser.name, email: nextUser.email });
@@ -2118,7 +2898,7 @@ function App() {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('id, role, full_name')
+        .select('id, role, full_name, parent_access_code')
         .eq('id', data.user.id)
         .maybeSingle();
 
@@ -2134,7 +2914,8 @@ function App() {
         id: profile.id,
         role: profile.role,
         name: profile.full_name || profile.role,
-        email: cleanEmail
+        email: cleanEmail,
+        parentAccessCode: profile.parent_access_code ?? ''
       });
       setView(role === 'parent' ? 'parent' : 'athlete');
       window.history.replaceState({}, '', window.location.pathname);
@@ -2145,7 +2926,7 @@ function App() {
     if (!user) return 'No account found with that email and password.';
     if (user.role === 'admin') return 'Admin access has moved outside the athlete app.';
     if (user.role !== role) return `This account is registered as ${user.role}. Choose the correct portal.`;
-    setAuthSession({ id: user.id, role: user.role, name: user.name, email: user.email });
+    setAuthSession({ id: user.id, role: user.role, name: user.name, email: user.email, parentAccessCode: user.parentAccessCode ?? '' });
     setView(role === 'parent' ? 'parent' : 'athlete');
     return '';
   }
@@ -2224,6 +3005,29 @@ function App() {
     setParentLinkRefreshKey((value) => value + 1);
   }
 
+  async function linkAthleteParentAccessCode(event) {
+    event?.preventDefault();
+    const accessCode = athleteParentAccessDraft.trim();
+    if (!accessCode) {
+      setAthleteParentLinkFeedback('Enter the family access code from your parent.');
+      return;
+    }
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete') {
+      setAthleteParentLinkFeedback('Log in as an athlete before linking a parent membership.');
+      return;
+    }
+
+    const { error } = await supabase.rpc('link_athlete_to_parent', { parent_code: accessCode });
+    if (error) {
+      setAthleteParentLinkFeedback('That code did not link. Check the code and try again.');
+      return;
+    }
+
+    setAthleteParentAccessDraft('');
+    setAthleteParentLinkFeedback('Parent membership linked. Premium access is updating...');
+    setPremiumAccessRefreshKey((value) => value + 1);
+  }
+
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
@@ -2233,7 +3037,7 @@ function App() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, role, full_name')
+        .select('id, role, full_name, parent_access_code')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -2247,7 +3051,8 @@ function App() {
         id: profile.id,
         role: profile.role,
         name: profile.full_name || profile.role,
-        email: user.email ?? ''
+        email: user.email ?? '',
+        parentAccessCode: profile.parent_access_code ?? ''
       });
       setView(profile.role === 'parent' ? 'parent' : 'athlete');
     });
@@ -2538,7 +3343,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [effectiveSession?.id]);
+  }, [effectiveSession?.id, premiumAccessRefreshKey]);
 
   async function startPremiumSubscription() {
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
@@ -2589,6 +3394,7 @@ function App() {
       return (
         <ParentDashboard
           parentTab={parentTab}
+          authSession={effectiveSession}
           athleteScore={athleteScore}
           standardsCompleted={standardsCompleted}
           standardsTotal={standards.length}
@@ -2606,13 +3412,16 @@ function App() {
           readinessHistory={readinessHistory}
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
+          setPlanProgress={setPlanProgress}
           privacySettings={privacySettings}
           goals={goals}
           athleteProfile={athleteProfile}
           journalEntries={journalEntries}
           lesson={activeLesson}
+          logoutUser={logoutUser}
           notifyUser={notifyUser}
           notificationPreferences={notificationPreferences}
+          requestBrowserNotifications={requestBrowserNotifications}
           updateNotificationPreference={updateNotificationPreference}
           standardsHistory={standardsHistory}
           streakCount={streakCount}
@@ -2727,10 +3536,15 @@ function App() {
         <ProfileScreen
           authSession={authSession}
           athleteProfile={athleteProfile}
+          athleteParentAccessDraft={athleteParentAccessDraft}
+          athleteParentLinkFeedback={athleteParentLinkFeedback}
+          linkAthleteParentAccessCode={linkAthleteParentAccessCode}
           notificationPreferences={notificationPreferences}
           privacySettings={privacySettings}
           requestBrowserNotifications={requestBrowserNotifications}
           logoutUser={logoutUser}
+          setAthleteParentAccessDraft={setAthleteParentAccessDraft}
+          setAthleteParentLinkFeedback={setAthleteParentLinkFeedback}
           setAthleteProfile={setAthleteProfile}
           setNotificationPreferences={setNotificationPreferences}
           setPrivacySettings={setPrivacySettings}
@@ -2758,6 +3572,8 @@ function App() {
     lastSubmittedDate,
     activeCoachSessionId,
     athleteProfile,
+    athleteParentAccessDraft,
+    athleteParentLinkFeedback,
     backendPremiumAccess,
     coachSessions,
     coachComposerFocused,
@@ -2781,6 +3597,7 @@ function App() {
     standardsHistory,
     standardsCompleted,
     effectiveSubscription,
+    effectiveSession,
     streakCount,
     submittedToday,
     tab,
@@ -2799,7 +3616,7 @@ function App() {
     );
   }
 
-  if (!prototypeBypassLogin && !onboardingComplete) {
+  if (!prototypeBypassLogin && !localParentInviteSession && !onboardingComplete) {
     return <OnboardingScreen completeOnboarding={completeOnboarding} />;
   }
 
@@ -2889,9 +3706,9 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
   const invitedRole = inviteParams.get('role');
   const invitedCode = inviteParams.get('parentCode') ?? '';
   const invitedAsParent = invitedRole === 'parent' && invitedCode;
-  const [mode, setMode] = useState(invitedRole === 'parent' && invitedCode ? 'signup' : 'login');
+  const [mode, setMode] = useState(invitedAsParent ? 'signup' : 'login');
   const [role, setRole] = useState(invitedAsParent ? 'parent' : '');
-  const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode });
+  const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode, parentFamilyCode: '' });
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -2909,7 +3726,7 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
     setIsSubmitting(true);
     const error = mode === 'login'
       ? loginUser({ role, email: form.email, password: form.password })
-      : signupUser({ role, name: form.name, email: form.email, password: form.password, parentCode: form.parentCode });
+      : signupUser({ role, name: form.name, email: form.email, password: form.password, parentCode: form.parentCode, parentFamilyCode: form.parentFamilyCode });
     setMessage(await error);
     setIsSubmitting(false);
   }
@@ -3034,6 +3851,17 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
                 placeholder={parentAccessCode}
                 value={form.parentCode}
                 onChange={(event) => updateForm('parentCode', event.target.value)}
+              />
+            </label>
+          )}
+          {mode === 'signup' && role === 'athlete' && (
+            <label>
+              <span>Family access code</span>
+              <input
+                className="text-field"
+                placeholder="Optional parent code"
+                value={form.parentFamilyCode}
+                onChange={(event) => updateForm('parentFamilyCode', event.target.value)}
               />
             </label>
           )}
@@ -4595,6 +5423,13 @@ function sectionLinesToBlocks(lines) {
   let bodyBuffer = [];
   let quoteBuffer = [];
   let bulletBuffer = [];
+  const readableLines = lines.flatMap((line) => {
+    if (!/^["“]/.test(line) || line.length <= 220) return [line];
+    const closingQuoteIndex = line.slice(1).search(/["”]/);
+    if (closingQuoteIndex < 0) return [line];
+    const quoteEnd = closingQuoteIndex + 2;
+    return [line.slice(0, quoteEnd), line.slice(quoteEnd).trim()].filter(Boolean);
+  });
 
   function flushBody() {
     if (!bodyBuffer.length) return;
@@ -4614,7 +5449,7 @@ function sectionLinesToBlocks(lines) {
     quoteBuffer = [];
   }
 
-  lines.forEach((line) => {
+  readableLines.forEach((line) => {
     const previousBody = bodyBuffer[bodyBuffer.length - 1] ?? '';
     const previousBullet = bulletBuffer[bulletBuffer.length - 1] ?? '';
     const previousQuote = quoteBuffer[quoteBuffer.length - 1] ?? '';
@@ -4624,13 +5459,12 @@ function sectionLinesToBlocks(lines) {
       !/[.!?:;"”)]$/.test(previousBody || previousBullet || previousQuote);
 
     if (quoteBuffer.length) {
-      if (isWrappedLine) {
-        quoteBuffer[quoteBuffer.length - 1] = `${previousQuote} ${line}`;
+      const nextQuote = `${previousQuote} ${line}`;
+      if (isWrappedLine && nextQuote.length <= 180) {
+        quoteBuffer[quoteBuffer.length - 1] = nextQuote;
         return;
       }
-      quoteBuffer.push(line);
-      if (/["”]$/.test(line)) flushQuote();
-      return;
+      flushQuote();
     }
 
     if (bulletBuffer.length) {
@@ -5350,11 +6184,16 @@ function PremiumAccessPanel({
 function ProfileScreen({
   authSession,
   athleteProfile,
+  athleteParentAccessDraft,
+  athleteParentLinkFeedback,
+  linkAthleteParentAccessCode,
   logoutUser,
   notificationPreferences,
   privacySettings,
   requestBrowserNotifications,
   restorePremiumSubscription,
+  setAthleteParentAccessDraft,
+  setAthleteParentLinkFeedback,
   setAthleteProfile,
   setNotificationPreferences,
   setPrivacySettings,
@@ -5614,6 +6453,28 @@ function ProfileScreen({
           </button>
         </div>
         {shareFeedback && <p className="inline-note">{shareFeedback}</p>}
+        <div className="family-access-divider" aria-hidden="true">
+          <span>or</span>
+        </div>
+        <div className="family-access-option">
+          <span>Have a parent code?</span>
+          <p>Enter the Family Access Code from your parent to join their membership.</p>
+        </div>
+        <form className="standard-form athlete-parent-code-form" onSubmit={linkAthleteParentAccessCode}>
+          <input
+            aria-label="Family access code"
+            placeholder="Enter parent code"
+            value={athleteParentAccessDraft}
+            onChange={(event) => {
+              setAthleteParentAccessDraft(event.target.value);
+              setAthleteParentLinkFeedback('');
+            }}
+          />
+          <button className="primary-action" type="submit">
+            Link Parent
+          </button>
+        </form>
+        {athleteParentLinkFeedback && <p className="inline-note">{athleteParentLinkFeedback}</p>}
       </section>
       <section className={openProfileSections.privacy ? 'panel privacy-controls-panel collapsible-panel open' : 'panel privacy-controls-panel collapsible-panel'}>
         <button
@@ -5670,8 +6531,255 @@ function ProfileScreen({
   );
 }
 
+function ParentSettingsScreen({
+  athleteName,
+  authSession,
+  linkedAthleteSummary,
+  linkParentAccessCode,
+  logoutUser,
+  notificationPreferences,
+  parentAccessDraft,
+  parentGuides,
+  parentLinkFeedback,
+  planSeriesStats,
+  requestBrowserNotifications,
+  setParentAccessDraft,
+  setParentLinkFeedback,
+  updateNotificationPreference
+}) {
+  const [parentNotificationsOpen, setParentNotificationsOpen] = useState(true);
+  const [familyAccessFeedback, setFamilyAccessFeedback] = useState('');
+  const parentName = authSession?.name || 'Parent';
+  const parentEmail = authSession?.email || 'No email found';
+  const familyAccessCode = authSession?.parentAccessCode || 'TCA-FAMILY';
+  const parentPhotoStorageKey = `the-ninety-percent-parent-photo-${authSession?.id || authSession?.email || 'local-parent'}`;
+  const [parentPhoto, setParentPhoto] = useState(() => {
+    try {
+      return localStorage.getItem(parentPhotoStorageKey) || '';
+    } catch {
+      return '';
+    }
+  });
+  const sportLine = linkedAthleteSummary?.sport ? `${linkedAthleteSummary.sport} support` : 'Athlete support';
+
+  useEffect(() => {
+    try {
+      if (parentPhoto) {
+        localStorage.setItem(parentPhotoStorageKey, parentPhoto);
+      } else {
+        localStorage.removeItem(parentPhotoStorageKey);
+      }
+    } catch {
+      // Local photo saving is a convenience; the account still works if storage is unavailable.
+    }
+  }, [parentPhoto, parentPhotoStorageKey]);
+
+  function updateParentPhoto(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setParentPhoto(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  function toggleBrowserPush(checked) {
+    if (checked) {
+      requestBrowserNotifications();
+      return;
+    }
+    updateNotificationPreference('browserPush', false);
+  }
+
+  async function copyFamilyAccessCode() {
+    try {
+      await navigator.clipboard.writeText(familyAccessCode);
+      setFamilyAccessFeedback('Family access code copied.');
+    } catch {
+      setFamilyAccessFeedback(`Give this code to your athlete: ${familyAccessCode}`);
+    }
+  }
+
+  return (
+    <>
+      <section className="profile-head parent-settings-head">
+        <div className="profile-avatar parent-profile-avatar">
+          {parentPhoto ? (
+            <img src={parentPhoto} alt="Parent profile" />
+          ) : (
+            <Users size={30} />
+          )}
+        </div>
+        <div>
+          <p className="eyebrow">Parent Profile</p>
+          <h2>{parentName}</h2>
+          <span>Linked to {athleteName} | {sportLine}</span>
+        </div>
+      </section>
+
+      <section className="panel parent-account-panel">
+        <PanelTitle icon={<UserRound size={18} />} title="Account" action="Parent" />
+        <div className="account-email-card parent-account-card">
+          <span>Registered email</span>
+          <strong>{parentEmail}</strong>
+        </div>
+        <div className="photo-actions parent-photo-actions">
+          <label className="photo-upload">
+            <Camera size={18} />
+            Add Photo
+            <input type="file" accept="image/*" onChange={updateParentPhoto} />
+          </label>
+          {parentPhoto && (
+            <button className="secondary-action inline" onClick={() => setParentPhoto('')} type="button">
+              Remove Photo
+            </button>
+          )}
+        </div>
+        <div className="parent-access-code-card">
+          <div>
+            <span>Family access</span>
+            <strong>{linkedAthleteSummary ? `Linked to ${athleteName}` : 'Not linked yet'}</strong>
+          </div>
+          <div className="family-access-option">
+            <span>Parent has athlete code</span>
+            <p>Enter the code from your athlete’s profile to connect their account.</p>
+          </div>
+          <form className="standard-form parent-access-code-form" onSubmit={linkParentAccessCode}>
+            <input
+              aria-label="Parent access code"
+              placeholder="Enter athlete code"
+              value={parentAccessDraft}
+              onChange={(event) => {
+                setParentAccessDraft(event.target.value);
+                setParentLinkFeedback('');
+                setFamilyAccessFeedback('');
+              }}
+            />
+            <button className="primary-action" type="submit">
+              {linkedAthleteSummary ? 'Update Link' : 'Link Athlete'}
+            </button>
+          </form>
+          <div className="family-access-divider" aria-hidden="true">
+            <span>or</span>
+          </div>
+          <div className="family-access-option">
+            <span>Athlete uses parent code</span>
+            <p>Give this code to your athlete. They can enter it when creating their account to join your membership.</p>
+          </div>
+          <div className="family-access-code-display">
+            <strong>{familyAccessCode}</strong>
+            <button className="secondary-action inline family-invite-button" onClick={copyFamilyAccessCode} type="button">
+              <Copy size={18} />
+              Copy Code
+            </button>
+          </div>
+          {(parentLinkFeedback || familyAccessFeedback) && <p className="inline-note">{parentLinkFeedback || familyAccessFeedback}</p>}
+        </div>
+        <div className="parent-settings-stats">
+          <span>
+            <strong>{athleteName}</strong>
+            Linked athlete
+          </span>
+          <span>
+            <strong>{parentGuides.length}</strong>
+            Parent guides
+          </span>
+          <span>
+            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
+            Plans complete
+          </span>
+        </div>
+      </section>
+
+      <section className={parentNotificationsOpen ? 'panel parent-notifications-panel collapsible-panel open' : 'panel parent-notifications-panel collapsible-panel'}>
+        <button
+          className="collapsible-trigger"
+          type="button"
+          aria-expanded={parentNotificationsOpen}
+          onClick={() => setParentNotificationsOpen((current) => !current)}
+        >
+          <span className="collapsible-title">
+            <span>
+              <Bell size={18} />
+              Notifications
+            </span>
+            <em>{notificationPreferences.parentUpdates ? 'On' : 'Off'}</em>
+          </span>
+          <ChevronDown size={18} />
+        </button>
+        {parentNotificationsOpen && (
+          <div className="collapsible-content">
+            <div className="privacy-list notification-settings-list">
+              <label>
+                <span>iPhone lock-screen notifications</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.browserPush}
+                  onChange={(event) => toggleBrowserPush(event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>New performance plans</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.performancePlans}
+                  onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Streak and progress moments</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.streaks}
+                  onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Parent support updates</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.parentUpdates}
+                  onChange={(event) => updateNotificationPreference('parentUpdates', event.target.checked)}
+                />
+              </label>
+            </div>
+            <p className="privacy-note">Turn on parent alerts for the moments you want surfaced without hovering over your athlete.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="panel parent-support-settings-panel">
+        <PanelTitle icon={<Sparkles size={18} />} title="Support Menu" action="Quick view" />
+        <div className="parent-support-menu">
+          <span>
+            <BookOpen size={18} />
+            <strong>Parent Corner</strong>
+            New guides for conversations at home.
+          </span>
+          <span>
+            <BarChart3 size={18} />
+            <strong>Progress Snapshot</strong>
+            Streaks, work rate, and plan progress.
+          </span>
+          <span>
+            <MessageCircle size={18} />
+            <strong>Encouragement</strong>
+            Send quick support from Overview.
+          </span>
+        </div>
+      </section>
+
+      <section className="parent-signout-panel">
+        <button className="secondary-action inline account-signout-button" onClick={logoutUser} type="button">
+          Sign Out
+        </button>
+      </section>
+    </>
+  );
+}
+
 function ParentDashboard({
   parentTab,
+  authSession,
   athleteScore,
   athleteProfile,
   goals,
@@ -5680,6 +6788,7 @@ function ParentDashboard({
   linkedAthleteId,
   linkedAthleteSummary,
   linkParentAccessCode,
+  logoutUser,
   notificationPreferences,
   notifyUser,
   parentAccessDraft,
@@ -5692,8 +6801,10 @@ function ParentDashboard({
   pointsLedger,
   privacySettings,
   readinessHistory,
+  requestBrowserNotifications,
   setParentAccessDraft,
   setParentLinkFeedback,
+  setPlanProgress,
   standardsCompleted,
   standardsHistory,
   standardsTotal,
@@ -5852,41 +6963,28 @@ function ParentDashboard({
       )}
 
       {parentTab === 'settings' && (
-      <section className="panel parent-notifications-panel">
-        <PanelTitle icon={<Bell size={18} />} title="Parent Notifications" action={notificationPreferences.parentUpdates ? 'On' : 'Off'} />
-        <div className="privacy-list">
-          <label>
-            <span>New performance plans</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.performancePlans}
-              onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Streak and progress moments</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.streaks}
-              onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
-            />
-          </label>
-          <label>
-            <span>Parent support updates</span>
-            <input
-              type="checkbox"
-              checked={notificationPreferences.parentUpdates}
-              onChange={(event) => updateNotificationPreference('parentUpdates', event.target.checked)}
-            />
-          </label>
-        </div>
-      </section>
+        <ParentSettingsScreen
+          athleteName={athleteName}
+          authSession={authSession}
+          linkParentAccessCode={linkParentAccessCode}
+          linkedAthleteSummary={linkedAthleteSummary}
+          logoutUser={logoutUser}
+          notificationPreferences={notificationPreferences}
+          parentAccessDraft={parentAccessDraft}
+          parentGuides={parentGuides}
+          parentLinkFeedback={parentLinkFeedback}
+          planSeriesStats={planSeriesStats}
+          requestBrowserNotifications={requestBrowserNotifications}
+          setParentAccessDraft={setParentAccessDraft}
+          setParentLinkFeedback={setParentLinkFeedback}
+          updateNotificationPreference={updateNotificationPreference}
+        />
       )}
 
       {parentTab === 'parent-corner' && (
       <>
       <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
-      <ParentPlanLibrary plans={plans} planProgress={planProgress} />
+      <ParentPlanLibrary plans={plans} planProgress={planProgress} setPlanProgress={setPlanProgress} notifyUser={notifyUser} />
       </>
       )}
 
@@ -5909,6 +7007,7 @@ function ParentDashboard({
 
 function ParentCornerSection({ parentGuides = [], parentMessage }) {
   const [selectedParentContentId, setSelectedParentContentId] = useState('');
+  const [parentGuideProgress, setParentGuideProgress] = useState(loadParentGuideProgress);
   const parentContent = parentGuides.length
     ? parentGuides.map((guide) => ({
       id: guide.id,
@@ -5922,7 +7021,8 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
       guideLength: guide.guideLength,
       coverImage: parentGuideCoverImage(guide.seriesTitle),
       thumbnailImage: parentGuideThumbnailImage(guide.seriesTitle),
-      coverPosition: parentGuideCoverPosition(guide.seriesTitle)
+      coverPosition: parentGuideCoverPosition(guide.seriesTitle),
+      completedAt: parentGuideProgress[String(guide.id)] || ''
     }))
     : [
       {
@@ -5937,11 +7037,26 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
         steps: [],
         coverImage: parentGuideCoverImage('Parent Corner'),
         thumbnailImage: parentGuideThumbnailImage('Parent Corner'),
-        coverPosition: parentGuideCoverPosition('Parent Corner')
+        coverPosition: parentGuideCoverPosition('Parent Corner'),
+        completedAt: parentGuideProgress['daily-parent-corner'] || ''
       }
     ];
   const selectedContent = parentContent.find((item) => item.id === selectedParentContentId);
   const latestGuide = parentContent[0];
+
+  useEffect(() => {
+    localStorage.setItem(parentGuideProgressStorageKey, JSON.stringify(parentGuideProgress));
+  }, [parentGuideProgress]);
+
+  function completeParentGuide(guideId) {
+    setParentGuideProgress((current) => {
+      if (current[String(guideId)]) return current;
+      return {
+        ...current,
+        [String(guideId)]: todayKey()
+      };
+    });
+  }
 
   if (selectedContent) {
     return (
@@ -5953,22 +7068,34 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
         <div className="parent-guide-read-header">
           <span>{selectedContent.category}</span>
           <h2>{selectedContent.title}</h2>
+          {selectedContent.completedAt && <em>Completed {selectedContent.completedAt}</em>}
           <p>{selectedContent.promise}</p>
         </div>
-        {selectedContent.steps.length ? (
-          <PlanEpisode steps={selectedContent.steps} planId={selectedContent.id} preserveHeadings />
-        ) : (
-          <div className="parent-cues">
-            <span>
-              <strong>Ask</strong>
-              {selectedContent.ask}
-            </span>
-            <span>
-              <strong>Avoid</strong>
-              {selectedContent.avoid}
-            </span>
-          </div>
-        )}
+        <div className="parent-guide-reader-body">
+          {selectedContent.steps.length ? (
+            <PlanEpisode steps={selectedContent.steps} planId={selectedContent.id} preserveHeadings />
+          ) : (
+            <div className="parent-cues">
+              <span>
+                <strong>Ask</strong>
+                {selectedContent.ask}
+              </span>
+              <span>
+                <strong>Avoid</strong>
+                {selectedContent.avoid}
+              </span>
+            </div>
+          )}
+          <button
+            className={selectedContent.completedAt ? 'secondary-action submitted parent-guide-complete' : 'secondary-action parent-guide-complete'}
+            disabled={Boolean(selectedContent.completedAt)}
+            onClick={() => completeParentGuide(selectedContent.id)}
+            type="button"
+          >
+            <Check size={16} />
+            {selectedContent.completedAt ? 'Guide Completed' : 'Mark as Complete'}
+          </button>
+        </div>
       </section>
     );
   }
@@ -5996,7 +7123,7 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
           <div className="plan-card-copy">
             <span>{latestGuide.category}</span>
             <strong>{latestGuide.seriesTitle}</strong>
-            <em>{latestGuide.title}</em>
+            <em>{latestGuide.completedAt ? `Completed ${latestGuide.completedAt}` : latestGuide.title}</em>
             <p>{latestGuide.promise}</p>
           </div>
         </button>
@@ -6021,7 +7148,7 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
               <span>{item.category}</span>
               <strong>{item.seriesTitle}</strong>
               <p>{item.promise}</p>
-              <em>{item.date}</em>
+              <em>{item.completedAt ? `Completed ${item.completedAt}` : item.date}</em>
             </button>
           ))}
         </div>
@@ -6030,7 +7157,7 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
   );
 }
 
-function ParentPlanLibrary({ plans, planProgress }) {
+function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser }) {
   const today = todayKey();
   const sequencedPlans = sequencedPlanAccess(plans, planProgress, today);
   const planLibrary = buildPlanLibrary(sequencedPlans);
@@ -6045,6 +7172,20 @@ function ParentPlanLibrary({ plans, planProgress }) {
   const selectedPlan = selectedSeries?.plans.find((plan) => String(plan.id) === String(selectedPlanId)) ?? defaultLesson;
   const openSeriesCount = planLibrary.filter((series) => series.openCount > 0).length;
   const completedSeriesCount = planLibrary.filter((series) => series.completedCount === series.plans.length).length;
+
+  function completeParentPlan(planId) {
+    const plan = sequencedPlans.find((item) => String(item.id) === String(planId));
+    if (!plan?.unlocked || plan.completedAt || !setPlanProgress) return;
+
+    setPlanProgress((current) => ({
+      ...current,
+      [String(planId)]: today
+    }));
+    notifyUser?.('Lesson marked complete', 'The next lesson will open tomorrow.', 'success', {
+      type: 'planUnlocks',
+      id: `parent-plan-complete-${planId}-${Date.now()}`
+    });
+  }
 
   useEffect(() => {
     if (!libraryOpen) {
@@ -6131,6 +7272,17 @@ function ParentPlanLibrary({ plans, planProgress }) {
                     <LockKeyhole size={18} />
                     <p>This lesson is still locked for the athlete. Parents can see the roadmap here without crowding the dashboard.</p>
                   </div>
+                )}
+                {selectedPlan.unlocked && (
+                  <button
+                    className={selectedPlan.completedAt ? 'secondary-action submitted' : 'secondary-action'}
+                    disabled={Boolean(selectedPlan.completedAt)}
+                    onClick={() => completeParentPlan(selectedPlan.id)}
+                    type="button"
+                  >
+                    <Check size={16} />
+                    {selectedPlan.completedAt ? 'Lesson Completed' : 'Mark Lesson Complete'}
+                  </button>
                 )}
               </>
             ) : (
