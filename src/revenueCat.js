@@ -7,7 +7,7 @@ let cachedMonthlyPackage = null;
 
 export const revenueCatConfig = {
   iosApiKey: import.meta.env.VITE_REVENUECAT_IOS_API_KEY || 'appl_YMfeRvFoCfgIxAuTsqJVayljlkv',
-  entitlementId: import.meta.env.VITE_REVENUECAT_ENTITLEMENT_ID || 'The Complete Athlete Pro',
+  entitlementId: import.meta.env.VITE_REVENUECAT_ENTITLEMENT_ID || 'premium',
   premiumRequired: import.meta.env.VITE_PREMIUM_REQUIRED === 'true'
 };
 

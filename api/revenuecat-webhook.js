@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   const payload = await readJson(req);
   const event = payload?.event ?? payload;
   const userId = String(event?.app_user_id || event?.original_app_user_id || '').trim();
-  const entitlementId = String(event?.entitlement_ids?.[0] || event?.entitlement_id || process.env.REVENUECAT_ENTITLEMENT_ID || 'The Complete Athlete Pro');
+  const entitlementId = String(event?.entitlement_ids?.[0] || event?.entitlement_id || process.env.REVENUECAT_ENTITLEMENT_ID || 'premium');
 
   if (!userId || !entitlementId) {
     await logAppEvent({

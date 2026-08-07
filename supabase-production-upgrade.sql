@@ -635,7 +635,7 @@ on public.parent_guides (release_date, status);
 create table if not exists public.user_subscriptions (
   user_id uuid not null references public.profiles(id) on delete cascade,
   provider text not null default 'revenuecat',
-  entitlement_id text not null default 'The Complete Athlete Pro',
+  entitlement_id text not null default 'premium',
   status text not null default 'inactive' check (status in ('active', 'trialing', 'inactive', 'expired', 'cancelled')),
   product_id text not null default '',
   original_transaction_id text not null default '',
