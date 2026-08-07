@@ -4598,7 +4598,7 @@ function OnboardingScreen({ completeOnboarding }) {
       <section className="onboarding-hero">
         <p className="eyebrow">The Complete Athlete</p>
         <h1>Start with today.</h1>
-        <p>Answer three quick things. We will recommend the first training rep and keep the rest out of the way.</p>
+        <p>Answer a few quick things. We will recommend the right plan and keep the rest out of the way.</p>
       </section>
 
       <form className="onboarding-form" onSubmit={startOnboarding}>
@@ -4644,18 +4644,6 @@ function OnboardingScreen({ completeOnboarding }) {
             ))}
           </div>
         </section>
-
-        {setup.currentChallenge && (
-          <section className="panel onboarding-panel onboarding-preview-panel">
-            <PanelTitle icon={<Sparkles size={18} />} title="Your first rep" action="Step 3" />
-            <div className="start-preview-card">
-              <span>Today’s Training</span>
-              <strong>{athleteChallengeById(setup.currentChallenge).lessonTitle}</strong>
-              <p>{athleteChallengeById(setup.currentChallenge).focus}</p>
-              <em>{athleteChallengeById(setup.currentChallenge).standard}</em>
-            </div>
-          </section>
-        )}
 
         <section className="panel onboarding-panel optional-onboarding-panel">
           <PanelTitle icon={<Users size={18} />} title="Family access" action="Optional" />
