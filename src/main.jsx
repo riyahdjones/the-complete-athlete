@@ -2438,6 +2438,7 @@ function App() {
     configured: Boolean(revenueCatConfig.iosApiKey),
     native: canUseNativePurchases(),
     active: false,
+    activeTrial: false,
     loading: Boolean(revenueCatConfig.iosApiKey),
     package: null,
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
@@ -2471,7 +2472,7 @@ function App() {
   const effectiveSubscription = {
     ...subscription,
     active: subscription.active || backendPremiumAccess.hasAccess,
-    activeTrial: subscription.activeTrial && subscription.active && !backendPremiumAccess.hasAccess,
+    activeTrial: Boolean(subscription.activeTrial),
     accessSource: backendPremiumAccess.source,
     sponsorUserId: backendPremiumAccess.sponsorUserId,
     expirationDate: subscription.expirationDate || backendPremiumAccess.expiresAt,
@@ -3915,6 +3916,7 @@ function App() {
       setSubscription((current) => ({
         ...current,
         active: status.active,
+        activeTrial: status.activeTrial,
         expirationDate: status.expirationDate,
         managementURL: status.managementURL,
         loading: false,
@@ -3951,6 +3953,7 @@ function App() {
       setSubscription((current) => ({
         ...current,
         active: status.active,
+        activeTrial: status.activeTrial,
         expirationDate: status.expirationDate,
         managementURL: status.managementURL,
         loading: false,
