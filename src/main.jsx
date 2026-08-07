@@ -186,6 +186,8 @@ const planProgressStorageKey = 'the-ninety-percent-performance-plan-progress';
 const parentGuideProgressStorageKey = 'the-ninety-percent-parent-guide-progress';
 const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
+const athleteStartStorageKey = 'the-complete-athlete-start-today-complete';
+const trialPromptStorageKey = 'the-complete-athlete-trial-prompt-dismissed';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
 const notificationPrefsStorageKey = 'the-ninety-percent-notification-preferences';
@@ -227,6 +229,97 @@ const notificationPreferenceSeed = {
   browserPush: false
 };
 
+const athleteChallengeOptions = [
+  {
+    id: 'pressure',
+    title: 'Pressure',
+    shortLabel: 'Handle pressure',
+    description: 'Stay steady when the moment feels big.',
+    goal: 'Stay composed in high-pressure moments',
+    standard: 'Use one reset breath before a hard rep',
+    lessonTitle: 'Pressure is information',
+    lessonBody: 'Pressure does not mean you are unprepared. It means the moment matters. Today, your job is to slow the moment down and control the next response.',
+    focus: 'What pressure can I treat as information instead of a threat today?',
+    planKeywords: ['pressure', 'game']
+  },
+  {
+    id: 'confidence',
+    title: 'Confidence',
+    shortLabel: 'Build confidence',
+    description: 'Collect proof instead of waiting to feel ready.',
+    goal: 'Build confidence through daily proof',
+    standard: 'Write down one confidence receipt',
+    lessonTitle: 'Confidence needs evidence',
+    lessonBody: 'Confidence grows when you prove something to yourself. Today, do one thing that gives your future self evidence to trust.',
+    focus: 'What proof can I collect today that I am becoming the athlete I say I am?',
+    planKeywords: ['confidence', 'belief']
+  },
+  {
+    id: 'comparison',
+    title: 'Comparison',
+    shortLabel: 'Stop comparing',
+    description: 'Focus on your own season and assignment.',
+    goal: 'Compete against my standard, not someone else',
+    standard: 'Name one controllable before practice',
+    lessonTitle: 'Run your race',
+    lessonBody: 'Comparison steals energy from the work in front of you. Today, bring your attention back to what you can control.',
+    focus: 'What part of my own game deserves my full attention today?',
+    planKeywords: ['identity', '90%', 'ninety']
+  },
+  {
+    id: 'discipline',
+    title: 'Discipline',
+    shortLabel: 'Get disciplined',
+    description: 'Do the work even when motivation is quiet.',
+    goal: 'Become consistent with the daily work',
+    standard: 'Finish one training task before comfort wins',
+    lessonTitle: 'Discipline goes first',
+    lessonBody: 'Motivation is helpful, but discipline is dependable. Today, choose the next right action before you negotiate with it.',
+    focus: 'What is one small action I can complete before I feel ready?',
+    planKeywords: ['discipline', 'training', 'leader']
+  },
+  {
+    id: 'coach',
+    title: 'Coach',
+    shortLabel: 'Handle coach feedback',
+    description: 'Respond to correction without losing yourself.',
+    goal: 'Receive coaching with maturity',
+    standard: 'Ask one clarifying question after feedback',
+    lessonTitle: 'Correction can sharpen you',
+    lessonBody: 'Feedback is not an attack on who you are. Today, separate your identity from correction and look for the useful part.',
+    focus: 'What feedback can I receive without letting it define me?',
+    planKeywords: ['coach', 'leadership']
+  },
+  {
+    id: 'identity',
+    title: 'Identity',
+    shortLabel: 'Separate identity from results',
+    description: 'Remember who you are beyond the scoreboard.',
+    goal: 'Play from identity, not for identity',
+    standard: 'Say one identity statement before competing',
+    lessonTitle: 'You are more than the result',
+    lessonBody: 'The scoreboard can measure a game. It cannot measure your worth. Today, compete with freedom because your identity is already bigger than performance.',
+    focus: 'What identity do I need to train today, no matter what the scoreboard says?',
+    planKeywords: ['identity', '90%', 'ninety']
+  },
+  {
+    id: 'something-else',
+    title: 'Something Else',
+    shortLabel: 'Something else',
+    description: 'Start with a general reset and find the right support after.',
+    goal: 'Get clear on what I need and take the next right step',
+    standard: 'Write one sentence about what I need help with today',
+    lessonTitle: 'Start with what is true',
+    lessonBody: 'You do not have to have the perfect label for what you are feeling. Start by being honest, choose one controllable, and take the next right step.',
+    focus: 'What is the real thing I need help with today?',
+    planKeywords: ['mindset', 'identity', 'confidence']
+  }
+];
+
+function athleteChallengeById(id) {
+  return athleteChallengeOptions.find((challenge) => challenge.id === id) ?? athleteChallengeOptions[0];
+}
+
 function todayKey() {
   return new Date().toLocaleDateString('en-CA');
 }
@@ -235,6 +328,12 @@ function timeBasedGreeting(name) {
   const cleanName = String(name ?? '').trim() || 'Athlete';
   const greeting = new Date().getHours() < 12 ? 'Good morning' : 'Hello';
   return `${greeting}, ${cleanName}`;
+}
+
+function firstNameGreeting(name) {
+  const firstName = String(name ?? '').trim().split(/\s+/)[0] || 'Athlete';
+  const greeting = new Date().getHours() < 12 ? 'Good morning' : 'Hello';
+  return `${greeting}, ${firstName}`;
 }
 
 function normalizeEmail(email) {
@@ -620,16 +719,33 @@ function loadAthleteProfile() {
       location: saved.location ?? '',
       photo: saved.photo ?? '',
       parentContact: saved.parentContact ?? '',
+      currentChallenge: saved.currentChallenge ?? '',
       parentAccessCode: saved.parentAccessCode ?? 'TCA-PARENT'
     };
   } catch {
-    return { name: '', sport: '', age: '', location: '', photo: '', parentContact: '', parentAccessCode: 'TCA-PARENT' };
+    return { name: '', sport: '', age: '', location: '', photo: '', parentContact: '', currentChallenge: '', parentAccessCode: 'TCA-PARENT' };
   }
 }
 
 function loadOnboardingComplete() {
   try {
     return localStorage.getItem(onboardingStorageKey) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function loadAthleteStartComplete() {
+  try {
+    return localStorage.getItem(athleteStartStorageKey) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function loadTrialPromptDismissed() {
+  try {
+    return localStorage.getItem(trialPromptStorageKey) === 'true';
   } catch {
     return false;
   }
@@ -719,6 +835,7 @@ function profileFromSupabase(row, authSession, currentProfile) {
     location: row?.location ?? currentProfile.location,
     photo: row?.photo_url ?? currentProfile.photo,
     parentContact: row?.parent_contact ?? currentProfile.parentContact,
+    currentChallenge: currentProfile.currentChallenge ?? '',
     parentAccessCode: row?.parent_access_code ?? currentProfile.parentAccessCode ?? 'TCA-PARENT'
   };
 }
@@ -872,6 +989,7 @@ function parentGuideMergeKey(guide) {
   if (series.includes('borrowed confidence')) return 'series:borrowed-confidence';
   if (series.includes('comparison trap')) return 'series:comparison-trap';
   if (series.includes('elite parents') || series.includes('elite athletes need elite parents')) return 'series:elite-parents';
+  if (series.includes('pressure isn')) return 'series:pressure-isnt-the-enemy';
   if (series.includes('raising a complete athlete')) return 'series:raising-complete-athlete';
   if (series.includes('home court advantage')) return 'series:home-court-advantage';
   return `id:${String(guide?.id ?? '')}`;
@@ -898,6 +1016,9 @@ function parentGuideCoverImage(seriesTitle) {
   if (normalized.includes('elite parents') || normalized.includes('elite athletes need elite parents')) {
     return '/parent-guides/elite-parents-banner.png';
   }
+  if (normalized.includes('pressure isn')) {
+    return '/parent-guides/pressure-isnt-the-enemy-banner.png';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '/parent-guides/raising-complete-athlete-banner.png';
   }
@@ -918,6 +1039,9 @@ function parentGuideThumbnailImage(seriesTitle) {
   if (normalized.includes('elite parents') || normalized.includes('elite athletes need elite parents')) {
     return '/parent-guides/elite-parents-thumbnail.png';
   }
+  if (normalized.includes('pressure isn')) {
+    return '/parent-guides/pressure-isnt-the-enemy-thumbnail.png';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '/parent-guides/raising-complete-athlete-thumbnail.png';
   }
@@ -937,6 +1061,9 @@ function parentGuideCoverPosition(seriesTitle) {
   }
   if (normalized.includes('elite parents') || normalized.includes('elite athletes need elite parents')) {
     return '50% 50%';
+  }
+  if (normalized.includes('pressure isn')) {
+    return '44% 50%';
   }
   if (normalized.includes('raising a complete athlete')) {
     return '58% 50%';
@@ -1178,6 +1305,386 @@ Ask, "What do you need from me tonight: space, encouragement, or help thinking i
 Key Takeaway
 
 Home court advantage begins when your athlete knows home is a safe place to be loved, rebuilt, and reminded who they are.`
+      ]
+    },
+    {
+      id: 'pressure-isnt-the-enemy-3-day-plan',
+      seriesTitle: "Pressure Isn't the Enemy",
+      title: 'A 3-Day Parent Plan',
+      category: 'Parent Support',
+      subject: 'A three-day parent plan for helping athletes see pressure as preparation, growth, and opportunity instead of something to fear.',
+      releaseDate,
+      guideDay: '3-Day Plan',
+      guideLength: 3,
+      steps: [
+        `Day 1: Pressure Reveals What Preparation Built
+
+Story
+
+Before anyone earns the right to call themselves a Navy SEAL, they must first survive one of the most demanding training environments in the world.
+
+The goal is not simply to make them stronger. It is to discover what remains when they are tired, cold, hungry, frustrated, and unsure how much longer they can continue.
+
+During training, candidates are placed in situations designed to create pressure. They operate on little sleep. They carry heavy equipment. They run through freezing water. They complete difficult tasks while their bodies and minds are exhausted.
+
+The instructors are not only watching how fast they move. They are watching how they respond.
+
+Do they panic? Do they blame someone else? Do they lose focus? Do they stop communicating? Do they abandon the team?
+
+Pressure reveals answers that comfort never could.
+
+A candidate may look disciplined when rested, confident when everything is going well, and focused when the instructions are easy. But when exhaustion sets in and the plan begins to fall apart, training exposes whether those qualities are truly part of them.
+
+The pressure does not suddenly create their habits. It reveals the habits they built before the moment arrived.
+
+That is why SEALs do not wait until the mission begins to learn how to stay calm. They practice under stress. They rehearse communication under stress. They make decisions under stress. They train their minds and bodies to recognize pressure without being controlled by it.
+
+Because when the real moment arrives, there may not be time to become prepared. There is only time to reveal what preparation already built.
+
+Deeper Look
+
+Most parents do not enjoy watching their children struggle. We want to help, fix it, protect them, and make the moment easier.
+
+That instinct comes from love.
+
+But sometimes, in trying to protect our athletes from pressure, we accidentally protect them from growth.
+
+Pressure is not always a warning that something is wrong. Sometimes it is proof that something important is being developed.
+
+A close game creates pressure. Trying out for a team creates pressure. Batting with two outs creates pressure. Competing against stronger athletes creates pressure. Returning after a mistake creates pressure.
+
+Those moments are uncomfortable. But they are also classrooms.
+
+Your athlete cannot learn how to stay composed under pressure if every pressure-filled situation is removed. They cannot learn how to recover from disappointment if every disappointment is immediately fixed. They cannot develop confidence in difficult moments if they are never trusted to walk through one.
+
+The goal is not to throw children into situations they are not ready for. The goal is to stop treating every uncomfortable moment like an emergency.
+
+Pressure reveals what has already been practiced.
+
+If your child has practiced blaming others, pressure will reveal blame. If they have practiced giving up, pressure will reveal quitting. If they have practiced breathing, resetting, communicating, and focusing on the next play, pressure will reveal those habits too.
+
+That means the most important work usually happens before the pressure arrives: at home, at practice, in ordinary conversations, and during small disappointments.
+
+That is where resilience is trained. That is where emotional control is rehearsed. That is where confidence becomes more than a feeling.
+
+Parents often ask, "How do I help my child perform better under pressure?"
+
+The answer usually is not removing pressure. It is helping them prepare for it.
+
+Teach them how to breathe. How to slow the moment down. How to focus on what they can control. How to respond after a mistake. How to speak to themselves when fear shows up.
+
+Pressure is not the enemy. Being unprepared for pressure is.
+
+The Living Room
+
+Take a few moments to reflect honestly.
+
+1. When my child feels pressure, is my first instinct to prepare them or rescue them?
+2. Have I ever treated a difficult sports moment like a crisis instead of a learning opportunity?
+3. What habits does my athlete currently reveal when things become uncomfortable?
+4. Am I helping my child practice emotional control before high-pressure moments arrive?
+5. What pressure-filled situation might my child be ready to handle with support instead of rescue?
+
+This Week at Home
+
+This week, teach your athlete a simple pressure routine.
+
+Keep it short enough that they can remember it during competition.
+
+Use these three steps:
+
+1. Breathe
+
+Take one slow breath. Pressure speeds everything up. Breathing helps the mind slow back down.
+
+2. Name What You Control
+
+Ask, "What can I control right now?"
+
+Their effort. Their attitude. Their preparation. Their communication. The next play.
+
+3. Reset
+
+Give them one short phrase to use: "Next play." "I'm ready." "One moment at a time." "Trust my work."
+
+Practice this routine at home when the pressure is low. Use it during homework frustration, during a difficult drill, after a mistake, or before a competition.
+
+The goal is for the routine to become familiar enough that your athlete can access it when emotions rise.
+
+Today's Challenge
+
+Think of one recent moment when your athlete felt pressure. Maybe they struck out, missed an important shot, made an error, lost a starting position, or struggled during a tryout.
+
+Instead of discussing what they did wrong, ask, "What did that moment reveal about what we need to practice?"
+
+Then choose one response skill to work on together. Not a physical skill. A mental response.
+
+Breathing. Resetting. Staying positive. Communicating. Recovering after a mistake.
+
+Let your athlete know: "I'm not disappointed that you felt pressure. Pressure is part of competing. We're going to learn how to handle it together."
+
+That sentence changes the moment. Pressure stops feeling like proof that they are not ready. It becomes an invitation to keep preparing.
+
+Key Takeaway
+
+Pressure does not magically create character, confidence, or composure. It reveals what has already been practiced. Elite parents do not spend all their energy removing pressure. They help their athletes build the habits needed to face it.`,
+        `Day 2: Pressure Produces Strength
+
+Story
+
+Deep beneath the surface of the earth, something extraordinary happens.
+
+Carbon.
+
+One of the most common elements on the planet. Soft. Ordinary. Unremarkable.
+
+Yet under the right conditions, carbon begins a remarkable transformation.
+
+Not because life becomes easier. But because it becomes harder.
+
+Miles beneath the earth's surface, immense pressure presses against it. Temperatures rise beyond what most materials can withstand.
+
+The process is not quick. It does not happen overnight. For years, sometimes millions of years, that ordinary carbon remains hidden, enduring pressure no one can see.
+
+Then, over time, something incredible emerges.
+
+A diamond.
+
+One of the strongest and most valuable natural substances on Earth.
+
+What changed?
+
+The pressure.
+
+Not because pressure magically made it valuable. But because pressure transformed what was already inside.
+
+Without that pressure, the diamond never becomes a diamond. It remains ordinary carbon.
+
+The very thing that seemed unbearable became the reason it was extraordinary.
+
+Deeper Look
+
+As parents, we naturally want to make life easier for our children. When they struggle, we want to step in. When they hurt, we want to protect them. When pressure begins to build, we often feel responsible for making it disappear.
+
+But what if some pressure is not working against your athlete?
+
+What if it is working for them?
+
+Pressure exposes things comfort never can. It reveals where confidence is fragile, where preparation is lacking, where emotions still need maturity, and where focus begins to drift.
+
+Those discoveries are not failures. They are opportunities.
+
+Think about how athletes improve.
+
+A basketball player does not become a better free-throw shooter by only practicing when nobody is watching. A quarterback does not learn composure by never facing a pass rush. A hitter does not develop confidence by only swinging when there is no count, no runners, and no consequences.
+
+Growth happens when athletes are stretched just beyond what feels comfortable.
+
+Pressure becomes the classroom.
+
+That is why elite parents do not panic every time their child feels nervous. They do not immediately rescue them from every uncomfortable moment.
+
+Instead, they ask a different question: "What is this moment trying to teach?"
+
+Maybe it is resilience. Maybe it is patience. Maybe it is emotional control. Maybe it is preparation. Maybe it is trust.
+
+The lesson is not found by avoiding pressure. It is found by walking through it.
+
+Parents often believe confidence comes first, then children become brave.
+
+The opposite is usually true.
+
+Children become confident because they have survived moments they once thought they could not.
+
+Every difficult game, every failed tryout, every tough inning, every missed shot, and every setback successfully navigated whispers something powerful:
+
+"I made it through that."
+
+That is how confidence is built. Not by avoiding pressure, but by discovering they are stronger than they imagined.
+
+The Living Room
+
+Take a few moments to reflect.
+
+1. When my child feels pressure, do I immediately try to remove it?
+2. Have I ever prevented growth by rescuing too quickly?
+3. What lesson might my athlete be learning through their current challenge?
+4. Do I see pressure as something harmful or something that can develop strength?
+5. How can I support my child without taking away the opportunity to grow?
+
+This Week at Home
+
+The next time your athlete says, "I'm nervous," do not immediately respond with, "Don't be nervous."
+
+Instead, say, "That's okay. Pressure means you're doing something that matters."
+
+Then ask, "What can this moment teach you?"
+
+Help your athlete stop viewing pressure as a signal to retreat. Help them see it as an invitation to grow.
+
+Over time, they will stop fearing difficult moments. They will begin expecting them because they will know something valuable is being built every time they face one.
+
+Today's Challenge
+
+Think about one pressure-filled moment your athlete is currently facing: a new team, a tryout, a championship, a batting slump, more playing time, or less playing time.
+
+Instead of asking, "How do we get out of this?"
+
+Ask, "Who could my child become because of this?"
+
+That one question shifts your focus from escaping pressure to embracing its purpose.
+
+Then tell your athlete, "I know this feels hard. But I also know hard things grow strong people."
+
+Sometimes the greatest gift a parent can give is not removing the weight. It is reminding their child they are strong enough to carry it.
+
+Key Takeaway
+
+Pressure does not exist to crush your athlete. It exists to reveal, refine, and strengthen them. Elite parents do not see pressure as the enemy. They see it as one of life's greatest teachers, preparing their children for challenges both in sports and beyond.`,
+        `Day 3: Great Athletes Don't Avoid Pressure - They Embrace It
+
+Story
+
+Game 6. 1998 NBA Finals. Chicago Bulls vs. Utah Jazz.
+
+Less than a minute remained. The Bulls trailed by three. Everything rested on the shoulders of one player.
+
+Michael Jordan.
+
+He drove to the basket for a quick layup.
+
+One-point game.
+
+On the next possession, Jordan stripped Karl Malone of the basketball. Now the Bulls had one final chance.
+
+No timeout. No drawn-up play. Just one possession.
+
+The entire basketball world knew who was going to take the shot.
+
+Utah knew. The fans knew. His teammates knew. Michael Jordan knew.
+
+With the clock winding down, Jordan dribbled to his right, crossed back to his left, created just enough space, rose into his jump shot.
+
+Nothing but net.
+
+The Bulls took the lead. Seconds later, the buzzer sounded. Chicago had won its sixth NBA championship.
+
+People remember the shot. But what they often overlook is what happened afterward.
+
+When reporters asked Jordan about moments like these, he never talked about enjoying pressure because he was fearless. He talked about preparation, about thousands of shots taken when no one was watching, and about trusting the work he had already put in.
+
+Pressure did not suddenly make Michael Jordan great. Pressure simply gave him an opportunity to reveal what years of preparation had already built.
+
+While many athletes hoped pressure would disappear, Jordan learned to welcome it.
+
+Because pressure gave preparation a chance to shine.
+
+Deeper Look
+
+One of the greatest gifts we can give our children is changing the way they think about pressure.
+
+Many young athletes believe pressure is something to fear, something to survive, something to avoid.
+
+But elite athletes eventually discover something different.
+
+Pressure is not a punishment. It is a privilege.
+
+Only athletes who put themselves in meaningful situations experience meaningful pressure.
+
+Championship games create pressure. The final inning creates pressure. The game-winning free throw creates pressure. Tryouts create pressure. Big opportunities create pressure.
+
+Pressure usually means your child is standing in a moment they have worked hard to reach.
+
+The goal is not to eliminate those moments. The goal is to prepare them to embrace them.
+
+As parents, we unintentionally create fear when we treat pressure like it is dangerous.
+
+We say things like, "Don't mess up." "This is a big one." "Everyone's watching."
+
+Without realizing it, we are adding weight instead of removing it.
+
+Elite parents speak differently.
+
+They remind their athletes: "This is why you prepared." "Trust your training." "Compete one play at a time." "You don't have to be perfect. You just have to be present."
+
+Pressure is simply an invitation to trust what has already been built.
+
+Children who learn this lesson early do not just become better athletes. They become adults who are not intimidated by difficult conversations, big presentations, leadership opportunities, or life's unexpected challenges.
+
+Because they learned something through sports.
+
+Pressure is not something to run from. It is something to rise through.
+
+The Living Room
+
+Reflect honestly.
+
+1. What message do I unintentionally send my child about pressure?
+2. Do I make big moments feel bigger than they need to be?
+3. What phrases do I use before games that either calm my athlete or increase anxiety?
+4. How can I help my child view pressure as an opportunity instead of a threat?
+
+This Week at Home
+
+This week, replace pressure language with preparation language.
+
+Instead of saying, "This is a huge game," say, "You've prepared for this."
+
+Instead of, "Don't strike out," say, "Compete one pitch at a time."
+
+Instead of, "Don't let everyone down," say, "Trust your work."
+
+The goal is to remind your athlete that pressure does not determine success. Preparation does.
+
+Over time, they will stop associating pressure with fear. They will begin associating it with opportunity.
+
+Today's Challenge
+
+Before your athlete's next competition, ask them one question: "What have you done to prepare for this moment?"
+
+Let them answer.
+
+Help them remember the practices, the repetitions, the early mornings, and the extra work.
+
+Then finish with one sentence:
+
+"Pressure doesn't change who you are. It simply gives you the opportunity to show who you've been becoming."
+
+Walk into the game with peace instead of panic, confidence instead of fear, and trust instead of tension.
+
+Key Takeaway
+
+Pressure is not the enemy of great athletes. It is often the stage where preparation, resilience, and confidence are revealed. Elite parents do not teach their children to avoid pressure. They teach them to welcome it as an opportunity to trust the work they have already done.
+
+Closing the Plan
+
+As parents, one of the greatest temptations is to protect our children from anything uncomfortable. We want to remove disappointment, eliminate failure, and shield them from pressure.
+
+But a life without pressure does not prepare a child for the real world. It prepares them for a world that does not exist.
+
+Over these last three days, we have discovered a different perspective.
+
+Pressure does not create character overnight. It reveals what has already been practiced.
+
+Pressure is not meant to crush your athlete. It strengthens them, refines them, and teaches lessons comfort never could.
+
+And pressure is not something to fear. It is often a sign that your child has stepped into a meaningful opportunity.
+
+One day, your athlete will leave the playing field. But pressure will not leave their life.
+
+There will be job interviews. College exams. Business presentations. Marriage. Parenthood. Leadership. Financial decisions. Moments where everything seems to be on the line.
+
+Sports are simply preparing them for those moments.
+
+Every difficult inning, every missed shot, and every tough conversation after a loss is helping develop a person who knows how to stay steady when life becomes difficult.
+
+That is why your role is not to remove every obstacle. It is to walk beside them until they learn they can overcome it.
+
+Because children who learn to handle pressure do not just become better athletes. They become stronger adults. And that is the greatest victory of all.
+
+Complete Athlete Parenting Principle
+
+Do not pray for a life with less pressure for your athlete. Help them become the kind of person who can carry greater pressure with greater confidence. That is where resilience is built, character is formed, and greatness begins.`
       ]
     },
     {
@@ -1838,7 +2345,12 @@ function App() {
   const [initialDailyState] = useState(loadDailyState);
   const [authUsers, setAuthUsers] = useState(loadAuthUsers);
   const [authSession, setAuthSession] = useState(loadAuthSession);
-  const [onboardingComplete, setOnboardingComplete] = useState(loadOnboardingComplete);
+  const [onboardingComplete, setOnboardingComplete] = useState(() => (
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('firstTime') === 'athlete'
+      ? false
+      : loadOnboardingComplete()
+  ));
+  const [athleteStartComplete, setAthleteStartComplete] = useState(() => (loadOnboardingComplete() ? true : loadAthleteStartComplete()));
   const [viewportRevision, setViewportRevision] = useState(0);
   const [isPhoneViewport, setIsPhoneViewport] = useState(() => (
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 720px)').matches : false
@@ -1902,10 +2414,11 @@ function App() {
     configured: Boolean(revenueCatConfig.iosApiKey),
     native: canUseNativePurchases(),
     active: false,
-    loading: false,
+    loading: Boolean(revenueCatConfig.iosApiKey),
     package: null,
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
   });
+  const [trialPromptDismissed, setTrialPromptDismissed] = useState(loadTrialPromptDismissed);
   const [backendPremiumAccess, setBackendPremiumAccess] = useState({
     hasAccess: false,
     source: 'none',
@@ -1914,13 +2427,22 @@ function App() {
   });
 
   const activeLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
+  const localAthletePreviewSession = useMemo(() => {
+    if (!import.meta.env.DEV || authSession || typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const athletePreview = params.get('firstTime') === 'athlete'
+      || params.get('startPreview') === 'athlete'
+      || params.get('todayPreview') === 'athlete';
+    if (params.get('role') !== 'athlete' || !athletePreview) return null;
+    return { id: 'local-athlete-preview', role: 'athlete', name: 'Preview Athlete', email: 'preview-athlete@example.com' };
+  }, [authSession]);
   const localParentInviteSession = useMemo(() => {
     if (!import.meta.env.DEV || authSession || typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     if (params.get('role') !== 'parent' || params.get('parentCode') !== 'TCA-PARENT') return null;
     return { id: 'local-parent-review', role: 'parent', name: 'App Review Parent', email: 'review-parent@example.com', parentAccessCode: 'TCA-FAMILY' };
   }, [authSession]);
-  const effectiveSession = authSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
+  const effectiveSession = authSession ?? localAthletePreviewSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
   const isAuthed = Boolean(effectiveSession);
   const effectiveSubscription = {
     ...subscription,
@@ -1934,9 +2456,17 @@ function App() {
         : 'Premium access is active.'
       : subscription.message
   };
-  const premiumAccessAllowed = !revenueCatConfig.premiumRequired || !effectiveSubscription.configured || effectiveSubscription.active;
+  const premiumAccessAllowed = !effectiveSubscription.configured || effectiveSubscription.active;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
+  const athleteOnboardingPreview = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('firstTime') === 'athlete';
+  const athleteStartPreview = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('startPreview') === 'athlete';
+  const athleteTodayPreview = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('todayPreview') === 'athlete';
+  const trialGatePreview = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('trialPreview') === 'true';
 
   const completion = standards.length
     ? Math.round((standardsCompleted / standards.length) * 100)
@@ -2052,6 +2582,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(notificationPrefsStorageKey, JSON.stringify(notificationPreferences));
   }, [notificationPreferences]);
+
+  useEffect(() => {
+    localStorage.setItem(athleteStartStorageKey, athleteStartComplete ? 'true' : 'false');
+  }, [athleteStartComplete]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !authSession?.id || !notifications.length) return;
@@ -3197,15 +3731,17 @@ function App() {
   }
 
   function completeOnboarding(setup) {
+    const selectedChallenge = athleteChallengeById(setup.currentChallenge);
     const nextProfile = {
       ...athleteProfile,
       name: setup.name,
       sport: setup.sport,
       age: setup.age,
       location: setup.location,
-      parentContact: setup.parentContact
+      parentContact: setup.parentContact,
+      currentChallenge: selectedChallenge.id
     };
-    const nextGoals = setup.goals
+    const nextGoals = (setup.goals?.length ? setup.goals : [selectedChallenge.goal])
       .map((goal, index) => ({
         id: Date.now() + index,
         label: index === 0 ? 'Main Goal' : `Goal ${index + 1}`,
@@ -3213,7 +3749,7 @@ function App() {
         progress: 0
       }))
       .filter((goal) => goal.value.trim());
-    const nextStandards = setup.standards
+    const nextStandards = (setup.standards?.length ? setup.standards : [selectedChallenge.standard])
       .map((label, index) => ({
         id: Date.now() + 100 + index,
         label,
@@ -3227,8 +3763,10 @@ function App() {
     if (nextStandards.length) setStandards(nextStandards);
     setTab('home');
     setView('athlete');
+    setAthleteStartComplete(false);
     setOnboardingComplete(true);
     localStorage.setItem(onboardingStorageKey, 'true');
+    localStorage.setItem(athleteStartStorageKey, 'false');
     celebrate('Setup complete. Start with today.');
   }
 
@@ -3357,7 +3895,11 @@ function App() {
         loading: false,
         message: status.active ? 'Premium access is active.' : 'Purchase finished, but premium access is not active yet.'
       }));
-      if (status.active) notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
+      if (status.active) {
+        setTrialPromptDismissed(true);
+        localStorage.setItem(trialPromptStorageKey, 'true');
+        notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
+      }
     } catch (error) {
       const cancelled = Boolean(error?.userCancelled);
       setSubscription((current) => ({
@@ -3366,6 +3908,15 @@ function App() {
         message: cancelled ? 'Purchase canceled.' : error?.message || 'Purchase could not be completed yet.'
       }));
     }
+  }
+
+  function skipTrialPrompt() {
+    setTrialPromptDismissed(true);
+    localStorage.setItem(trialPromptStorageKey, 'true');
+    notifyUser('Free mode started', 'You can start the 7-day trial any time from Profile.', 'info', {
+      type: 'points',
+      id: `trial-skipped-${Date.now()}`
+    });
   }
 
   async function restorePremiumSubscription() {
@@ -3380,6 +3931,10 @@ function App() {
         loading: false,
         message: status.active ? 'Premium access restored.' : 'No active subscription was found.'
       }));
+      if (status.active) {
+        setTrialPromptDismissed(true);
+        localStorage.setItem(trialPromptStorageKey, 'true');
+      }
     } catch (error) {
       setSubscription((current) => ({
         ...current,
@@ -3406,6 +3961,7 @@ function App() {
           parentLinkFeedback={parentLinkFeedback}
           parentGuides={parentGuides}
           parentMessage={parentMessage}
+          premiumAccessAllowed={premiumAccessAllowed}
           planProgress={planProgress}
           plans={plans}
           pointsLedger={pointsLedger}
@@ -3422,6 +3978,9 @@ function App() {
           notifyUser={notifyUser}
           notificationPreferences={notificationPreferences}
           requestBrowserNotifications={requestBrowserNotifications}
+          restorePremiumSubscription={restorePremiumSubscription}
+          startPremiumSubscription={startPremiumSubscription}
+          subscription={effectiveSubscription}
           updateNotificationPreference={updateNotificationPreference}
           standardsHistory={standardsHistory}
           streakCount={streakCount}
@@ -3432,6 +3991,8 @@ function App() {
       home: (
         <HomeScreen
           athleteScore={athleteScore}
+          athleteProfile={athleteProfile}
+          athleteStartComplete={athleteTodayPreview || (!athleteStartPreview && athleteStartComplete)}
           awardPoints={awardPoints}
           completion={completion}
           confidenceAverage={confidenceAverage}
@@ -3448,6 +4009,7 @@ function App() {
           setLastSubmittedDate={setLastSubmittedDate}
           setStreakCount={setStreakCount}
           setReadinessHistory={setReadinessHistory}
+          setAthleteStartComplete={setAthleteStartComplete}
           setStandardsHistory={setStandardsHistory}
           setJournal={setJournal}
           setJournalType={setJournalType}
@@ -3504,33 +4066,24 @@ function App() {
         />
       ),
       coach: (
-        premiumAccessAllowed ? (
-          <CoachScreen
-            activeCoachSessionId={activeCoachSessionId}
-            athleteProfile={athleteProfile}
-            authSession={authSession}
-            coachSessions={coachSessions}
-            lesson={activeLesson}
-            goals={goals}
-            messages={messages}
-            planProgress={planProgress}
-            plans={plans}
-            standards={standards}
-            setActiveCoachSessionId={setActiveCoachSessionId}
-            setCoachSessions={setCoachSessions}
-            setMessages={setMessages}
-            messageDraft={messageDraft}
-            setMessageDraft={setMessageDraft}
-            setCoachComposerFocused={setCoachComposerFocused}
-          />
-        ) : (
-          <PremiumAccessPanel
-            compact={false}
-            restorePremiumSubscription={restorePremiumSubscription}
-            startPremiumSubscription={startPremiumSubscription}
-            subscription={effectiveSubscription}
-          />
-        )
+        <CoachScreen
+          activeCoachSessionId={activeCoachSessionId}
+          athleteProfile={athleteProfile}
+          authSession={authSession}
+          coachSessions={coachSessions}
+          lesson={activeLesson}
+          goals={goals}
+          messages={messages}
+          planProgress={planProgress}
+          plans={plans}
+          standards={standards}
+          setActiveCoachSessionId={setActiveCoachSessionId}
+          setCoachSessions={setCoachSessions}
+          setMessages={setMessages}
+          messageDraft={messageDraft}
+          setMessageDraft={setMessageDraft}
+          setCoachComposerFocused={setCoachComposerFocused}
+        />
       ),
       profile: (
         <ProfileScreen
@@ -3571,6 +4124,7 @@ function App() {
     lessonLibrary,
     lastSubmittedDate,
     activeCoachSessionId,
+    athleteStartComplete,
     athleteProfile,
     athleteParentAccessDraft,
     athleteParentLinkFeedback,
@@ -3602,7 +4156,10 @@ function App() {
     submittedToday,
     tab,
     todayPoints,
-    view
+    view,
+    athleteStartPreview,
+    athleteTodayPreview,
+    trialGatePreview
   ]);
 
   if (!isAuthed) {
@@ -3616,8 +4173,20 @@ function App() {
     );
   }
 
-  if (!prototypeBypassLogin && !localParentInviteSession && !onboardingComplete) {
+  if (!prototypeBypassLogin && !localParentInviteSession && !athleteTodayPreview && !onboardingComplete) {
     return <OnboardingScreen completeOnboarding={completeOnboarding} />;
+  }
+
+  if (!effectiveSubscription.loading && !premiumAccessAllowed && (!trialPromptDismissed || trialGatePreview)) {
+    return (
+      <TrialPaywallScreen
+        role={effectiveSession.role}
+        restorePremiumSubscription={restorePremiumSubscription}
+        skipTrialPrompt={skipTrialPrompt}
+        startPremiumSubscription={startPremiumSubscription}
+        subscription={effectiveSubscription}
+      />
+    );
   }
 
   const useMobileAppShell = typeof window !== 'undefined'
@@ -3626,6 +4195,7 @@ function App() {
       || isPhoneViewport
     );
   const coachTypingMode = useMobileAppShell && view === 'athlete' && tab === 'coach' && coachComposerFocused;
+  const isAthleteHome = view === 'athlete' && tab === 'home';
 
   return (
     <div
@@ -3662,8 +4232,10 @@ function App() {
       >
         <header className="topbar">
           <div>
-            <p className="top-greeting">{timeBasedGreeting(effectiveSession.name)}</p>
-            {view === 'athlete' && tab === 'home' ? null : (
+            <p className={isAthleteHome ? 'top-greeting athlete-home-greeting' : 'top-greeting'}>
+              {isAthleteHome ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
+            </p>
+            {!isAthleteHome && (
               <h1>{view === 'athlete' ? screenTitles[tab] : 'Parent Dashboard'}</h1>
             )}
           </div>
@@ -3893,8 +4465,9 @@ function OnboardingScreen({ completeOnboarding }) {
     age: '',
     location: '',
     parentContact: '',
-    goals: [''],
-    standards: standardsSeed.map((standard) => standard.label)
+    currentChallenge: '',
+    goals: [],
+    standards: []
   });
   const [message, setMessage] = useState('');
 
@@ -3903,29 +4476,12 @@ function OnboardingScreen({ completeOnboarding }) {
     setMessage('');
   }
 
-  function updateList(field, index, value) {
-    setSetup((current) => ({
-      ...current,
-      [field]: current[field].map((item, itemIndex) => (itemIndex === index ? value : item))
-    }));
-    setMessage('');
-  }
-
-  function addListItem(field, value = '') {
-    setSetup((current) => ({ ...current, [field]: [...current[field], value] }));
-  }
-
-  function removeListItem(field, index) {
-    setSetup((current) => ({
-      ...current,
-      [field]: current[field].filter((_, itemIndex) => itemIndex !== index)
-    }));
-  }
-
   function startOnboarding(event) {
     event.preventDefault();
     const cleanSetup = {
       ...setup,
+      name: setup.name.trim(),
+      sport: setup.sport.trim(),
       goals: setup.goals.map((goal) => goal.trim()).filter(Boolean),
       standards: setup.standards.map((standard) => standard.trim()).filter(Boolean)
     };
@@ -3935,13 +4491,8 @@ function OnboardingScreen({ completeOnboarding }) {
       return;
     }
 
-    if (cleanSetup.goals.length === 0) {
-      setMessage('Set at least one goal.');
-      return;
-    }
-
-    if (cleanSetup.standards.length === 0) {
-      setMessage('Add at least one daily productivity item.');
+    if (!cleanSetup.currentChallenge) {
+      setMessage('Choose what you want help with first.');
       return;
     }
 
@@ -3949,16 +4500,16 @@ function OnboardingScreen({ completeOnboarding }) {
   }
 
   return (
-    <main className="onboarding-shell" aria-label="The Complete Athlete onboarding">
+    <main className="onboarding-shell simple-athlete-onboarding" aria-label="The Complete Athlete onboarding">
       <section className="onboarding-hero">
         <p className="eyebrow">The Complete Athlete</p>
-        <h1>Set your foundation.</h1>
-        <p>Add the details that shape your experience: who you are, what you are working toward, and the daily work you want to track.</p>
+        <h1>Start with today.</h1>
+        <p>Answer three quick things. We will recommend the first training rep and keep the rest out of the way.</p>
       </section>
 
       <form className="onboarding-form" onSubmit={startOnboarding}>
         <section className="panel onboarding-panel">
-          <PanelTitle icon={<UserRound size={18} />} title="Athlete" action="Profile" />
+          <PanelTitle icon={<UserRound size={18} />} title="Athlete" action="Step 1" />
           <div className="form-grid">
             <label>
               <span>Name</span>
@@ -3984,88 +4535,53 @@ function OnboardingScreen({ completeOnboarding }) {
                 className="text-field"
                 inputMode="numeric"
                 maxLength="2"
-                placeholder="Age"
+                placeholder="Optional"
                 value={setup.age}
                 onChange={(event) => updateField('age', event.target.value.replace(/\D/g, '').slice(0, 2))}
               />
             </label>
-            <label>
-              <span>State or country</span>
-              <input
-                className="text-field"
-                placeholder="Location"
-                value={setup.location}
-                onChange={(event) => updateField('location', event.target.value)}
-              />
-            </label>
           </div>
         </section>
 
         <section className="panel onboarding-panel">
-          <PanelTitle icon={<Target size={18} />} title="Goals" action={`${setup.goals.filter(Boolean).length} set`} />
-          <div className="onboarding-list">
-            {setup.goals.map((goal, index) => (
-              <label key={`goal-${index}`}>
-                <span>Goal {index + 1}</span>
-                <div>
-                  <input
-                    className="text-field"
-                    placeholder="Write one goal clearly"
-                    value={goal}
-                    onChange={(event) => updateList('goals', index, event.target.value)}
-                  />
-                  {setup.goals.length > 1 && (
-                    <button className="remove-standard" type="button" onClick={() => removeListItem('goals', index)}>
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </label>
+          <PanelTitle icon={<Target size={18} />} title="What do you need help with?" action="Step 2" />
+          <div className="challenge-choice-grid" aria-label="Athlete challenge options">
+            {athleteChallengeOptions.map((challenge) => (
+              <button
+                className={setup.currentChallenge === challenge.id ? 'challenge-choice active' : 'challenge-choice'}
+                key={challenge.id}
+                onClick={() => updateField('currentChallenge', challenge.id)}
+                type="button"
+              >
+                <strong>{challenge.shortLabel}</strong>
+                <span>{challenge.description}</span>
+              </button>
             ))}
           </div>
-          <button className="secondary-action inline" type="button" onClick={() => addListItem('goals')}>
-            <Plus size={18} />
-            Add Goal
-          </button>
         </section>
 
-        <section className="panel onboarding-panel">
-          <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Productivity" action={`${setup.standards.filter(Boolean).length} tasks`} />
-          <div className="onboarding-list">
-            {setup.standards.map((standard, index) => (
-              <label key={`standard-${index}`}>
-                <span>Task {index + 1}</span>
-                <div>
-                  <input
-                    className="text-field"
-                    placeholder="Task they can prove today"
-                    value={standard}
-                    onChange={(event) => updateList('standards', index, event.target.value)}
-                  />
-                  {setup.standards.length > 1 && (
-                    <button className="remove-standard" type="button" onClick={() => removeListItem('standards', index)}>
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </label>
-            ))}
+        {setup.currentChallenge && (
+          <section className="panel onboarding-panel onboarding-preview-panel">
+            <PanelTitle icon={<Sparkles size={18} />} title="Your first rep" action="Step 3" />
+            <div className="start-preview-card">
+              <span>Today’s Training</span>
+              <strong>{athleteChallengeById(setup.currentChallenge).lessonTitle}</strong>
+              <p>{athleteChallengeById(setup.currentChallenge).focus}</p>
+              <em>{athleteChallengeById(setup.currentChallenge).standard}</em>
+            </div>
+          </section>
+        )}
+
+        <section className="panel onboarding-panel optional-onboarding-panel">
+          <PanelTitle icon={<Users size={18} />} title="Family access" action="Optional" />
+          <div className="optional-link-copy">
+            <strong>Already have a parent code?</strong>
+            <span>You can add it now or later in Settings.</span>
           </div>
-          <button className="secondary-action inline" type="button" onClick={() => addListItem('standards')}>
-            <Plus size={18} />
-            Add Task
-          </button>
-        </section>
-
-        <section className="panel onboarding-panel">
-          <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Optional" />
-          <label className="journal-label" htmlFor="onboarding-parent">
-            Parent email or phone
-          </label>
           <input
             id="onboarding-parent"
             className="text-field"
-            placeholder="Add parent contact"
+            placeholder="Optional family code"
             value={setup.parentContact}
             onChange={(event) => updateField('parentContact', event.target.value)}
           />
@@ -4083,6 +4599,8 @@ function OnboardingScreen({ completeOnboarding }) {
 
 function HomeScreen({
   athleteScore,
+  athleteProfile,
+  athleteStartComplete,
   awardPoints,
   celebrate,
   completion,
@@ -4099,6 +4617,7 @@ function HomeScreen({
   setJournalType,
   setScores,
   setStandards,
+  setAthleteStartComplete,
   setLastSubmittedDate,
   setStreakCount,
   setReadinessHistory,
@@ -4273,143 +4792,50 @@ function HomeScreen({
     setTab('journal');
   }
 
+  if (!athleteStartComplete) {
+    return (
+      <AthleteStartToday
+        athleteProfile={athleteProfile}
+        celebrate={celebrate}
+        lesson={lesson}
+        plans={plans}
+        planProgress={planProgress}
+        setAthleteStartComplete={setAthleteStartComplete}
+        setJournal={setJournal}
+        setJournalType={setJournalType}
+        setStandards={setStandards}
+        setTab={setTab}
+      />
+    );
+  }
+
   return (
     <>
-      <section className="panel daily-deposit-panel">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
-        {lesson.title && <h2>{lesson.title}</h2>}
-        <p>{lesson.body}</p>
-      </section>
-
-      <section className="panel today-focus-panel">
-        <PanelTitle icon={<Target size={18} />} title="Today's Focus" />
-        <div className="focus-question">
+      <section className="panel daily-deposit-panel today-page-hero">
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" action={submittedToday ? 'Locked in' : 'Start here'} />
+        <div className="today-hero-copy">
+          <span>Mindset rep</span>
+          {lesson.title && <h2>{lesson.title}</h2>}
+          <p>{lesson.body}</p>
+        </div>
+        <div className="today-focus-callout">
+          <span>Today’s focus</span>
           <strong>{todaysFocus}</strong>
         </div>
-      </section>
-
-      <section className="panel progress-snapshot">
-        <PanelTitle icon={<BarChart3 size={18} />} title="Progress Snapshot" />
-        <div className="progress-scoreboard">
+        <div className="today-command-grid" aria-label="Today’s snapshot">
           <span>
-            <strong>{completion}%</strong>
-            Productivity today
+            <strong>{completedStandards.length}/{standards.length}</strong>
+            Productivity
+          </span>
+          <span>
+            <strong>{athleteScore}</strong>
+            Score
           </span>
           <span>
             <strong>{streakCount}</strong>
-            Day streak
-          </span>
-          <span>
-            <strong>{averageGoalProgress}%</strong>
-            Goal progress
-          </span>
-          <span>
-            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
-            Plans completed
+            Streak
           </span>
         </div>
-        {focusGoal && (
-          <div className="goal-progress-callout">
-            <span>Current goal</span>
-            <strong>{focusGoal.value}</strong>
-            <Progress value={focusGoal.progress} />
-          </div>
-        )}
-      </section>
-
-      <section className="panel athlete-score-panel">
-        <PanelTitle icon={<Star size={18} />} title="Complete Athlete Score" action={`Today +${todayPoints}`} />
-        <div className="score-hero">
-          <strong>{athleteScore}</strong>
-          <span>Total points earned through productivity, goals, plans, and reflection.</span>
-          <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
-            <CircleHelp size={15} />
-            How points work
-          </button>
-        </div>
-        <div className="point-event-list">
-          {recentPointEvents.length === 0 ? (
-            <p>No points yet. Complete today’s work to start building your score.</p>
-          ) : (
-            recentPointEvents.map((entry) => (
-              <span key={entry.id}>
-                <strong>+{entry.points}</strong>
-                {entry.label}
-              </span>
-            ))
-          )}
-        </div>
-      </section>
-
-      {scoreInfoOpen && (
-        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
-          <section
-            aria-label="How points are calculated"
-            aria-modal="true"
-            className="bottom-sheet score-info-sheet"
-            role="dialog"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="sheet-handle" aria-hidden="true" />
-            <div className="sheet-head">
-              <div>
-                <span>Complete Athlete Score</span>
-                <strong>How points work</strong>
-              </div>
-              <button className="icon-button sheet-close" onClick={() => setScoreInfoOpen(false)} type="button" aria-label="Close points explanation">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="points-breakdown">
-              <span>
-                <strong>+25</strong>
-                Full productivity day completed
-              </span>
-              <span>
-                <strong>+5</strong>
-                Streak bonus per day, up to +25
-              </span>
-              <span>
-                <strong>+15</strong>
-                Reflection saved
-              </span>
-              <span>
-                <strong>+10</strong>
-                Goal added
-              </span>
-              <span>
-                <strong>+150</strong>
-                Goal completed
-              </span>
-              <span>
-                <strong>+10</strong>
-                Plan lesson completed
-              </span>
-              <span>
-                <strong>+100</strong>
-                Full plan series completed
-              </span>
-            </div>
-            <p className="score-info-note">Your score is the total proof you have stacked through daily action, reflection, goals, and performance plans.</p>
-          </section>
-        </div>
-      )}
-
-      <section className="panel readiness-panel">
-        <PanelTitle icon={<LineChart size={18} />} title="Morning Readiness Check-In" />
-        {Object.entries(scores).map(([key, value]) => (
-          <label className="slider-row" key={key}>
-            <span>{key}</span>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              value={value}
-              onChange={(event) => setScores((current) => ({ ...current, [key]: Number(event.target.value) }))}
-            />
-            <strong>{value}</strong>
-          </label>
-        ))}
       </section>
 
       <section className="panel daily-standards-panel">
@@ -4559,6 +4985,113 @@ function HomeScreen({
         </div>
       </section>
 
+      <section className="panel athlete-score-panel">
+        <PanelTitle icon={<Star size={18} />} title="Complete Athlete Score" action={`Today +${todayPoints}`} />
+        <div className="score-hero">
+          <strong>{athleteScore}</strong>
+          <span>Total points earned through productivity, goals, plans, and reflection.</span>
+          <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
+            <CircleHelp size={15} />
+            How points work
+          </button>
+        </div>
+        <div className="point-event-list">
+          {recentPointEvents.length === 0 ? (
+            <p>No points yet. Complete today’s work to start building your score.</p>
+          ) : (
+            recentPointEvents.map((entry) => (
+              <span key={entry.id}>
+                <strong>+{entry.points}</strong>
+                {entry.label}
+              </span>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="panel progress-snapshot">
+        <PanelTitle icon={<BarChart3 size={18} />} title="Progress Snapshot" />
+        <div className="progress-scoreboard">
+          <span>
+            <strong>{completion}%</strong>
+            Productivity today
+          </span>
+          <span>
+            <strong>{streakCount}</strong>
+            Day streak
+          </span>
+          <span>
+            <strong>{averageGoalProgress}%</strong>
+            Goal progress
+          </span>
+          <span>
+            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
+            Plans completed
+          </span>
+        </div>
+        {focusGoal && (
+          <div className="goal-progress-callout">
+            <span>Current goal</span>
+            <strong>{focusGoal.value}</strong>
+            <Progress value={focusGoal.progress} />
+          </div>
+        )}
+      </section>
+
+      {scoreInfoOpen && (
+        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
+          <section
+            aria-label="How points are calculated"
+            aria-modal="true"
+            className="bottom-sheet score-info-sheet"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-head">
+              <div>
+                <span>Complete Athlete Score</span>
+                <strong>How points work</strong>
+              </div>
+              <button className="icon-button sheet-close" onClick={() => setScoreInfoOpen(false)} type="button" aria-label="Close points explanation">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="points-breakdown">
+              <span>
+                <strong>+25</strong>
+                Full productivity day completed
+              </span>
+              <span>
+                <strong>+5</strong>
+                Streak bonus per day, up to +25
+              </span>
+              <span>
+                <strong>+15</strong>
+                Reflection saved
+              </span>
+              <span>
+                <strong>+10</strong>
+                Goal added
+              </span>
+              <span>
+                <strong>+150</strong>
+                Goal completed
+              </span>
+              <span>
+                <strong>+10</strong>
+                Plan lesson completed
+              </span>
+              <span>
+                <strong>+100</strong>
+                Full plan series completed
+              </span>
+            </div>
+            <p className="score-info-note">Your score is the total proof you have stacked through daily action, reflection, goals, and performance plans.</p>
+          </section>
+        </div>
+      )}
+
       {standardsHistoryOpen && (
         <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setStandardsHistoryOpen(false)}>
           <section
@@ -4608,6 +5141,105 @@ function HomeScreen({
       )}
 
     </>
+  );
+}
+
+function AthleteStartToday({
+  athleteProfile,
+  celebrate,
+  lesson,
+  plans,
+  planProgress,
+  setAthleteStartComplete,
+  setJournal,
+  setJournalType,
+  setStandards,
+  setTab
+}) {
+  const challenge = athleteChallengeById(athleteProfile?.currentChallenge);
+  const planLibrary = buildPlanLibrary(sequencedPlanAccess(plans, planProgress, todayKey()));
+  const recommendedSeries = planLibrary.find((series) => {
+    const text = `${series.title} ${series.tagline} ${series.category}`.toLowerCase();
+    return challenge.planKeywords.some((keyword) => text.includes(keyword));
+  }) ?? planLibrary.find((series) => series.openCount > 0) ?? planLibrary[0];
+
+  function markStartComplete() {
+    setStandards((current) => {
+      if (!current.length) {
+        return [{ id: Date.now(), label: challenge.standard, done: true, goalId: null }];
+      }
+      return current.map((standard, index) => (index === 0 ? { ...standard, done: true } : standard));
+    });
+    setJournalType('Daily Reflection');
+    setJournal(
+      `Today’s Training: ${challenge.lessonTitle}\nFocus question: ${challenge.focus}\nOne action: ${challenge.standard}\nWhat I need to remember: `
+    );
+    setAthleteStartComplete(true);
+    localStorage.setItem(athleteStartStorageKey, 'true');
+    celebrate('First rep complete. Your full dashboard is ready.');
+  }
+
+  function openRecommendedPlan() {
+    setAthleteStartComplete(true);
+    localStorage.setItem(athleteStartStorageKey, 'true');
+    setTab('plans');
+  }
+
+  function goStraightHome() {
+    setAthleteStartComplete(true);
+    localStorage.setItem(athleteStartStorageKey, 'true');
+    setTab('home');
+    celebrate('Home screen is ready when you are.');
+  }
+
+  return (
+    <section className="athlete-start-today" aria-label="Start today">
+      <div className="start-today-hero">
+        <span>Start Here</span>
+        <h2>Today’s Training</h2>
+        <p>{athleteProfile?.sport ? `${athleteProfile.sport} mindset rep` : 'One mindset rep. One action. Then go work.'}</p>
+      </div>
+
+      <article className="start-today-card">
+        <div className="start-today-label">
+          <Brain size={17} />
+          <span>{challenge.title}</span>
+        </div>
+        <strong>{challenge.lessonTitle || lesson?.title}</strong>
+        <p>{challenge.lessonBody || lesson?.body}</p>
+        <div className="start-focus-box">
+          <span>Focus question</span>
+          <b>{challenge.focus}</b>
+        </div>
+      </article>
+
+      <article className="start-action-card">
+        <div>
+          <span>One action</span>
+          <strong>{challenge.standard}</strong>
+        </div>
+        <BadgeCheck size={24} />
+      </article>
+
+      {recommendedSeries && (
+        <button className="recommended-start-plan has-cover" onClick={openRecommendedPlan} style={{ '--plan-cover': `url(${recommendedSeries.thumbnailImage})`, '--plan-cover-position': recommendedSeries.coverPosition }} type="button">
+          <div className="plan-cover-thumb" aria-hidden="true" />
+          <div>
+            <span>Recommended plan</span>
+            <strong>{recommendedSeries.title}</strong>
+            <em>{nextPlanLabel(recommendedSeries)}</em>
+          </div>
+        </button>
+      )}
+
+      <button className="primary-action full start-today-complete" onClick={markStartComplete} type="button">
+        <Check size={18} />
+        Mark Complete
+      </button>
+      <button className="ghost-action full start-home-skip" onClick={goStraightHome} type="button">
+        Go to Home
+      </button>
+    </section>
   );
 }
 
@@ -4704,7 +5336,7 @@ function GoalsScreen({
     <>
       <section className="panel goal-lead">
         <PanelTitle icon={<Target size={18} />} title="Goal System" action={`${goals.length} goals`} />
-        <p>Your goals show where you are going. Today’s productivity proves you are becoming that athlete.</p>
+        <p>Goals give your effort a direction, but it’s discipline to constantly pursue them that gives you momentum.</p>
         <div className="goal-reminder">
           <strong>How it works</strong>
           <span>Link daily productivity to goals. When you complete those items and lock in the day, that goal earns progress.</span>
@@ -6129,6 +6761,82 @@ function CoachScreen({
   );
 }
 
+function TrialPaywallScreen({
+  restorePremiumSubscription,
+  role,
+  skipTrialPrompt,
+  startPremiumSubscription,
+  subscription
+}) {
+  const product = subscription.package;
+  const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
+  const canPurchase = subscription.configured && subscription.native && product && !subscription.active;
+  const canRestore = subscription.configured && subscription.native;
+  const roleLine = role === 'parent'
+    ? 'Support your athlete with every parent guide and the full plan library.'
+    : 'Train your mindset with every plan, daily tools, and focused coach support.';
+
+  return (
+    <main className="trial-gate-shell">
+      <section className="trial-gate-card">
+        <span className="trial-kicker">7-day free trial</span>
+        <h1>Unlock The Complete Athlete</h1>
+        <p>{roleLine}</p>
+        <div className="trial-benefit-list">
+          <span>
+            <BookOpen size={18} />
+            Full performance plan library
+          </span>
+          <span>
+            <Users size={18} />
+            Parent Corner access
+          </span>
+          <span>
+            <BadgeCheck size={18} />
+            Daily Deposit and Today tools
+          </span>
+          <span>
+            <Goal size={18} />
+            Goals, journal, and family access
+          </span>
+          <span>
+            <MessageCircle size={18} />
+            Limited mindset coach messages
+          </span>
+        </div>
+        <div className="trial-price-card">
+          <span>Try everything first</span>
+          <strong>{priceLine}</strong>
+          <em>Cancel anytime through your Apple subscription settings.</em>
+        </div>
+        {subscription.message && <p className="inline-note">{subscription.message}</p>}
+        <div className="trial-actions">
+          <button
+            className="primary-action full"
+            disabled={!canPurchase || subscription.loading}
+            onClick={startPremiumSubscription}
+            type="button"
+          >
+            <Sparkles size={18} />
+            {subscription.loading ? 'Checking...' : 'Start Free Trial'}
+          </button>
+          <button
+            className="secondary-action inline"
+            disabled={!canRestore || subscription.loading}
+            onClick={restorePremiumSubscription}
+            type="button"
+          >
+            Restore Purchase
+          </button>
+          <button className="trial-skip-button" onClick={skipTrialPrompt} type="button">
+            Not now. Continue in free mode.
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function PremiumAccessPanel({
   compact = true,
   restorePremiumSubscription,
@@ -6137,7 +6845,7 @@ function PremiumAccessPanel({
 }) {
   const product = subscription.package;
   const coveredByParent = subscription.active && subscription.accessSource === 'parent';
-  const statusLabel = subscription.active ? (coveredByParent ? 'Parent covered' : 'Active') : revenueCatConfig.premiumRequired ? 'Required' : 'Testing';
+  const statusLabel = subscription.active ? (coveredByParent ? 'Parent covered' : 'Active') : 'Required';
   const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
   const canPurchase = subscription.configured && subscription.native && product && !subscription.active;
   const canRestore = subscription.configured && subscription.native;
@@ -6174,7 +6882,7 @@ function PremiumAccessPanel({
           Restore Purchase
         </button>
       </div>
-      {!subscription.native && (
+      {!subscription.native && !subscription.message && (
         <p className="privacy-note">Purchases are handled by Apple inside the iPhone app.</p>
       )}
     </section>
@@ -6796,18 +7504,22 @@ function ParentDashboard({
   parentLinkFeedback,
   parentGuides,
   parentMessage,
+  premiumAccessAllowed,
   planProgress,
   plans,
   pointsLedger,
   privacySettings,
   readinessHistory,
   requestBrowserNotifications,
+  restorePremiumSubscription,
   setParentAccessDraft,
   setParentLinkFeedback,
   setPlanProgress,
+  startPremiumSubscription,
   standardsCompleted,
   standardsHistory,
   standardsTotal,
+  subscription,
   streakCount,
   updateNotificationPreference
 }) {
@@ -6982,10 +7694,19 @@ function ParentDashboard({
       )}
 
       {parentTab === 'parent-corner' && (
-      <>
-      <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
-      <ParentPlanLibrary plans={plans} planProgress={planProgress} setPlanProgress={setPlanProgress} notifyUser={notifyUser} />
-      </>
+        premiumAccessAllowed ? (
+          <>
+            <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
+            <ParentPlanLibrary plans={plans} planProgress={planProgress} setPlanProgress={setPlanProgress} notifyUser={notifyUser} />
+          </>
+        ) : (
+          <PremiumAccessPanel
+            compact={false}
+            restorePremiumSubscription={restorePremiumSubscription}
+            startPremiumSubscription={startPremiumSubscription}
+            subscription={subscription}
+          />
+        )
       )}
 
       {parentTab === 'overview' && privacySettings.goalsVisible && (
@@ -7121,7 +7842,6 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
         >
           <div className="plan-cover" aria-hidden="true" />
           <div className="plan-card-copy">
-            <span>{latestGuide.category}</span>
             <strong>{latestGuide.seriesTitle}</strong>
             <em>{latestGuide.completedAt ? `Completed ${latestGuide.completedAt}` : latestGuide.title}</em>
             <p>{latestGuide.promise}</p>
@@ -7133,7 +7853,6 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
         <PanelTitle icon={<Target size={18} />} title="Browse Parent Content" action={`${parentContent.length} shown`} />
         <div className="plan-category-strip" aria-label="Parent content categories">
           <button className="active" type="button">All</button>
-          <button type="button">Home Support</button>
         </div>
         <div className="plan-list">
           {parentContent.map((item) => (
@@ -7145,7 +7864,6 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
               type="button"
             >
               <div className="plan-cover-thumb" aria-hidden="true" />
-              <span>{item.category}</span>
               <strong>{item.seriesTitle}</strong>
               <p>{item.promise}</p>
               <em>{item.completedAt ? `Completed ${item.completedAt}` : item.date}</em>
@@ -7340,7 +8058,7 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
 
 function BottomNav({ tab, setTab }) {
   const items = [
-    ['home', Home, 'home'],
+    ['home', Home, 'today'],
     ['journal', PenLine, 'goals'],
     ['plans', BookOpen, 'plans'],
     ['coach', MessageCircle, 'coach'],
