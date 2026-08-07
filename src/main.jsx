@@ -2531,7 +2531,7 @@ function App() {
       : subscription.message
   };
   const premiumAccessAllowed = !effectiveSubscription.configured || effectiveSubscription.active;
-  const planAccessAllowed = premiumAccessAllowed || effectiveSubscription.activeTrial;
+  const trialPlanMode = !premiumAccessAllowed || effectiveSubscription.activeTrial || localTrialAccessActive;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
   const athleteOnboardingPreview = typeof window !== 'undefined'
@@ -4143,24 +4143,15 @@ function App() {
         />
       ),
       plans: (
-        planAccessAllowed ? (
-          <PlansScreen
-            plans={plans}
-            planProgress={planProgress}
-            trialPlanMode={effectiveSubscription.activeTrial || localTrialAccessActive}
-            setPlanProgress={setPlanProgress}
-            awardPoints={awardPoints}
-            notifyUser={notifyUser}
-            persistPlanCompletion={persistPlanCompletion}
-          />
-        ) : (
-          <PremiumAccessPanel
-            compact={false}
-            restorePremiumSubscription={restorePremiumSubscription}
-            startPremiumSubscription={startPremiumSubscription}
-            subscription={effectiveSubscription}
-          />
-        )
+        <PlansScreen
+          plans={plans}
+          planProgress={planProgress}
+          trialPlanMode={trialPlanMode}
+          setPlanProgress={setPlanProgress}
+          awardPoints={awardPoints}
+          notifyUser={notifyUser}
+          persistPlanCompletion={persistPlanCompletion}
+        />
       ),
       journal: (
         <JournalScreen
@@ -4254,8 +4245,8 @@ function App() {
     parentGuides,
     parentTab,
     parentMessage,
-    planAccessAllowed,
     premiumAccessAllowed,
+    trialPlanMode,
     planProgress,
     plans,
     recentPointEvents,
@@ -6870,7 +6861,6 @@ function TrialPaywallScreen({
 }) {
   const product = subscription.package;
   const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
-  const canPurchase = subscription.configured && subscription.native && !subscription.active;
   const canRestore = subscription.configured && subscription.native;
   const roleLine = role === 'parent'
     ? 'Support your athlete with every parent guide and the full plan library.'
@@ -6913,7 +6903,7 @@ function TrialPaywallScreen({
         <div className="trial-actions">
           <button
             className="primary-action full"
-            disabled={!canPurchase || subscription.loading}
+            disabled={subscription.loading}
             onClick={startPremiumSubscription}
             type="button"
           >
@@ -6947,7 +6937,6 @@ function PremiumAccessPanel({
   const coveredByParent = subscription.active && subscription.accessSource === 'parent';
   const statusLabel = subscription.active ? (coveredByParent ? 'Parent covered' : 'Active') : 'Required';
   const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
-  const canPurchase = subscription.configured && subscription.native && !subscription.active;
   const canRestore = subscription.configured && subscription.native;
 
   return (
@@ -6965,7 +6954,7 @@ function PremiumAccessPanel({
         {!subscription.active && (
           <button
             className="primary-action full"
-            disabled={!canPurchase || subscription.loading}
+            disabled={subscription.loading}
             onClick={startPremiumSubscription}
             type="button"
           >
