@@ -2523,6 +2523,7 @@ function App() {
       : subscription.message
   };
   const premiumAccessAllowed = !effectiveSubscription.configured || effectiveSubscription.active;
+  const planAccessAllowed = premiumAccessAllowed || effectiveSubscription.activeTrial;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
   const athleteOnboardingPreview = typeof window !== 'undefined'
@@ -4120,7 +4121,7 @@ function App() {
         />
       ),
       plans: (
-        premiumAccessAllowed ? (
+        planAccessAllowed ? (
           <PlansScreen
             plans={plans}
             planProgress={planProgress}
@@ -4230,6 +4231,7 @@ function App() {
     parentGuides,
     parentTab,
     parentMessage,
+    planAccessAllowed,
     premiumAccessAllowed,
     planProgress,
     plans,
