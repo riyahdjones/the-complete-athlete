@@ -3799,9 +3799,10 @@ function App() {
 
   function completeOnboarding(setup) {
     const selectedChallenge = athleteChallengeById(setup.currentChallenge);
+    const accountName = effectiveSession?.name || athleteProfile.name || 'Athlete';
     const nextProfile = {
       ...athleteProfile,
-      name: setup.name,
+      name: accountName,
       sport: setup.sport,
       age: setup.age,
       location: setup.location,
@@ -4555,7 +4556,6 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
 
 function OnboardingScreen({ completeOnboarding }) {
   const [setup, setSetup] = useState({
-    name: '',
     sport: '',
     age: '',
     location: '',
@@ -4575,14 +4575,13 @@ function OnboardingScreen({ completeOnboarding }) {
     event.preventDefault();
     const cleanSetup = {
       ...setup,
-      name: setup.name.trim(),
       sport: setup.sport.trim(),
       goals: setup.goals.map((goal) => goal.trim()).filter(Boolean),
       standards: setup.standards.map((standard) => standard.trim()).filter(Boolean)
     };
 
-    if (!cleanSetup.name.trim() || !cleanSetup.sport.trim()) {
-      setMessage('Add the athlete name and sport to start.');
+    if (!cleanSetup.sport.trim()) {
+      setMessage('Add the athlete sport to start.');
       return;
     }
 
@@ -4606,15 +4605,6 @@ function OnboardingScreen({ completeOnboarding }) {
         <section className="panel onboarding-panel">
           <PanelTitle icon={<UserRound size={18} />} title="Athlete" action="Step 1" />
           <div className="form-grid">
-            <label>
-              <span>Name</span>
-              <input
-                className="text-field"
-                placeholder="Athlete name"
-                value={setup.name}
-                onChange={(event) => updateField('name', event.target.value)}
-              />
-            </label>
             <label>
               <span>Sport</span>
               <input
