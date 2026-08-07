@@ -767,11 +767,24 @@ function loadAthleteStartComplete() {
   }
 }
 
-function loadTrialPromptDismissed() {
+function scopedTrialPromptStorageKey(userId) {
+  return `${trialPromptStorageKey}:${String(userId || 'guest')}`;
+}
+
+function loadTrialPromptDismissed(userId) {
   try {
-    return localStorage.getItem(trialPromptStorageKey) === 'true';
+    if (!userId) return false;
+    return localStorage.getItem(scopedTrialPromptStorageKey(userId)) === 'true';
   } catch {
     return false;
+  }
+}
+
+function saveTrialPromptDismissed(userId) {
+  try {
+    if (userId) localStorage.setItem(scopedTrialPromptStorageKey(userId), 'true');
+  } catch {
+    // Ignore storage failures so purchase and restore flows can finish.
   }
 }
 
@@ -2443,7 +2456,7 @@ function App() {
     package: null,
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
   });
-  const [trialPromptDismissed, setTrialPromptDismissed] = useState(loadTrialPromptDismissed);
+  const [trialPromptDismissed, setTrialPromptDismissed] = useState(false);
   const [backendPremiumAccess, setBackendPremiumAccess] = useState({
     hasAccess: false,
     source: 'none',
@@ -3845,6 +3858,10 @@ function App() {
   }, [effectiveSession, view]);
 
   useEffect(() => {
+    setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
+  }, [effectiveSession?.id]);
+
+  useEffect(() => {
     if (!effectiveSession?.id) return;
     let active = true;
 
@@ -3924,7 +3941,7 @@ function App() {
       }));
       if (status.active) {
         setTrialPromptDismissed(true);
-        localStorage.setItem(trialPromptStorageKey, 'true');
+        saveTrialPromptDismissed(effectiveSession?.id);
         notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
       }
     } catch (error) {
@@ -3939,7 +3956,7 @@ function App() {
 
   function skipTrialPrompt() {
     setTrialPromptDismissed(true);
-    localStorage.setItem(trialPromptStorageKey, 'true');
+    saveTrialPromptDismissed(effectiveSession?.id);
     notifyUser('Free mode started', 'You can start the 7-day trial any time from Profile.', 'info', {
       type: 'points',
       id: `trial-skipped-${Date.now()}`
@@ -3961,7 +3978,7 @@ function App() {
       }));
       if (status.active) {
         setTrialPromptDismissed(true);
-        localStorage.setItem(trialPromptStorageKey, 'true');
+        saveTrialPromptDismissed(effectiveSession?.id);
       }
     } catch (error) {
       setSubscription((current) => ({
