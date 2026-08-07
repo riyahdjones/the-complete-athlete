@@ -188,6 +188,7 @@ const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const athleteStartStorageKey = 'the-complete-athlete-start-today-complete';
 const trialPromptStorageKey = 'the-complete-athlete-trial-prompt-dismissed';
+const trialAccessStorageKey = 'the-complete-athlete-trial-access-expires';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
 const notificationPrefsStorageKey = 'the-ninety-percent-notification-preferences';
@@ -785,6 +786,30 @@ function saveTrialPromptDismissed(userId) {
     if (userId) localStorage.setItem(scopedTrialPromptStorageKey(userId), 'true');
   } catch {
     // Ignore storage failures so purchase and restore flows can finish.
+  }
+}
+
+function scopedTrialAccessStorageKey(userId) {
+  return `${trialAccessStorageKey}:${String(userId || 'guest')}`;
+}
+
+function loadTrialAccessActive(userId) {
+  try {
+    if (!userId) return false;
+    const expiresAt = localStorage.getItem(scopedTrialAccessStorageKey(userId));
+    return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now());
+  } catch {
+    return false;
+  }
+}
+
+function saveTrialAccessWindow(userId, expirationDate) {
+  try {
+    if (!userId) return;
+    const fallbackExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    localStorage.setItem(scopedTrialAccessStorageKey(userId), expirationDate || fallbackExpiresAt);
+  } catch {
+    // Trial access still depends on RevenueCat/backend when storage is unavailable.
   }
 }
 
@@ -2457,8 +2482,10 @@ function App() {
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
   });
   const [trialPromptDismissed, setTrialPromptDismissed] = useState(false);
+  const [localTrialAccessActive, setLocalTrialAccessActive] = useState(false);
   const [backendPremiumAccess, setBackendPremiumAccess] = useState({
     hasAccess: false,
+    activeTrial: false,
     source: 'none',
     sponsorUserId: null,
     expiresAt: ''
@@ -2485,7 +2512,7 @@ function App() {
   const effectiveSubscription = {
     ...subscription,
     active: subscription.active || backendPremiumAccess.hasAccess,
-    activeTrial: Boolean(subscription.activeTrial),
+    activeTrial: Boolean(subscription.activeTrial || backendPremiumAccess.activeTrial || localTrialAccessActive),
     accessSource: backendPremiumAccess.source,
     sponsorUserId: backendPremiumAccess.sponsorUserId,
     expirationDate: subscription.expirationDate || backendPremiumAccess.expiresAt,
@@ -3859,6 +3886,7 @@ function App() {
 
   useEffect(() => {
     setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
+    setLocalTrialAccessActive(loadTrialAccessActive(effectiveSession?.id));
   }, [effectiveSession?.id]);
 
   useEffect(() => {
@@ -3898,6 +3926,7 @@ function App() {
     if (!isSupabaseConfigured || !effectiveSession?.id || String(effectiveSession.id).startsWith('demo-')) {
       setBackendPremiumAccess({
         hasAccess: false,
+        activeTrial: false,
         source: 'none',
         sponsorUserId: null,
         expiresAt: ''
@@ -3908,11 +3937,21 @@ function App() {
     let active = true;
 
     async function loadBackendPremiumAccess() {
-      const { data, error } = await supabase.rpc('user_has_premium_access', { target_user_id: effectiveSession.id });
+      const [{ data, error }, subscriptionResult] = await Promise.all([
+        supabase.rpc('user_has_premium_access', { target_user_id: effectiveSession.id }),
+        supabase
+          .from('user_subscriptions')
+          .select('status, expires_at')
+          .eq('user_id', effectiveSession.id)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+      ]);
       if (!active) return;
       const access = Array.isArray(data) ? data[0] : data;
+      const subscriptionRow = Array.isArray(subscriptionResult.data) ? subscriptionResult.data[0] : null;
       setBackendPremiumAccess({
         hasAccess: !error && Boolean(access?.has_access),
+        activeTrial: subscriptionRow?.status === 'trialing',
         source: access?.access_source || 'none',
         sponsorUserId: access?.sponsor_user_id || null,
         expiresAt: access?.expires_at || ''
@@ -3942,6 +3981,9 @@ function App() {
       if (status.active) {
         setTrialPromptDismissed(true);
         saveTrialPromptDismissed(effectiveSession?.id);
+        saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
+        setLocalTrialAccessActive(true);
+        setPremiumAccessRefreshKey((current) => current + 1);
         notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
       }
     } catch (error) {
@@ -3979,6 +4021,11 @@ function App() {
       if (status.active) {
         setTrialPromptDismissed(true);
         saveTrialPromptDismissed(effectiveSession?.id);
+        if (status.activeTrial) {
+          saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
+          setLocalTrialAccessActive(true);
+        }
+        setPremiumAccessRefreshKey((current) => current + 1);
       }
     } catch (error) {
       setSubscription((current) => ({
