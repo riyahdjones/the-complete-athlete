@@ -3980,6 +3980,7 @@ function App() {
     setLocalTrialAccessActive(true);
     setTrialPromptDismissed(true);
     saveTrialPromptDismissed(effectiveSession?.id);
+    if (effectiveSession?.role === 'athlete') setTab('plans');
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
     try {
       const status = await purchaseRevenueCatSubscription();
@@ -3997,18 +3998,24 @@ function App() {
         saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
         setLocalTrialAccessActive(true);
+        if (effectiveSession?.role === 'athlete') setTab('plans');
         setPremiumAccessRefreshKey((current) => current + 1);
         notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
       }
     } catch (error) {
       const cancelled = Boolean(error?.userCancelled);
-      setLocalTrialAccessActive(false);
-      clearTrialAccessWindow(effectiveSession?.id);
-      setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
+      if (cancelled) {
+        setLocalTrialAccessActive(false);
+        clearTrialAccessWindow(effectiveSession?.id);
+        setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
+        setTab('home');
+      }
       setSubscription((current) => ({
         ...current,
         loading: false,
-        message: cancelled ? 'Purchase canceled.' : error?.message || 'Purchase could not be completed yet.'
+        message: cancelled
+          ? 'Purchase canceled.'
+          : 'Trial plan access is open while subscription setup is being finalized.'
       }));
     }
   }
@@ -4040,6 +4047,7 @@ function App() {
         saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
         setLocalTrialAccessActive(true);
+        if (effectiveSession?.role === 'athlete') setTab('plans');
         setPremiumAccessRefreshKey((current) => current + 1);
       }
     } catch (error) {
