@@ -813,6 +813,14 @@ function saveTrialAccessWindow(userId, expirationDate) {
   }
 }
 
+function clearTrialAccessWindow(userId) {
+  try {
+    if (userId) localStorage.removeItem(scopedTrialAccessStorageKey(userId));
+  } catch {
+    // Ignore storage failures during purchase cancellation.
+  }
+}
+
 const goalsSeed = [
   { id: 1, label: 'Dream Goal', value: 'Earn a varsity leadership role', progress: 42 },
   { id: 2, label: 'Season Goal', value: 'Become a dependable fourth-quarter player', progress: 64 },
@@ -3968,6 +3976,10 @@ function App() {
   }, [effectiveSession?.id, premiumAccessRefreshKey]);
 
   async function startPremiumSubscription() {
+    saveTrialAccessWindow(effectiveSession?.id);
+    setLocalTrialAccessActive(true);
+    setTrialPromptDismissed(true);
+    saveTrialPromptDismissed(effectiveSession?.id);
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
     try {
       const status = await purchaseRevenueCatSubscription();
@@ -3990,6 +4002,9 @@ function App() {
       }
     } catch (error) {
       const cancelled = Boolean(error?.userCancelled);
+      setLocalTrialAccessActive(false);
+      clearTrialAccessWindow(effectiveSession?.id);
+      setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
       setSubscription((current) => ({
         ...current,
         loading: false,
@@ -4023,10 +4038,8 @@ function App() {
       if (status.active) {
         setTrialPromptDismissed(true);
         saveTrialPromptDismissed(effectiveSession?.id);
-        if (status.activeTrial) {
-          saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
-          setLocalTrialAccessActive(true);
-        }
+        saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
+        setLocalTrialAccessActive(true);
         setPremiumAccessRefreshKey((current) => current + 1);
       }
     } catch (error) {
@@ -4126,7 +4139,7 @@ function App() {
           <PlansScreen
             plans={plans}
             planProgress={planProgress}
-            trialPlanMode={effectiveSubscription.activeTrial}
+            trialPlanMode={effectiveSubscription.activeTrial || localTrialAccessActive}
             setPlanProgress={setPlanProgress}
             awardPoints={awardPoints}
             notifyUser={notifyUser}
@@ -4217,6 +4230,7 @@ function App() {
     journalGoalId,
     journalType,
     lessonLibrary,
+    localTrialAccessActive,
     lastSubmittedDate,
     activeCoachSessionId,
     athleteStartComplete,
