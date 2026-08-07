@@ -684,6 +684,30 @@ function sequencedPlanAccess(plans, planProgress, date = todayKey()) {
   });
 }
 
+function trialPlanAccess(plans, planProgress) {
+  const sortedPlans = [...plans].sort((first, second) => (
+    planSeriesTitle(first).localeCompare(planSeriesTitle(second)) ||
+    planDayNumber(first) - planDayNumber(second) ||
+    String(first.title).localeCompare(String(second.title))
+  ));
+  const firstPlanBySeries = new Map();
+
+  sortedPlans.forEach((plan) => {
+    const series = planSeriesTitle(plan);
+    if (!firstPlanBySeries.has(series)) firstPlanBySeries.set(series, String(plan.id));
+  });
+
+  return sortedPlans.map((plan) => {
+    const dayOneOpen = firstPlanBySeries.get(planSeriesTitle(plan)) === String(plan.id);
+    return {
+      ...plan,
+      completedAt: planProgress[String(plan.id)] || '',
+      unlocked: dayOneOpen,
+      unlockDate: dayOneOpen ? '' : 'After trial upgrade'
+    };
+  });
+}
+
 function planSeriesCompletion(plans, planProgress) {
   const series = new Map();
   plans.forEach((plan) => {
@@ -2447,6 +2471,7 @@ function App() {
   const effectiveSubscription = {
     ...subscription,
     active: subscription.active || backendPremiumAccess.hasAccess,
+    activeTrial: subscription.activeTrial && subscription.active && !backendPremiumAccess.hasAccess,
     accessSource: backendPremiumAccess.source,
     sponsorUserId: backendPremiumAccess.sponsorUserId,
     expirationDate: subscription.expirationDate || backendPremiumAccess.expiresAt,
@@ -4032,6 +4057,7 @@ function App() {
           <PlansScreen
             plans={plans}
             planProgress={planProgress}
+            trialPlanMode={effectiveSubscription.activeTrial}
             setPlanProgress={setPlanProgress}
             awardPoints={awardPoints}
             notifyUser={notifyUser}
@@ -4233,7 +4259,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className={isAthleteHome ? 'top-greeting athlete-home-greeting' : 'top-greeting'}>
-              {isAthleteHome ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
+              {view === 'athlete' ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
             </p>
             {!isAthleteHome && (
               <h1>{view === 'athlete' ? screenTitles[tab] : 'Parent Dashboard'}</h1>
@@ -4812,9 +4838,8 @@ function HomeScreen({
   return (
     <>
       <section className="panel daily-deposit-panel today-page-hero">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" action={submittedToday ? 'Locked in' : 'Start here'} />
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" action={submittedToday ? 'Locked in' : ''} />
         <div className="today-hero-copy">
-          <span>Mindset rep</span>
           {lesson.title && <h2>{lesson.title}</h2>}
           <p>{lesson.body}</p>
         </div>
@@ -5477,10 +5502,12 @@ function GoalsScreen({
   );
 }
 
-function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion }) {
+function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion }) {
   const readOnly = !setPlanProgress;
   const today = todayKey();
-  const sequencedPlans = sequencedPlanAccess(plans, planProgress, today);
+  const sequencedPlans = trialPlanMode
+    ? trialPlanAccess(plans, planProgress)
+    : sequencedPlanAccess(plans, planProgress, today);
   const planLibrary = buildPlanLibrary(sequencedPlans);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -5559,9 +5586,11 @@ function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notify
           <button className="plan-back-button" onClick={() => setSelectedSeriesId('')} type="button">
             Back to Library
           </button>
-          <PanelTitle icon={<CalendarDays size={18} />} title={selectedSeries.title} action={`${completedCount}/${visiblePlans.length} done`} />
+          <PanelTitle icon={<CalendarDays size={18} />} title={selectedSeries.title} action={trialPlanMode ? 'Trial: Day 1 open' : `${completedCount}/${visiblePlans.length} done`} />
           <p>{selectedSeries.tagline}</p>
-          {lockedCount > 0 && <span>{lockedCount} lessons are waiting behind the completion flow.</span>}
+          {trialPlanMode
+            ? <span>Your trial opens Day 1 of every plan. The remaining days unlock with membership.</span>
+            : lockedCount > 0 && <span>{lockedCount} lessons are waiting behind the completion flow.</span>}
         </section>
 
         <div className="plan-reader-stack">
@@ -5575,6 +5604,8 @@ function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notify
                     ? `Completed ${plan.completedAt}`
                     : plan.unlocked
                       ? `${plan.challengeDay || `Day ${planDayNumber(plan) || planCurrentDay(plan)}`} of ${plan.challengeLength || 7}`
+                      : trialPlanMode
+                        ? 'Unlocks with membership'
                       : plan.unlockDate && plan.unlockDate > today
                         ? `Unlocks ${plan.unlockDate}`
                         : 'Complete the previous plan first'}
@@ -5587,7 +5618,7 @@ function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notify
               {!plan.unlocked && (
                 <div className="locked-message">
                   <LockKeyhole size={18} />
-                  <p>Finish the previous lesson, then come back the next day to unlock this one.</p>
+                  <p>{trialPlanMode ? 'Day 1 is open during the trial. Membership unlocks the rest of this plan.' : 'Finish the previous lesson, then come back the next day to unlock this one.'}</p>
                 </div>
               )}
               {plan.unlocked && !readOnly && (
@@ -5621,13 +5652,13 @@ function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notify
 
       {continueSeries && (
         <section className="panel continue-plan-panel">
-          <PanelTitle icon={<Sparkles size={18} />} title="Continue Training" action={`${continueSeries.completedCount}/${continueSeries.plans.length} done`} />
+          <PanelTitle icon={<Sparkles size={18} />} title="Continue Training" action={trialPlanMode ? 'Trial access' : `${continueSeries.completedCount}/${continueSeries.plans.length} done`} />
           <button className="continue-plan-card has-cover" onClick={() => setSelectedSeriesId(continueSeries.id)} style={{ '--plan-cover': `url(${continueSeries.coverImage})`, '--plan-cover-position': continueSeries.coverPosition }} type="button">
             <div className="plan-cover" aria-hidden="true" />
             <div className="plan-card-copy">
               <span>{continueSeries.category}</span>
               <strong>{continueSeries.title}</strong>
-              <em>{nextPlanLabel(continueSeries)}</em>
+              <em>{trialPlanMode ? 'Day 1 open during trial' : nextPlanLabel(continueSeries)}</em>
               <p>{continueSeries.tagline}</p>
             </div>
           </button>
@@ -5659,7 +5690,7 @@ function PlansScreen({ plans, planProgress, setPlanProgress, awardPoints, notify
                   <span>{series.category}</span>
                   <strong>{series.title}</strong>
                   <p>{series.tagline}</p>
-                  <em>{series.completedCount}/{series.plans.length} complete · {series.openCount} open</em>
+                  <em>{trialPlanMode ? 'Day 1 open during trial' : `${series.completedCount}/${series.plans.length} complete · ${series.openCount} open`}</em>
                 </button>
               ))}
             </div>
@@ -6770,7 +6801,7 @@ function TrialPaywallScreen({
 }) {
   const product = subscription.package;
   const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
-  const canPurchase = subscription.configured && subscription.native && product && !subscription.active;
+  const canPurchase = subscription.configured && subscription.native && !subscription.active;
   const canRestore = subscription.configured && subscription.native;
   const roleLine = role === 'parent'
     ? 'Support your athlete with every parent guide and the full plan library.'
@@ -6847,7 +6878,7 @@ function PremiumAccessPanel({
   const coveredByParent = subscription.active && subscription.accessSource === 'parent';
   const statusLabel = subscription.active ? (coveredByParent ? 'Parent covered' : 'Active') : 'Required';
   const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
-  const canPurchase = subscription.configured && subscription.native && product && !subscription.active;
+  const canPurchase = subscription.configured && subscription.native && !subscription.active;
   const canRestore = subscription.configured && subscription.native;
 
   return (

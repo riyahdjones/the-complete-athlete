@@ -23,8 +23,10 @@ function simplifyCustomerInfo(customerInfo, entitlementId = revenueCatConfig.ent
     activeEntitlements['The Complete Athlete Pro'] ??
     Object.values(activeEntitlements)[0] ??
     null;
+  const periodType = String(entitlement?.periodType ?? entitlement?.period_type ?? '').toLowerCase();
   return {
     active: Boolean(entitlement?.isActive),
+    activeTrial: Boolean(entitlement?.isActive) && periodType === 'trial',
     entitlement,
     expirationDate: entitlement?.expirationDate ?? customerInfo?.latestExpirationDate ?? '',
     managementURL: customerInfo?.managementURL ?? ''
