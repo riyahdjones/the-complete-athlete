@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
 import {
+  ArrowRight,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -13,6 +14,7 @@ import {
   ChevronDown,
   CircleHelp,
   Copy,
+  Download,
   Goal,
   Home,
   LineChart,
@@ -2403,6 +2405,422 @@ Elite athletes do not just need great coaching. They need parents whose lives re
   ];
 }
 
+function ManifestoLandingPage() {
+  const [manifestoFormOpen, setManifestoFormOpen] = useState(false);
+  const [manifestoFormSubmitted, setManifestoFormSubmitted] = useState(false);
+  const [manifestoFormSubmitting, setManifestoFormSubmitting] = useState(false);
+  const [manifestoFormError, setManifestoFormError] = useState('');
+  const [manifestoLead, setManifestoLead] = useState({ name: '', email: '', phone: '', smsConsent: false });
+  const trainingList = ['their swing...', 'their shot...', 'their speed...', 'their mechanics...'];
+  const painSignals = [
+    ['It looks like', 'an athlete who dominates practice, then plays tight when the lights come on.'],
+    ['It sounds like', '"I do not know what happened. I just could not get out of my head."'],
+    ['It becomes', 'one mistake turning into a whole game of hesitation, frustration, and fear.'],
+    ['So families try', 'more lessons, more tournaments, more reps, more pressure, and more correction.'],
+    ['But underneath', 'confidence, identity, beliefs, habits, and pressure response are running the performance.'],
+    ['And eventually', 'talent gets passed by athletes who know how to think, reset, and compete with control.']
+  ];
+  const learningCards = [
+    ['The Lie We Have All Been Told', 'Why working harder is not always the answer.'],
+    ['The Person Behind The Performance', 'The hidden identity creating every result.'],
+    ['The Athletic Operating System', 'The framework elite performers unknowingly follow.'],
+    ['Why Confidence Comes And Goes', 'How to build confidence that survives failure.'],
+    ['How To Rewire Performance', 'Practical ways to change your habits, thoughts, and results.']
+  ];
+  const unlockCallouts = [
+    'Unshakable Confidence',
+    'Stronger Identity',
+    'Mental Toughness',
+    'Better Focus',
+    'Emotional Control',
+    'Championship Habits'
+  ];
+  const imagineList = [
+    'walked into every game expecting success.',
+    'stopped letting one mistake ruin an entire performance.',
+    'knew exactly how to reset after failure.',
+    'understood confidence instead of chasing it.',
+    'began developing the same mental tools elite athletes spend years discovering.'
+  ];
+  const operatingLayers = [
+    ['Performance', 'what everyone sees'],
+    ['Habits', 'what athletes repeat'],
+    ['Beliefs', 'what athletes expect'],
+    ['Identity', 'who athletes believe they are']
+  ];
+  const openManifestoForm = (event) => {
+    event.preventDefault();
+    setManifestoFormSubmitted(false);
+    setManifestoFormError('');
+    setManifestoFormOpen(true);
+  };
+  const closeManifestoForm = () => {
+    setManifestoFormOpen(false);
+    setManifestoFormSubmitted(false);
+    setManifestoFormError('');
+  };
+  const submitManifestoForm = async (event) => {
+    event.preventDefault();
+    setManifestoFormSubmitting(true);
+    setManifestoFormError('');
+    const lead = {
+      name: manifestoLead.name.trim(),
+      email: manifestoLead.email.trim(),
+      phone: manifestoLead.phone.trim(),
+      smsConsent: manifestoLead.smsConsent,
+      source: 'Ninety Percent Manifesto',
+      submittedAt: new Date().toISOString()
+    };
+
+    try {
+      const response = await fetch(appApiUrl('/api/manifesto-lead'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lead)
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || 'Lead submission failed.');
+      }
+
+      try {
+        const storedLeads = JSON.parse(window.localStorage?.getItem('manifestoLeads') || '[]');
+        window.localStorage?.setItem('manifestoLeads', JSON.stringify([lead, ...storedLeads].slice(0, 50)));
+      } catch {
+        // GHL is the source of truth; local storage is only a convenience for local previews.
+      }
+      setManifestoFormSubmitted(true);
+    } catch {
+      setManifestoFormError('Something went wrong. Please check your details and try again.');
+    } finally {
+      setManifestoFormSubmitting(false);
+    }
+  };
+  const updateManifestoLead = (field, value) => {
+    setManifestoLead((current) => ({ ...current, [field]: value }));
+  };
+
+  return (
+    <main className="manifesto-page">
+      <section className="manifesto-hero">
+        <div className="manifesto-mobile-hero-image">
+          <img src="/landing/father-son-blue-hero.png" alt="Father and son preparing together for competition" />
+        </div>
+
+        <div className="manifesto-hero-content">
+          <div className="manifesto-copy">
+            <h1>Everyone says sports are 90% mental. Almost nobody teaches what that actually means.</h1>
+            <p className="manifesto-lead">
+              Every year, millions of athletes spend thousands of hours practicing:
+            </p>
+            <div className="manifesto-training-list" aria-label="Common physical training focus areas">
+              {trainingList.map((item) => <span key={item}>{item}</span>)}
+            </div>
+            <p className="manifesto-parent-hook">
+              while completely ignoring the part that controls all of them. If sports are truly 90% mental, why does
+              nobody train the ninety percent?
+            </p>
+            <div className="manifesto-hero-offer">
+              <div className="manifesto-actions">
+                <a className="manifesto-primary" href="/the-90-manifesto.pdf" download onClick={openManifestoForm}>
+                  <Download size={20} />
+                  Download the Complete Athlete Manifesto
+                </a>
+                <span className="manifesto-free-badge">Free</span>
+              </div>
+              <ManifestoCoverMockup />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="manifesto-section manifesto-credibility">
+        <div className="manifesto-section-copy">
+          <p className="manifesto-kicker">Why I wrote this</p>
+          <h2>Riyahd Jones learned the mental side the hard way.</h2>
+          <p>
+            Before becoming a coach, leader, and entrepreneur, Riyahd Jones was an SEC athlete at the University of
+            Tennessee and a Top-10 nationally ranked junior college cornerback. But some of his most important lessons
+            about performance came after the games were over.
+          </p>
+          <p>
+            Years spent competing at a high level, building successful teams, leading in business, and studying the
+            principles behind human performance revealed something he wishes he had understood much earlier:
+          </p>
+          <p className="manifesto-emphasis">
+            Talent can get you in the room, but your mindset, identity, habits, beliefs, and ability to handle pressure
+            determine what you do once you get there.
+          </p>
+          <p>
+            This manifesto was built to give young athletes the mental tools he wishes someone had given him: to develop
+            not just better players, but complete athletes.
+          </p>
+        </div>
+        <div className="manifesto-credibility-photo">
+          <img src="/landing/riyahd-tennessee-football.jpg" alt="Riyahd Jones playing football at the University of Tennessee" />
+        </div>
+      </section>
+
+      <section className="manifesto-section manifesto-pain">
+        <div className="manifesto-section-copy">
+          <h2>Your Athlete Has the Talent. So Why Doesn't It Always Show Up?</h2>
+          <p>
+            You can see the ability. You've watched it show up in practice. You've seen flashes of what they're capable
+            of. But when the pressure rises, adversity hits, or confidence starts to slip, something changes.
+          </p>
+          <p>
+            And that's when everyone starts searching for the visible problem: mechanics, effort, toughness, coaching,
+            playing time.
+          </p>
+          <p>
+            But what if the problem isn't physical at all?
+          </p>
+          <p>
+            What if your athlete has spent years training their body and their game, but almost no time learning how to
+            train the part responsible for controlling both?
+          </p>
+        </div>
+        <div className="manifesto-list manifesto-pain-list">
+          {painSignals.map(([label, body]) => (
+            <div className="manifesto-list-row manifesto-pain-row" key={label}>
+              <AlertDot />
+              <span>
+                <strong>{label}</strong>
+                {body}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="manifesto-section manifesto-big-idea">
+        <div className="manifesto-section-copy">
+          <h2>Performance is not built on the field. It is built in the mind.</h2>
+          <p>
+            Most athletes try to fix the thing everyone can see: the result. They chase the missed shot, the bad swing,
+            the dropped pass, the slow start, or the mistake that happened under pressure.
+          </p>
+          <p>
+            But performance is the last thing to show up, not the first thing to change. The result is usually a signal
+            from a deeper system.
+          </p>
+          <div className="manifesto-big-idea-callout">
+            <span>Most athletes chase the top.</span>
+            <strong>Complete athletes build from the bottom.</strong>
+          </div>
+        </div>
+        <div className="manifesto-operating-stack" aria-label="Performance operating system">
+          {operatingLayers.map(([layer, description], index) => (
+            <React.Fragment key={layer}>
+              <div className={index === 0 ? 'top' : ''}>
+                <strong>{layer}</strong>
+                <span>{description}</span>
+              </div>
+              {index < 3 ? <ArrowUpIcon /> : null}
+            </React.Fragment>
+          ))}
+        </div>
+      </section>
+
+      <section className="manifesto-section manifesto-blue-band">
+        <div className="manifesto-unlock-intro">
+          <p className="manifesto-kicker">What the manifesto unlocks</p>
+          <h2>The part of performance most athletes have never been taught to train.</h2>
+          <div className="manifesto-unlock-copy">
+            <p>
+              This manifesto isn't about adding more pressure, more workouts, or more information to an athlete's
+              plate. It's about unlocking the part of performance most athletes have never been taught to train.
+            </p>
+            <p>
+              You'll begin to understand why some athletes rise under pressure while others shrink. Why confidence can
+              disappear overnight. Why two athletes with similar talent can have completely different careers. Why
+              habits, beliefs, identity, self-talk, focus, and imagination have such a powerful effect on what happens
+              when it's time to perform.
+            </p>
+            <p>
+              Most importantly, you'll discover that better performance doesn't always begin with doing more. Sometimes
+              it begins with becoming different.
+            </p>
+            <p>
+              This manifesto gives athletes and parents a new lens for understanding performance and a framework for
+              developing the other 90%.
+            </p>
+          </div>
+          <div className="manifesto-unlock-callouts" aria-label="What the manifesto helps develop">
+            {unlockCallouts.map((callout) => (
+              <span key={callout}>{callout}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="manifesto-section manifesto-learn-inside">
+        <div className="manifesto-section-copy">
+          <p className="manifesto-kicker">What you will learn inside</p>
+          <h2>A clearer way to understand the ninety percent.</h2>
+        </div>
+        <div className="manifesto-promise-grid">
+          {learningCards.map(([title, body]) => (
+            <article className="manifesto-card" key={title}>
+              <BadgeCheck size={22} />
+              <strong>{title}</strong>
+              <p>{body}</p>
+            </article>
+          ))}
+        </div>
+        <div className="manifesto-plus-more">
+          <span>Plus more</span>
+          <strong>Additional lessons, reflection prompts, and practical language for helping athletes understand the ninety percent.</strong>
+        </div>
+      </section>
+
+      <section className="manifesto-section manifesto-imagine">
+        <div className="manifesto-visual-panel">
+          <img src="/landing/baseball-dugout-blue.png" alt="Baseball player sitting in the dugout after striking out" />
+          <div>
+            <span>Imagine if</span>
+            <strong>Your child had language for the part of the game nobody can see.</strong>
+          </div>
+        </div>
+        <div className="manifesto-section-copy">
+          <p className="manifesto-kicker">The transformation</p>
+          <h2>Imagine if your child...</h2>
+          <div className="manifesto-bridge-list manifesto-imagine-list">
+            {imagineList.map((body) => (
+              <div key={body}>
+                <Check size={20} />
+                <span>{body}</span>
+              </div>
+            ))}
+          </div>
+          <p className="manifesto-purpose">
+            That is the purpose of this manifesto.
+          </p>
+        </div>
+      </section>
+
+      <section className="manifesto-final-cta">
+        <p className="manifesto-kicker">Start with the missing piece</p>
+        <h2>Download the Ninety Percent and learn what it means to be a complete athlete.</h2>
+        <a className="manifesto-primary" href="/the-90-manifesto.pdf" download onClick={openManifestoForm}>
+          Download Ninety Percent Manifesto
+          <ArrowRight size={20} />
+        </a>
+      </section>
+
+      {manifestoFormOpen ? (
+        <div className="manifesto-modal" role="dialog" aria-modal="true" aria-labelledby="manifesto-form-title">
+          <button className="manifesto-modal-backdrop" type="button" aria-label="Close download form" onClick={closeManifestoForm} />
+          <div className="manifesto-modal-card">
+            <button className="manifesto-modal-close" type="button" aria-label="Close download form" onClick={closeManifestoForm}>
+              <X size={20} />
+            </button>
+            {manifestoFormSubmitted ? (
+              <div className="manifesto-form-success">
+                <BadgeCheck size={34} />
+                <p className="manifesto-kicker">You're in</p>
+                <h2 id="manifesto-form-title">Check your email for the manifesto.</h2>
+                <p>
+                  We sent the Ninety Percent Manifesto to the email you entered. If you do not see it in a few minutes,
+                  check your spam or promotions folder.
+                </p>
+                <button className="manifesto-primary" type="button" onClick={closeManifestoForm}>
+                  Back to the page
+                  <ArrowRight size={20} />
+                </button>
+              </div>
+            ) : (
+              <form className="manifesto-opt-in-form" onSubmit={submitManifestoForm}>
+                <p className="manifesto-kicker">Free download</p>
+                <h2 id="manifesto-form-title">Get the Ninety Percent Manifesto</h2>
+                <p>
+                  Enter your details and we will send the manifesto to your inbox.
+                </p>
+                <label>
+                  Name
+                  <input
+                    type="text"
+                    name="name"
+                    value={manifestoLead.name}
+                    onChange={(event) => updateManifestoLead('name', event.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                    required
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    name="email"
+                    value={manifestoLead.email}
+                    onChange={(event) => updateManifestoLead('email', event.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                  />
+                </label>
+                <label>
+                  Phone number
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={manifestoLead.phone}
+                    onChange={(event) => updateManifestoLead('phone', event.target.value)}
+                    placeholder="(555) 123-4567"
+                    autoComplete="tel"
+                    required
+                  />
+                </label>
+                <label className="manifesto-sms-consent">
+                  <input
+                    type="checkbox"
+                    name="smsConsent"
+                    checked={manifestoLead.smsConsent}
+                    onChange={(event) => updateManifestoLead('smsConsent', event.target.checked)}
+                  />
+                  <span>
+                    I agree to receive text messages about the Ninety Percent Manifesto and Complete Athlete updates.
+                    Message and data rates may apply. Reply STOP to unsubscribe.
+                  </span>
+                </label>
+                {manifestoFormError ? <p className="manifesto-form-error">{manifestoFormError}</p> : null}
+                <button className="manifesto-primary" type="submit" disabled={manifestoFormSubmitting}>
+                  {manifestoFormSubmitting ? 'Sending...' : 'Send me the manifesto'}
+                  <ArrowRight size={20} />
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </main>
+  );
+}
+
+function ManifestoCoverMockup() {
+  return (
+    <div className="manifesto-cover-mockup" aria-label="The Complete Athlete Manifesto cover preview">
+      <span>The Complete Athlete</span>
+      <strong>The 90% Manifesto</strong>
+      <em>What nobody teaches about the mental side of sports</em>
+    </div>
+  );
+}
+
+function ArrowUpIcon() {
+  return <span className="manifesto-stack-arrow" aria-hidden="true" />;
+}
+
+function AlertDot() {
+  return (
+    <span className="manifesto-alert-dot" aria-hidden="true">
+      <Target size={15} />
+    </span>
+  );
+}
+
 const privacySeed = {
   readinessVisible: true,
   standardsVisible: true,
@@ -2412,6 +2830,11 @@ const privacySeed = {
 };
 
 function App() {
+  const landingPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  if (landingPath === '/manifesto' || landingPath === '/the-90-manifesto') {
+    return <ManifestoLandingPage />;
+  }
+
   const [initialDailyState] = useState(loadDailyState);
   const [authUsers, setAuthUsers] = useState(loadAuthUsers);
   const [authSession, setAuthSession] = useState(loadAuthSession);
@@ -3976,11 +4399,6 @@ function App() {
   }, [effectiveSession?.id, premiumAccessRefreshKey]);
 
   async function startPremiumSubscription() {
-    saveTrialAccessWindow(effectiveSession?.id);
-    setLocalTrialAccessActive(true);
-    setTrialPromptDismissed(true);
-    saveTrialPromptDismissed(effectiveSession?.id);
-    if (effectiveSession?.role === 'athlete') setTab('plans');
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
     try {
       const status = await purchaseRevenueCatSubscription();
@@ -4005,17 +4423,17 @@ function App() {
     } catch (error) {
       const cancelled = Boolean(error?.userCancelled);
       if (cancelled) {
-        setLocalTrialAccessActive(false);
-        clearTrialAccessWindow(effectiveSession?.id);
-        setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
-        setTab('home');
+        setSubscription((current) => ({
+          ...current,
+          loading: false,
+          message: 'Purchase canceled.'
+        }));
+        return;
       }
       setSubscription((current) => ({
         ...current,
         loading: false,
-        message: cancelled
-          ? 'Purchase canceled.'
-          : 'Trial plan access is open while subscription setup is being finalized.'
+        message: error?.message || 'The App Store checkout could not open yet. You can still continue in free mode.'
       }));
     }
   }
