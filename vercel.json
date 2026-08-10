@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/manifesto",
+      "destination": "/"
+    },
+    {
+      "source": "/the-90-manifesto",
+      "destination": "/"
+    }
+  ],
   "crons": [
     {
       "path": "/api/send-notifications",
