@@ -2427,11 +2427,6 @@ function ManifestoLandingPage() {
     ['Why Confidence Comes And Goes', 'How to build confidence that survives failure.'],
     ['How To Rewire Performance', 'Practical ways to change your habits, thoughts, and results.']
   ];
-  const manifestoPreviewPages = [
-    ['01', 'The Mental Gap', 'Why athletes can train harder and still feel stuck when the pressure rises.'],
-    ['02', 'Identity Before Performance', 'How the way an athlete sees themselves shapes what shows up in competition.'],
-    ['03', 'The Reset Framework', 'Simple language for moving through mistakes without letting them take over the game.']
-  ];
   const unlockCallouts = [
     'Unshakable Confidence',
     'Stronger Identity',
@@ -2677,30 +2672,6 @@ function ManifestoLandingPage() {
         <div className="manifesto-plus-more">
           <span>Plus more</span>
           <strong>Additional lessons, reflection prompts, and practical language for helping athletes understand the ninety percent.</strong>
-        </div>
-      </section>
-
-      <section className="manifesto-section manifesto-preview">
-        <div className="manifesto-preview-copy">
-          <p className="manifesto-kicker">Preview the download</p>
-          <h2>Give them a look at what they are actually getting.</h2>
-          <p>
-            The manifesto is built to be read, shared, and returned to. It gives parents and athletes language for the
-            invisible part of performance, then turns that language into a framework they can use.
-          </p>
-          <button className="manifesto-primary" type="button" onClick={openManifestoForm}>
-            <BookOpen size={20} />
-            Send me the preview
-          </button>
-        </div>
-        <div className="manifesto-preview-spread" aria-label="Preview pages inside the Ninety Percent Manifesto">
-          {manifestoPreviewPages.map(([number, title, body]) => (
-            <article className="manifesto-preview-page" key={number}>
-              <span>{number}</span>
-              <strong>{title}</strong>
-              <p>{body}</p>
-            </article>
-          ))}
         </div>
       </section>
 
