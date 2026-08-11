@@ -4268,11 +4268,25 @@ textarea,
   gap: 22px;
   padding: 88px 20px 104px;
   text-align: center;
-  background: #ffffff;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(6, 18, 54, 0.92), rgba(31, 94, 255, 0.96)),
+    var(--manifesto-blue);
 }
 
 .manifesto-final-cta h2 {
   max-width: 860px;
+  color: #ffffff;
+}
+
+.manifesto-final-cta .manifesto-kicker {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.manifesto-final-cta .manifesto-primary {
+  color: var(--manifesto-blue);
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
 }
 
 .manifesto-sticky-cta {
