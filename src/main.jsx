@@ -2596,19 +2596,34 @@ function ManifestoLandingPage() {
 
       <section className="manifesto-section manifesto-big-idea">
         <div className="manifesto-section-copy">
-          <h2>Performance is not built on the field. It is built in the mind.</h2>
+          <h2>Performance isn't built on the field or the court. It's revealed there.</h2>
           <p>
-            Most athletes try to fix the thing everyone can see: the result. They chase the missed shot, the bad swing,
-            the dropped pass, the slow start, or the mistake that happened under pressure.
+            What happens during the game is only the part everyone gets to see.
           </p>
           <p>
-            But performance is the last thing to show up, not the first thing to change. The result is usually a signal
-            from a deeper system.
+            The missed shot. The bad swing. The dropped pass. The hesitation under pressure. The mistake that turns into
+            three more.
           </p>
-          <div className="manifesto-big-idea-callout">
-            <span>Most athletes chase the top.</span>
-            <strong>Complete athletes build from the bottom.</strong>
-          </div>
+          <p>So that's where most athletes try to fix the problem.</p>
+          <p>
+            <strong>But the result isn't the source. It's the evidence.</strong>
+          </p>
+          <p>
+            Long before performance shows up on the field, something deeper is already at work: an athlete's beliefs,
+            identity, thoughts, habits, expectations, and response to pressure.
+          </p>
+          <p>
+            Those invisible forces shape the decisions they make, the confidence they carry, and ultimately, the athlete
+            who shows up when the moment gets big.
+          </p>
+          <p>
+            <strong>
+              You don't change performance by constantly chasing the result. You change the system producing it.
+            </strong>
+          </p>
+          <p>
+            And that's where the other 90% begins.
+          </p>
         </div>
         <div className="manifesto-operating-stack" aria-label="Performance operating system">
           {operatingLayers.map(([layer, description], index) => (
