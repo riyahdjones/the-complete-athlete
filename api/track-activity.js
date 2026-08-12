@@ -24,7 +24,10 @@ export default async function handler(req, res) {
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
       last_active_at: new Date().toISOString(),
-      last_inactivity_notified_at: null
+      last_inactivity_notified_at: null,
+      last_winback_10_notified_at: null,
+      last_winback_21_notified_at: null,
+      last_parent_nudge_notified_at: null
     })
   });
 

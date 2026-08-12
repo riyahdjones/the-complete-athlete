@@ -7,6 +7,9 @@ create table if not exists public.profiles (
   parent_access_code text not null default ('TCA-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8))),
   last_active_at timestamptz not null default now(),
   last_inactivity_notified_at timestamptz,
+  last_winback_10_notified_at timestamptz,
+  last_winback_21_notified_at timestamptz,
+  last_parent_nudge_notified_at timestamptz,
   created_at timestamptz not null default now()
 );
 

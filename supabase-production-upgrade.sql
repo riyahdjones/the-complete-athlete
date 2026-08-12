@@ -6,7 +6,10 @@ alter table public.profiles
 
 alter table public.profiles
   add column if not exists last_active_at timestamptz not null default now(),
-  add column if not exists last_inactivity_notified_at timestamptz;
+  add column if not exists last_inactivity_notified_at timestamptz,
+  add column if not exists last_winback_10_notified_at timestamptz,
+  add column if not exists last_winback_21_notified_at timestamptz,
+  add column if not exists last_parent_nudge_notified_at timestamptz;
 
 alter table public.athlete_profiles
 add column if not exists updated_at timestamptz not null default now();

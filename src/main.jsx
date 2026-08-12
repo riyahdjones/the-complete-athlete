@@ -230,7 +230,7 @@ const notificationPreferenceSeed = {
   points: true,
   parentUpdates: true,
   inactivityReminders: true,
-  browserPush: false
+  browserPush: true
 };
 
 const athleteChallengeOptions = [
@@ -3198,8 +3198,15 @@ function App() {
         listenerHandles.push(registration, registrationError, received);
 
         const permission = await PushNotifications.checkPermissions();
-        if (notificationPreferences.browserPush && permission.receive === 'granted') {
-          await PushNotifications.register();
+        if (notificationPreferences.browserPush) {
+          const nextPermission = permission.receive === 'granted'
+            ? permission
+            : permission.receive === 'denied'
+              ? permission
+              : await PushNotifications.requestPermissions();
+          const granted = nextPermission.receive === 'granted';
+          setNotificationPreferences((current) => ({ ...current, browserPush: granted }));
+          if (granted) await PushNotifications.register();
         }
       } catch {
         setNotificationPreferences((current) => ({ ...current, browserPush: false }));
