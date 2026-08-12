@@ -33,6 +33,7 @@ import {
   Users,
   X
 } from 'lucide-react';
+import { createCollegeRecruitingParentGuide } from './collegeRecruitingParentGuide';
 import { createPerformancePlanSeeds } from './performancePlans';
 import {
   canUseNativePurchases,
@@ -1065,6 +1066,7 @@ function parentGuideMergeKey(guide) {
   if (series.includes('comparison trap')) return 'series:comparison-trap';
   if (series.includes('elite parents') || series.includes('elite athletes need elite parents')) return 'series:elite-parents';
   if (series.includes('pressure isn')) return 'series:pressure-isnt-the-enemy';
+  if (series.includes('college recruiting')) return 'series:college-recruiting-101';
   if (series.includes('raising a complete athlete')) return 'series:raising-complete-athlete';
   if (series.includes('home court advantage')) return 'series:home-court-advantage';
   return `id:${String(guide?.id ?? '')}`;
@@ -1094,6 +1096,9 @@ function parentGuideCoverImage(seriesTitle) {
   if (normalized.includes('pressure isn')) {
     return '/parent-guides/pressure-isnt-the-enemy-banner.png';
   }
+  if (normalized.includes('college recruiting')) {
+    return '/parent-guides/college-recruiting-101-banner.jpg';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '/parent-guides/raising-complete-athlete-banner.png';
   }
@@ -1117,6 +1122,9 @@ function parentGuideThumbnailImage(seriesTitle) {
   if (normalized.includes('pressure isn')) {
     return '/parent-guides/pressure-isnt-the-enemy-thumbnail.png';
   }
+  if (normalized.includes('college recruiting')) {
+    return '/parent-guides/college-recruiting-101-thumbnail.jpg';
+  }
   if (normalized.includes('raising a complete athlete')) {
     return '/parent-guides/raising-complete-athlete-thumbnail.png';
   }
@@ -1139,6 +1147,9 @@ function parentGuideCoverPosition(seriesTitle) {
   }
   if (normalized.includes('pressure isn')) {
     return '44% 50%';
+  }
+  if (normalized.includes('college recruiting')) {
+    return '50% 50%';
   }
   if (normalized.includes('raising a complete athlete')) {
     return '58% 50%';
@@ -1757,11 +1768,12 @@ That is why your role is not to remove every obstacle. It is to walk beside them
 
 Because children who learn to handle pressure do not just become better athletes. They become stronger adults. And that is the greatest victory of all.
 
-Complete Athlete Parenting Principle
+        Complete Athlete Parenting Principle
 
 Do not pray for a life with less pressure for your athlete. Help them become the kind of person who can carry greater pressure with greater confidence. That is where resilience is built, character is formed, and greatness begins.`
       ]
     },
+    createCollegeRecruitingParentGuide(releaseDate),
     {
       id: 'raising-complete-athlete-seed',
       seriesTitle: 'Raising a Complete Athlete',
@@ -7071,19 +7083,39 @@ function sectionLinesToBlocks(lines) {
   return blocks;
 }
 
+function isPreservedHeadingLine(line) {
+  if (!line || line.length > 96) return false;
+  if (/^(YES \/ NO|___ \/ \d+|___ \/ \d+|___ \/|[0-9]+\.|[A-Z]\.)/.test(line)) return false;
+  if (/^["']/.test(line)) return false;
+  if (/^[A-Z0-9&/.,:'"() -]+$/.test(line) && /[A-Z]/.test(line)) return true;
+  return false;
+}
+
 function explicitPlanReaderSections(body, preserveHeadings = false) {
   const lines = planReaderBody(body)
     .split(/\n+/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-  if (!lines.some((line) => explicitPlanSectionHeadings.has(line) || /^Day\s+\d+:/i.test(line) || /^Next Chapter:/i.test(line))) return [];
+  if (!lines.some((line) =>
+    explicitPlanSectionHeadings.has(line) ||
+    /^Day\s+\d+:/i.test(line) ||
+    /^DAY\s+\d+\s+-/i.test(line) ||
+    /^Next Chapter:/i.test(line) ||
+    (preserveHeadings && isPreservedHeadingLine(line))
+  )) return [];
 
   const sections = [];
   let current = null;
 
   lines.forEach((line) => {
-    if (explicitPlanSectionHeadings.has(line) || /^Day\s+\d+:/i.test(line) || /^Next Chapter:/i.test(line)) {
+    if (
+      explicitPlanSectionHeadings.has(line) ||
+      /^Day\s+\d+:/i.test(line) ||
+      /^DAY\s+\d+\s+-/i.test(line) ||
+      /^Next Chapter:/i.test(line) ||
+      (preserveHeadings && isPreservedHeadingLine(line))
+    ) {
       const sectionTitleMap = {
         'Mental Model': '',
         Opening: 'Start Here',
