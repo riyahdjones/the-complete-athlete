@@ -32,6 +32,7 @@ export default async function EngagementPage() {
         </div>
         <div className="analytics-grid overview-grid">
           <Metric label="Plans Available" value={analytics.plansAvailable} detail="Released lessons in the library" />
+          <Metric label="Plan Opens" value={analytics.planOpens7Days} detail={`${analytics.planOpenUsers7Days} athletes this week`} />
           <Metric label="Lessons Completed" value={analytics.planLessonsCompleted} detail="Total lesson completions" />
           <Metric label="Plans Started" value={analytics.plansStarted} detail="Athlete-plan starts" />
           <Metric label="Completion Rate" value={`${analytics.planCompletionRate}%`} detail="All possible lesson completions" />
@@ -64,8 +65,10 @@ export default async function EngagementPage() {
         </div>
         <div className="analytics-grid overview-grid">
           <Metric label="Full Days Today" value={analytics.completedAllStandardsToday} detail="Athletes who locked a full productivity day" />
+          <Metric label="Daily Submits" value={analytics.dailySubmissions7Days} detail="Productivity submissions this week" />
           <Metric label="Productivity Avg" value={`${analytics.averageStandardsPercent}%`} detail="Last 14 days locked" />
-          <Metric label="Goals" value={analytics.goalsCreated} detail={`${analytics.goalsCompleted} completed`} />
+          <Metric label="Goals" value={analytics.goalsCreated} detail={`${analytics.goalsAdded7Days} added this week`} />
+          <Metric label="Journals" value={analytics.journalSaves7Days} detail="Reflections saved this week" />
           <Metric label="Active Items" value={analytics.activeStandards} detail="Current athlete productivity items" />
           <Metric label="Total Points" value={analytics.totalPoints} detail="All points earned" />
           <Metric label="Points Today" value={analytics.pointsToday} detail="Earned today" />
@@ -82,8 +85,10 @@ export default async function EngagementPage() {
         </div>
         <div className="analytics-grid overview-grid">
           <Metric label="Linked Parents" value={analytics.parentLinks} detail={`${analytics.parentLinkRate}% link rate`} />
+          <Metric label="New Family Links" value={analytics.familyLinks7Days} detail="Access-code links this week" />
           <Metric label="Active Parents" value={analytics.activeParents7Days} detail="Activity signals this week" />
           <Metric label="Parent Accounts" value={analytics.parentCount} detail="Total parent users" />
+          <Metric label="Push Opt-Ins" value={analytics.notificationOptIns7Days} detail={`${analytics.notificationOptOuts7Days} denied this week`} />
         </div>
       </section>
     </main>

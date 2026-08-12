@@ -71,6 +71,37 @@ function eventDateKey(row) {
   return row.entry_date || dateKeyFromDate(new Date(row.created_at || row.submitted_at));
 }
 
+function eventsSince(events, dateKey) {
+  return events.filter((event) => event.created_at && dateKeyFromDate(new Date(event.created_at)) >= dateKey);
+}
+
+function countEvents(events, eventTypes) {
+  const types = new Set(Array.isArray(eventTypes) ? eventTypes : [eventTypes]);
+  return events.filter((event) => types.has(event.event_type)).length;
+}
+
+function countAreaEvents(events, area) {
+  return events.filter((event) => event.area === area).length;
+}
+
+function uniqueUsersForEvents(events, eventTypes = null) {
+  const types = eventTypes ? new Set(Array.isArray(eventTypes) ? eventTypes : [eventTypes]) : null;
+  return new Set(
+    events
+      .filter((event) => event.user_id && (!types || types.has(event.event_type)))
+      .map((event) => event.user_id)
+  ).size;
+}
+
+function topEventTypes(events) {
+  const counts = new Map();
+  events.forEach((event) => counts.set(event.event_type, (counts.get(event.event_type) ?? 0) + 1));
+  return [...counts.entries()]
+    .map(([eventType, count]) => ({ eventType, count }))
+    .sort((first, second) => second.count - first.count)
+    .slice(0, 10);
+}
+
 export async function getDashboardData() {
   const supabase = supabaseAdmin();
   const activityStart = daysAgoKey(13);
@@ -124,7 +155,7 @@ export async function getDashboardData() {
     supabase.from('coach_daily_usage').select('athlete_user_id, message_count, usage_date').eq('usage_date', todayKey()).limit(1000),
     supabase.from('coach_daily_usage').select('athlete_user_id, message_count, usage_date').gte('usage_date', sevenDayStart).limit(3000),
     supabase.from('coach_daily_usage').select('athlete_user_id, message_count, usage_date').order('usage_date', { ascending: false }).limit(5000),
-    supabase.from('app_events').select('id, user_id, area, event_type, severity, metadata, created_at').order('created_at', { ascending: false }).limit(100),
+    supabase.from('app_events').select('id, user_id, area, event_type, severity, metadata, created_at').order('created_at', { ascending: false }).limit(2000),
     supabase.from('app_events').select('id', { count: 'exact', head: true }).in('severity', ['error', 'critical']).gte('created_at', `${sevenDayStart}T00:00:00Z`),
     supabase.from('readiness_checks').select('id', { count: 'exact', head: true }).eq('entry_date', todayKey()),
     supabase.from('standards_history').select('id', { count: 'exact', head: true }).eq('entry_date', todayKey()),
@@ -148,6 +179,8 @@ export async function getDashboardData() {
   const coachUsage7DayRows = coachUsage7Days.data ?? [];
   const coachUsageAllRows = coachUsageAll.data ?? [];
   const eventRows = appEvents.data ?? [];
+  const events7Days = eventsSince(eventRows, sevenDayStart);
+  const eventsToday = eventsSince(eventRows, todayKey());
   const planRows = plans.data ?? [];
   const planProgressRows = planProgress.data ?? [];
   const pointsRows = pointsLedger.data ?? [];
@@ -272,9 +305,30 @@ export async function getDashboardData() {
       coachMessagesToday: coachUsageTodayRows.reduce((sum, row) => sum + Number(row.message_count || 0), 0),
       coachMessages7Days: coachUsage7DayRows.reduce((sum, row) => sum + Number(row.message_count || 0), 0),
       coachLimitHits,
+      appEventsToday: eventsToday.length,
+      appEvents7Days: events7Days.length,
+      activeEventUsers7Days: uniqueUsersForEvents(events7Days),
+      signups7Days: countEvents(events7Days, 'signup_completed'),
+      onboardingCompletions7Days: countEvents(events7Days, 'onboarding_completed'),
+      trialStarts7Days: countEvents(events7Days, 'trial_start_clicked'),
+      trialSkips7Days: countEvents(events7Days, 'trial_skipped'),
+      purchases7Days: countEvents(events7Days, ['purchase_completed', 'restore_purchase_completed']),
+      purchaseIssues7Days: countEvents(events7Days, ['purchase_failed', 'restore_purchase_failed']),
+      planOpens7Days: countEvents(events7Days, 'plan_series_opened'),
+      planOpenUsers7Days: uniqueUsersForEvents(events7Days, 'plan_series_opened'),
+      dailySubmissions7Days: countEvents(events7Days, 'daily_productivity_submitted'),
+      journalSaves7Days: countEvents(events7Days, 'journal_saved'),
+      goalsAdded7Days: countEvents(events7Days, 'goal_added'),
+      familyLinks7Days: countEvents(events7Days, 'family_linked'),
+      notificationOptIns7Days: countEvents(events7Days, 'notification_permission_granted'),
+      notificationOptOuts7Days: countEvents(events7Days, 'notification_permission_denied'),
+      coachEventVolume7Days: countAreaEvents(events7Days, 'coach'),
+      coachMessageSends7Days: countEvents(events7Days, 'coach_message_sent'),
+      coachReplyFailures7Days: countEvents(events7Days, ['coach_reply_failed', 'coach_daily_limit_hit']),
+      topEventTypes7Days: topEventTypes(events7Days),
       monitoredIssues7Days: criticalEvents.count ?? 0,
       safetyEvents: safetyEvents.data ?? [],
-      recentEvents: eventRows,
+      recentEvents: eventRows.slice(0, 100),
       dailyActivity: buildDailyActivity(readinessRows, standardsRows),
       recentActivity,
       plansAvailable: planRows.length,

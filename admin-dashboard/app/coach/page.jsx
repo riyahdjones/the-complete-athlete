@@ -34,8 +34,9 @@ export default async function CoachPage() {
         <div className="analytics-grid overview-grid">
           <Metric label="Messages Today" value={analytics.coachMessagesToday} detail="AI coach requests today" />
           <Metric label="Messages This Week" value={analytics.coachMessages7Days} detail="Last 7 days" />
+          <Metric label="Send Clicks" value={analytics.coachMessageSends7Days} detail="Tracked sends this week" />
           <Metric label="Daily Limit Hits" value={analytics.coachLimitHits} detail="Athletes at 15 messages today" />
-          <Metric label="Coach Issues" value={coachEvents.length} detail="Recent coach events" />
+          <Metric label="Coach Issues" value={analytics.coachReplyFailures7Days} detail="Failures or limits this week" />
         </div>
       </section>
 

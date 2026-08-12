@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
 import {
@@ -2996,6 +2996,51 @@ function App() {
   const trialGatePreview = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('trialPreview') === 'true';
 
+  const trackAnalyticsEvent = useCallback(async (eventType, metadata = {}, options = {}) => {
+    if (typeof window === 'undefined') return;
+
+    let accessToken = '';
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession();
+      accessToken = data.session?.access_token || '';
+    }
+
+    const payload = {
+      area: options.area || metadata.area || 'app',
+      eventType,
+      severity: options.severity || 'info',
+      metadata: {
+        role: effectiveSession?.role || 'anonymous',
+        view,
+        tab,
+        parentTab,
+        premiumActive: Boolean(effectiveSubscription.active),
+        activeTrial: Boolean(effectiveSubscription.activeTrial),
+        trialPlanMode: Boolean(trialPlanMode),
+        nativeRuntime: isNativePushRuntime(),
+        path: window.location.pathname,
+        ...metadata
+      }
+    };
+
+    fetch(appApiUrl('/api/track-event'), {
+      method: 'POST',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  }, [
+    effectiveSession?.role,
+    effectiveSubscription.active,
+    effectiveSubscription.activeTrial,
+    parentTab,
+    tab,
+    trialPlanMode,
+    view
+  ]);
+
   const completion = standards.length
     ? Math.round((standardsCompleted / standards.length) * 100)
     : 0;
@@ -3110,6 +3155,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem(notificationPrefsStorageKey, JSON.stringify(notificationPreferences));
   }, [notificationPreferences]);
+
+  useEffect(() => {
+    if (!effectiveSession?.id) return;
+    trackAnalyticsEvent('session_started', {
+      sessionId: String(effectiveSession.id).slice(0, 18),
+      onboardingComplete,
+      notificationBrowserPush: notificationPreferences.browserPush
+    }, { area: 'engagement' });
+  }, [effectiveSession?.id]);
 
   useEffect(() => {
     localStorage.setItem(athleteStartStorageKey, athleteStartComplete ? 'true' : 'false');
@@ -3929,14 +3983,17 @@ function App() {
   async function signupUser({ role, name, email, password, parentCode, parentFamilyCode }) {
     const cleanEmail = normalizeEmail(email);
     if (!cleanEmail || !password) {
+      trackAnalyticsEvent('signup_failed', { role, reason: 'missing_credentials' }, { area: 'auth', severity: 'warning' });
       return 'Email and password are required.';
     }
 
     if (authUsers.some((user) => user.email === cleanEmail)) {
+      trackAnalyticsEvent('signup_failed', { role, reason: 'duplicate_email' }, { area: 'auth', severity: 'warning' });
       return 'An account already exists for that email.';
     }
 
     if (role === 'admin') {
+      trackAnalyticsEvent('signup_failed', { role, reason: 'admin_blocked' }, { area: 'auth', severity: 'warning' });
       return 'Admin access has moved outside the athlete app.';
     }
 
@@ -3953,20 +4010,27 @@ function App() {
         }
       });
 
-      if (error) return error.message;
+      if (error) {
+        trackAnalyticsEvent('signup_failed', { role, reason: error.message }, { area: 'auth', severity: 'warning' });
+        return error.message;
+      }
 
       if (data.user && data.session) {
         if (role === 'parent' && parentCode) {
           const { error: linkError } = await supabase.rpc('link_parent_to_athlete', { access_code: parentCode.trim() });
           if (linkError) {
+            trackAnalyticsEvent('family_link_failed', { source: 'signup_parent', reason: linkError.message }, { area: 'family', severity: 'warning' });
             return 'Account created, but the parent link could not be created. Check the access code.';
           }
+          trackAnalyticsEvent('family_linked', { source: 'signup_parent' }, { area: 'family' });
         }
         if (role === 'athlete' && parentFamilyCode) {
           const { error: athleteLinkError } = await supabase.rpc('link_athlete_to_parent', { parent_code: parentFamilyCode.trim() });
           if (athleteLinkError) {
+            trackAnalyticsEvent('family_link_failed', { source: 'signup_athlete', reason: athleteLinkError.message }, { area: 'family', severity: 'warning' });
             return 'Account created, but the family access code could not be linked. Check the code with your parent.';
           }
+          trackAnalyticsEvent('family_linked', { source: 'signup_athlete' }, { area: 'family' });
         }
 
         let parentAccessCode = '';
@@ -3983,6 +4047,7 @@ function App() {
         setAuthSession({ id: data.user.id, role, name: fullName, email: cleanEmail, parentAccessCode });
         setView(role === 'parent' ? 'parent' : 'athlete');
         window.history.replaceState({}, '', window.location.pathname);
+        trackAnalyticsEvent('signup_completed', { role, parentCodeEntered: Boolean(parentCode || parentFamilyCode) }, { area: 'auth' });
       }
 
       return data.session ? '' : 'Account created. Check your email if confirmation is required, then log in.';
@@ -3999,6 +4064,7 @@ function App() {
     setAuthUsers((current) => [...current, nextUser]);
     setAuthSession({ id: nextUser.id, role: nextUser.role, name: nextUser.name, email: nextUser.email });
     setView(role === 'parent' ? 'parent' : 'athlete');
+    trackAnalyticsEvent('signup_completed', { role, mode: 'local' }, { area: 'auth' });
     return '';
   }
 
@@ -4011,7 +4077,10 @@ function App() {
         password
       });
 
-      if (error) return error.message;
+      if (error) {
+        trackAnalyticsEvent('login_failed', { role, reason: error.message }, { area: 'auth', severity: 'warning' });
+        return error.message;
+      }
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -4019,13 +4088,23 @@ function App() {
         .eq('id', data.user.id)
         .maybeSingle();
 
-      if (profileError) return profileError.message;
-      if (!profile) return 'No profile found for this account.';
+      if (profileError) {
+        trackAnalyticsEvent('login_failed', { role, reason: profileError.message }, { area: 'auth', severity: 'warning' });
+        return profileError.message;
+      }
+      if (!profile) {
+        trackAnalyticsEvent('login_failed', { role, reason: 'missing_profile' }, { area: 'auth', severity: 'warning' });
+        return 'No profile found for this account.';
+      }
       if (profile.role === 'admin') {
         await supabase.auth.signOut();
+        trackAnalyticsEvent('login_failed', { role, reason: 'admin_blocked' }, { area: 'auth', severity: 'warning' });
         return 'Admin access has moved outside the athlete app.';
       }
-      if (profile.role !== role) return `This account is registered as ${profile.role}. Choose the correct portal.`;
+      if (profile.role !== role) {
+        trackAnalyticsEvent('login_failed', { role, accountRole: profile.role, reason: 'wrong_portal' }, { area: 'auth', severity: 'warning' });
+        return `This account is registered as ${profile.role}. Choose the correct portal.`;
+      }
 
       setAuthSession({
         id: profile.id,
@@ -4036,15 +4115,26 @@ function App() {
       });
       setView(role === 'parent' ? 'parent' : 'athlete');
       window.history.replaceState({}, '', window.location.pathname);
+      trackAnalyticsEvent('login_completed', { role: profile.role }, { area: 'auth' });
       return '';
     }
 
     const user = authUsers.find((account) => account.email === cleanEmail && account.password === password);
-    if (!user) return 'No account found with that email and password.';
-    if (user.role === 'admin') return 'Admin access has moved outside the athlete app.';
-    if (user.role !== role) return `This account is registered as ${user.role}. Choose the correct portal.`;
+    if (!user) {
+      trackAnalyticsEvent('login_failed', { role, mode: 'local', reason: 'not_found' }, { area: 'auth', severity: 'warning' });
+      return 'No account found with that email and password.';
+    }
+    if (user.role === 'admin') {
+      trackAnalyticsEvent('login_failed', { role, mode: 'local', reason: 'admin_blocked' }, { area: 'auth', severity: 'warning' });
+      return 'Admin access has moved outside the athlete app.';
+    }
+    if (user.role !== role) {
+      trackAnalyticsEvent('login_failed', { role, mode: 'local', accountRole: user.role, reason: 'wrong_portal' }, { area: 'auth', severity: 'warning' });
+      return `This account is registered as ${user.role}. Choose the correct portal.`;
+    }
     setAuthSession({ id: user.id, role: user.role, name: user.name, email: user.email, parentAccessCode: user.parentAccessCode ?? '' });
     setView(role === 'parent' ? 'parent' : 'athlete');
+    trackAnalyticsEvent('login_completed', { role: user.role, mode: 'local' }, { area: 'auth' });
     return '';
   }
 
@@ -4113,10 +4203,12 @@ function App() {
 
     const { error } = await supabase.rpc('link_parent_to_athlete', { access_code: accessCode });
     if (error) {
+      trackAnalyticsEvent('family_link_failed', { source: 'parent_settings', reason: error.message }, { area: 'family', severity: 'warning' });
       setParentLinkFeedback('That code did not link. Check the code and try again.');
       return;
     }
 
+    trackAnalyticsEvent('family_linked', { source: 'parent_settings' }, { area: 'family' });
     setParentAccessDraft('');
     setParentLinkFeedback('Athlete linked. Loading parent dashboard...');
     setParentLinkRefreshKey((value) => value + 1);
@@ -4136,10 +4228,12 @@ function App() {
 
     const { error } = await supabase.rpc('link_athlete_to_parent', { parent_code: accessCode });
     if (error) {
+      trackAnalyticsEvent('family_link_failed', { source: 'athlete_profile', reason: error.message }, { area: 'family', severity: 'warning' });
       setAthleteParentLinkFeedback('That code did not link. Check the code and try again.');
       return;
     }
 
+    trackAnalyticsEvent('family_linked', { source: 'athlete_profile' }, { area: 'family' });
     setAthleteParentAccessDraft('');
     setAthleteParentLinkFeedback('Parent membership linked. Premium access is updating...');
     setPremiumAccessRefreshKey((value) => value + 1);
@@ -4197,6 +4291,10 @@ function App() {
   }
 
   async function requestBrowserNotifications() {
+    trackAnalyticsEvent('notification_permission_requested', {
+      nativeRuntime: isNativePushRuntime()
+    }, { area: 'notifications' });
+
     if (isNativePushRuntime()) {
       try {
         const { PushNotifications } = await import('@capacitor/push-notifications');
@@ -4204,8 +4302,13 @@ function App() {
         const granted = permission.receive === 'granted';
         setNotificationPreferences((current) => ({ ...current, browserPush: granted }));
         if (granted) await PushNotifications.register();
+        trackAnalyticsEvent(granted ? 'notification_permission_granted' : 'notification_permission_denied', {
+          nativeRuntime: true,
+          permission: permission.receive
+        }, { area: 'notifications', severity: granted ? 'info' : 'warning' });
       } catch {
         setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+        trackAnalyticsEvent('notification_permission_failed', { nativeRuntime: true }, { area: 'notifications', severity: 'warning' });
       }
       return;
     }
@@ -4213,6 +4316,10 @@ function App() {
     if (!('Notification' in window)) return;
     const permission = await Notification.requestPermission();
     setNotificationPreferences((current) => ({ ...current, browserPush: permission === 'granted' }));
+    trackAnalyticsEvent(permission === 'granted' ? 'notification_permission_granted' : 'notification_permission_denied', {
+      nativeRuntime: false,
+      permission
+    }, { area: 'notifications', severity: permission === 'granted' ? 'info' : 'warning' });
   }
 
   async function registerPushDeviceToken(token, platform) {
@@ -4253,7 +4360,13 @@ function App() {
   function toggleNotifications() {
     setNotificationsOpen((open) => {
       const nextOpen = !open;
-      if (nextOpen) markNotificationsRead();
+      if (nextOpen) {
+        trackAnalyticsEvent('notification_tray_opened', {
+          unreadCount: unreadNotifications.length,
+          totalCount: notifications.length
+        }, { area: 'notifications' });
+        markNotificationsRead();
+      }
       return nextOpen;
     });
   }
@@ -4280,6 +4393,13 @@ function App() {
     });
 
     persistPointEvent(pointEvent);
+    trackAnalyticsEvent('points_awarded', {
+      pointType: type,
+      points: cleanPoints,
+      label,
+      uniqueKey: cleanKey,
+      metadataKeys: Object.keys(metadata || {})
+    }, { area: 'engagement' });
     notifyUser('Points earned', `+${cleanPoints} points · ${label}`, 'success', {
       type: 'points',
       id: `points-${cleanKey}`
@@ -4297,6 +4417,7 @@ function App() {
 
   async function persistPlanCompletion(planId, completedAt) {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !authSession.id) return;
+    const completedPlan = plans.find((plan) => String(plan.id) === String(planId));
 
     await supabase
       .from('performance_plan_progress')
@@ -4306,6 +4427,13 @@ function App() {
         completed_at: completedAt,
         updated_at: new Date().toISOString()
       }, { onConflict: 'athlete_user_id,plan_id' });
+
+    trackAnalyticsEvent('plan_lesson_completed', {
+      planId: String(planId),
+      planTitle: completedPlan?.title || '',
+      seriesTitle: completedPlan ? planSeriesTitle(completedPlan) : '',
+      day: completedPlan ? planDayNumber(completedPlan) : null
+    }, { area: 'plans' });
   }
 
   function celebrate(message) {
@@ -4351,6 +4479,15 @@ function App() {
     setOnboardingComplete(true);
     localStorage.setItem(onboardingStorageKey, 'true');
     localStorage.setItem(athleteStartStorageKey, 'false');
+    trackAnalyticsEvent('onboarding_completed', {
+      challengeId: selectedChallenge.id,
+      sportProvided: Boolean(setup.sport),
+      ageProvided: Boolean(setup.age),
+      locationProvided: Boolean(setup.location),
+      parentContactProvided: Boolean(setup.parentContact),
+      goalsCount: nextGoals.length,
+      standardsCount: nextStandards.length
+    }, { area: 'activation' });
     celebrate('Setup complete. Start with today.');
   }
 
@@ -4485,6 +4622,10 @@ function App() {
 
   async function startPremiumSubscription() {
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
+    trackAnalyticsEvent('trial_start_clicked', {
+      configured: Boolean(effectiveSubscription.configured),
+      nativeRuntime: canUseNativePurchases()
+    }, { area: 'monetization' });
     try {
       const status = await purchaseRevenueCatSubscription();
       setSubscription((current) => ({
@@ -4497,6 +4638,10 @@ function App() {
         message: status.active ? 'Premium access is active.' : 'Purchase finished, but premium access is not active yet.'
       }));
       if (status.active) {
+        trackAnalyticsEvent('purchase_completed', {
+          activeTrial: Boolean(status.activeTrial),
+          expirationDate: status.expirationDate || ''
+        }, { area: 'monetization' });
         setTrialPromptDismissed(true);
         saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
@@ -4508,6 +4653,7 @@ function App() {
     } catch (error) {
       const cancelled = Boolean(error?.userCancelled);
       if (cancelled) {
+        trackAnalyticsEvent('purchase_cancelled', {}, { area: 'monetization', severity: 'warning' });
         setSubscription((current) => ({
           ...current,
           loading: false,
@@ -4515,6 +4661,9 @@ function App() {
         }));
         return;
       }
+      trackAnalyticsEvent('purchase_failed', {
+        message: error?.message || 'unknown'
+      }, { area: 'monetization', severity: 'error' });
       setSubscription((current) => ({
         ...current,
         loading: false,
@@ -4526,6 +4675,7 @@ function App() {
   function skipTrialPrompt() {
     setTrialPromptDismissed(true);
     saveTrialPromptDismissed(effectiveSession?.id);
+    trackAnalyticsEvent('trial_skipped', {}, { area: 'monetization' });
     notifyUser('Free mode started', 'You can start the 7-day trial any time from Profile.', 'info', {
       type: 'points',
       id: `trial-skipped-${Date.now()}`
@@ -4534,6 +4684,7 @@ function App() {
 
   async function restorePremiumSubscription() {
     setSubscription((current) => ({ ...current, loading: true, message: 'Restoring purchases...' }));
+    trackAnalyticsEvent('restore_purchase_clicked', {}, { area: 'monetization' });
     try {
       const status = await restoreRevenueCatSubscription();
       setSubscription((current) => ({
@@ -4546,6 +4697,10 @@ function App() {
         message: status.active ? 'Premium access restored.' : 'No active subscription was found.'
       }));
       if (status.active) {
+        trackAnalyticsEvent('restore_purchase_completed', {
+          activeTrial: Boolean(status.activeTrial),
+          expirationDate: status.expirationDate || ''
+        }, { area: 'monetization' });
         setTrialPromptDismissed(true);
         saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
@@ -4554,12 +4709,29 @@ function App() {
         setPremiumAccessRefreshKey((current) => current + 1);
       }
     } catch (error) {
+      trackAnalyticsEvent('restore_purchase_failed', {
+        message: error?.message || 'unknown'
+      }, { area: 'monetization', severity: 'warning' });
       setSubscription((current) => ({
         ...current,
         loading: false,
         message: error?.message || 'Purchases could not be restored yet.'
       }));
     }
+  }
+
+  function changeAthleteTab(nextTab) {
+    if (nextTab !== tab) {
+      trackAnalyticsEvent('tab_opened', { from: tab, to: nextTab }, { area: 'navigation' });
+    }
+    setTab(nextTab);
+  }
+
+  function changeParentTab(nextTab) {
+    if (nextTab !== parentTab) {
+      trackAnalyticsEvent('parent_tab_opened', { from: parentTab, to: nextTab }, { area: 'navigation' });
+    }
+    setParentTab(nextTab);
   }
 
   const content = useMemo(() => {
@@ -4643,6 +4815,7 @@ function App() {
           streakCount={streakCount}
           submittedToday={submittedToday}
           todayPoints={todayPoints}
+          trackAnalyticsEvent={trackAnalyticsEvent}
         />
       ),
       plans: (
@@ -4654,6 +4827,7 @@ function App() {
           awardPoints={awardPoints}
           notifyUser={notifyUser}
           persistPlanCompletion={persistPlanCompletion}
+          trackAnalyticsEvent={trackAnalyticsEvent}
         />
       ),
       journal: (
@@ -4673,6 +4847,7 @@ function App() {
           setGoalDraft={setGoalDraft}
           setGoals={setGoals}
           standards={standards}
+          trackAnalyticsEvent={trackAnalyticsEvent}
         />
       ),
       coach: (
@@ -4693,6 +4868,7 @@ function App() {
           messageDraft={messageDraft}
           setMessageDraft={setMessageDraft}
           setCoachComposerFocused={setCoachComposerFocused}
+          trackAnalyticsEvent={trackAnalyticsEvent}
         />
       ),
       profile: (
@@ -4771,7 +4947,8 @@ function App() {
     view,
     athleteStartPreview,
     athleteTodayPreview,
-    trialGatePreview
+    trialGatePreview,
+    trackAnalyticsEvent
   ]);
 
   if (!isAuthed) {
@@ -4870,8 +5047,8 @@ function App() {
 
         <section className="content">{content}</section>
 
-        {view === 'athlete' && !coachTypingMode && <BottomNav tab={tab} setTab={setTab} />}
-        {view === 'parent' && <ParentBottomNav tab={parentTab} setTab={setParentTab} />}
+        {view === 'athlete' && !coachTypingMode && <BottomNav tab={tab} setTab={changeAthleteTab} />}
+        {view === 'parent' && <ParentBottomNav tab={parentTab} setTab={changeParentTab} />}
       </main>
     </div>
   );
@@ -5221,7 +5398,8 @@ function HomeScreen({
   standardsHistory,
   streakCount,
   submittedToday,
-  todayPoints
+  todayPoints,
+  trackAnalyticsEvent
 }) {
   const [standardsFeedback, setStandardsFeedback] = useState('');
   const [standardsHistoryOpen, setStandardsHistoryOpen] = useState(false);
@@ -5249,6 +5427,9 @@ function HomeScreen({
     setStandardDraft('');
     setStandardGoalId('');
     setStandardsFeedback('');
+    trackAnalyticsEvent?.('daily_productivity_item_added', {
+      linkedToGoal: Boolean(standardGoalId)
+    }, { area: 'daily' });
     celebrate('Added to today. Check it off when it is done.');
   }
 
@@ -5345,6 +5526,14 @@ function HomeScreen({
       metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus }
     });
     setStandardsFeedback('');
+    trackAnalyticsEvent?.('daily_productivity_submitted', {
+      completed: completedStandards.length,
+      total: standards.length,
+      percent: standards.length ? Math.round((completedStandards.length / standards.length) * 100) : 0,
+      allCompleted: allStandardsCompleted,
+      streak: nextStreak,
+      pointsAwarded: standardsPoints
+    }, { area: 'daily' });
     celebrate(awarded ? `Day locked in. +${standardsPoints} points.` : 'Day submitted. Finish every item to earn productivity points.');
 
     notifyUser(
@@ -5378,6 +5567,10 @@ function HomeScreen({
     setJournal(
       `Daily Deposit: ${lesson.title ? `${lesson.title}\n` : ''}Focus question: ${todaysFocus}\nWhat I handled today: ${keptStandards}\nWhat I need to remember: `
     );
+    trackAnalyticsEvent?.('daily_reflection_started', {
+      completed: completedStandards.length,
+      total: standards.length
+    }, { area: 'daily' });
     setTab('journal');
   }
 
@@ -5394,6 +5587,7 @@ function HomeScreen({
         setJournalType={setJournalType}
         setStandards={setStandards}
         setTab={setTab}
+        trackAnalyticsEvent={trackAnalyticsEvent}
       />
     );
   }
@@ -5742,7 +5936,8 @@ function AthleteStartToday({
   setJournal,
   setJournalType,
   setStandards,
-  setTab
+  setTab,
+  trackAnalyticsEvent
 }) {
   const challenge = athleteChallengeById(athleteProfile?.currentChallenge);
   const planLibrary = buildPlanLibrary(sequencedPlanAccess(plans, planProgress, todayKey()));
@@ -5764,18 +5959,28 @@ function AthleteStartToday({
     );
     setAthleteStartComplete(true);
     localStorage.setItem(athleteStartStorageKey, 'true');
+    trackAnalyticsEvent?.('first_rep_completed', {
+      challengeId: challenge.id
+    }, { area: 'activation' });
     celebrate('First rep complete. Your full dashboard is ready.');
   }
 
   function openRecommendedPlan() {
     setAthleteStartComplete(true);
     localStorage.setItem(athleteStartStorageKey, 'true');
+    trackAnalyticsEvent?.('recommended_plan_opened', {
+      challengeId: challenge.id,
+      seriesTitle: recommendedSeries?.title || ''
+    }, { area: 'activation' });
     setTab('plans');
   }
 
   function goStraightHome() {
     setAthleteStartComplete(true);
     localStorage.setItem(athleteStartStorageKey, 'true');
+    trackAnalyticsEvent?.('first_time_home_skipped', {
+      challengeId: challenge.id
+    }, { area: 'activation' });
     setTab('home');
     celebrate('Home screen is ready when you are.');
   }
@@ -5866,7 +6071,8 @@ function GoalsScreen({
   goals,
   setGoalDraft,
   setGoals,
-  standards
+  standards,
+  trackAnalyticsEvent
 }) {
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100);
   const linkedStandards = standards.filter((standard) => standard.goalId);
@@ -5897,6 +6103,10 @@ function GoalsScreen({
       uniqueKey: `goal-added-${id}`,
       metadata: { goalLabel: label }
     });
+    trackAnalyticsEvent?.('goal_added', {
+      labelLength: label.length,
+      valueLength: value.length
+    }, { area: 'goals' });
     celebrate(awarded ? `Goal added. +${pointValues.goalAdded} points.` : 'Goal added. Write it, read it, prove it.');
   }
 
@@ -5917,6 +6127,10 @@ function GoalsScreen({
       uniqueKey: `goal-completed-${id}`,
       metadata: { goalLabel: goal?.label || '' }
     });
+    trackAnalyticsEvent?.('goal_completed', {
+      alreadyComplete: wasComplete,
+      linkedStandards: standards.filter((standard) => standard.goalId === id).length
+    }, { area: 'goals' });
     celebrate(awarded ? `Goal complete. +${pointValues.goalCompleted} points.` : 'Goal complete. Achievement unlocked.');
   }
 
@@ -6065,7 +6279,7 @@ function GoalsScreen({
   );
 }
 
-function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion }) {
+function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, trackAnalyticsEvent }) {
   const readOnly = !setPlanProgress;
   const today = todayKey();
   const sequencedPlans = trialPlanMode
@@ -6091,6 +6305,18 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgre
     }
   }, [planLibrary, selectedSeriesId]);
 
+  function openSeries(series, source) {
+    setSelectedSeriesId(series.id);
+    trackAnalyticsEvent?.('plan_series_opened', {
+      source,
+      seriesTitle: series.title,
+      category: series.category,
+      openCount: series.openCount,
+      totalLessons: series.plans.length,
+      trialPlanMode: Boolean(trialPlanMode)
+    }, { area: 'plans' });
+  }
+
   function completePlan(planId) {
     if (readOnly) return;
     if (planProgress[String(planId)]) return;
@@ -6102,6 +6328,14 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgre
       [String(planId)]: today
     };
     const seriesAwarded = seriesPlans.length > 0 && seriesPlans.every((item) => Boolean(nextProgress[String(item.id)]));
+
+    trackAnalyticsEvent?.('plan_lesson_complete_clicked', {
+      planId: String(planId),
+      planTitle: plan?.title || '',
+      seriesTitle,
+      day: plan ? planDayNumber(plan) : null,
+      seriesCompleted: seriesAwarded
+    }, { area: 'plans' });
 
     setPlanProgress(nextProgress);
     persistPlanCompletion?.(planId, today);
@@ -6216,7 +6450,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgre
       {continueSeries && (
         <section className="panel continue-plan-panel">
           <PanelTitle icon={<Sparkles size={18} />} title="Continue Training" action={trialPlanMode ? 'Trial access' : `${continueSeries.completedCount}/${continueSeries.plans.length} done`} />
-          <button className="continue-plan-card has-cover" onClick={() => setSelectedSeriesId(continueSeries.id)} style={{ '--plan-cover': `url(${continueSeries.coverImage})`, '--plan-cover-position': continueSeries.coverPosition }} type="button">
+          <button className="continue-plan-card has-cover" onClick={() => openSeries(continueSeries, 'continue_training')} style={{ '--plan-cover': `url(${continueSeries.coverImage})`, '--plan-cover-position': continueSeries.coverPosition }} type="button">
             <div className="plan-cover" aria-hidden="true" />
             <div className="plan-card-copy">
               <span>{continueSeries.category}</span>
@@ -6248,7 +6482,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgre
             </div>
             <div className="plan-list">
               {filteredLibrary.map((series) => (
-                <button className="plan-list-row has-cover" key={series.id} onClick={() => setSelectedSeriesId(series.id)} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-thumb': `url(${series.thumbnailImage})`, '--plan-cover-position': series.coverPosition }} type="button">
+                <button className="plan-list-row has-cover" key={series.id} onClick={() => openSeries(series, 'browse_library')} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-thumb': `url(${series.thumbnailImage})`, '--plan-cover-position': series.coverPosition }} type="button">
                   <div className="plan-cover-thumb" aria-hidden="true" />
                   <span>{series.category}</span>
                   <strong>{series.title}</strong>
@@ -6972,7 +7206,8 @@ function JournalScreen({
   setJournalType,
   setGoalDraft,
   setGoals,
-  standards
+  standards,
+  trackAnalyticsEvent
 }) {
   const [reflectionHistoryOpen, setReflectionHistoryOpen] = useState(false);
 
@@ -6997,6 +7232,11 @@ function JournalScreen({
       uniqueKey: `journal-saved-${entry.id}`,
       metadata: { entryType: entry.type }
     });
+    trackAnalyticsEvent?.('journal_saved', {
+      entryType: entry.type,
+      bodyLength: body.length,
+      linkedToGoal: Boolean(entry.linkedGoalId)
+    }, { area: 'journal' });
     celebrate(awarded ? `Journal saved. +${pointValues.journalSaved} points.` : 'Journal saved. That reflection is yours to revisit.');
   }
 
@@ -7129,6 +7369,7 @@ function JournalScreen({
         setGoalDraft={setGoalDraft}
         setGoals={setGoals}
         standards={standards}
+        trackAnalyticsEvent={trackAnalyticsEvent}
       />
     </>
   );
@@ -7150,7 +7391,8 @@ function CoachScreen({
   setCoachSessions,
   setMessages,
   setMessageDraft,
-  setCoachComposerFocused
+  setCoachComposerFocused,
+  trackAnalyticsEvent
 }) {
   const [coachStatus, setCoachStatus] = useState('');
   const [coachThinking, setCoachThinking] = useState(false);
@@ -7292,15 +7534,31 @@ function CoachScreen({
     setCoachStatus('');
     setCoachThinking(true);
     saveCoachSession(sessionId, sessionTitle, nextMessages);
+    trackAnalyticsEvent?.('coach_message_sent', {
+      sessionStarted: !activeCoachSessionId,
+      messageLength: clean.length,
+      historyCount: messages.length,
+      goalsCount: goals.length,
+      activeStandardsCount: standards.filter((standard) => standard.active !== false).length
+    }, { area: 'coach' });
 
     try {
       const payload = await requestCoachReply(clean, nextMessages, sessionId, sessionTitle);
       if (payload.messageLimit) {
         setCoachStatus(`${payload.messageCount} of ${payload.messageLimit} coach messages used today.`);
       }
+      trackAnalyticsEvent?.('coach_reply_received', {
+        messageCount: payload.messageCount || null,
+        messageLimit: payload.messageLimit || null,
+        replyLength: String(payload.reply || '').length
+      }, { area: 'coach' });
       saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: payload.reply }]);
     } catch (error) {
       if (error.code === 'coach_daily_limit') {
+        trackAnalyticsEvent?.('coach_daily_limit_hit', {
+          messageCount: error.messageCount || null,
+          messageLimit: error.messageLimit || null
+        }, { area: 'coach', severity: 'warning' });
         setCoachStatus(error.message);
         setMessages(messages);
         if (messages.length === 0 && !activeCoachSessionId) {
@@ -7314,6 +7572,9 @@ function CoachScreen({
       if (import.meta.env.DEV) {
         const reply = coachReply(clean);
         setCoachStatus('Local coach backend is not connected, so this chat used the prototype coach.');
+        trackAnalyticsEvent?.('coach_fallback_reply_used', {
+          reason: error.message || 'backend_unavailable'
+        }, { area: 'coach', severity: 'warning' });
         saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
       } else {
         const backendMessage =
@@ -7321,6 +7582,10 @@ function CoachScreen({
             ? 'Sign out and log back in, then try My Mindset Coach again.'
             : error.message || 'My Mindset Coach could not connect. Try again in a moment.';
         setCoachStatus(backendMessage);
+        trackAnalyticsEvent?.('coach_reply_failed', {
+          status: error.status || null,
+          reason: error.message || 'unknown'
+        }, { area: 'coach', severity: 'error' });
         saveCoachSession(sessionId, sessionTitle, nextMessages);
       }
     } finally {
@@ -7330,6 +7595,9 @@ function CoachScreen({
 
   function useTopic(prompt) {
     setMessageDraft(prompt);
+    trackAnalyticsEvent?.('coach_topic_selected', {
+      promptLength: prompt.length
+    }, { area: 'coach' });
   }
 
   function startNewChat() {
@@ -7338,6 +7606,7 @@ function CoachScreen({
     setMessages([]);
     setMessageDraft('');
     setCoachStatus('');
+    trackAnalyticsEvent?.('coach_new_chat_started', {}, { area: 'coach' });
   }
 
   function openCoachSession(session) {
@@ -7346,6 +7615,9 @@ function CoachScreen({
     setMessages(session.messages);
     setMessageDraft('');
     setCoachStatus('');
+    trackAnalyticsEvent?.('coach_session_opened', {
+      messagesCount: session.messages?.length || 0
+    }, { area: 'coach' });
   }
 
   function removeCoachSession(id) {

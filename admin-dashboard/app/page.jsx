@@ -87,6 +87,9 @@ export default async function Page() {
         <div className="analytics-grid overview-grid">
           <MetricCard label="Athletes" value={analytics.athleteCount} detail={`${analytics.newUsers7Days} new users this week`} />
           <MetricCard label="Parents" value={analytics.parentCount} detail={`${analytics.parentLinks} linked accounts`} />
+          <MetricCard label="App Opens" value={analytics.activeEventUsers7Days} detail={`${analytics.appEvents7Days} events this week`} />
+          <MetricCard label="Onboarding" value={analytics.onboardingCompletions7Days} detail={`${analytics.signups7Days} signups this week`} />
+          <MetricCard label="Trial Starts" value={analytics.trialStarts7Days} detail={`${analytics.purchases7Days} purchases/restores this week`} />
           <MetricCard label="AI Coach" value={analytics.coachMessagesToday} detail={`${analytics.coachMessages7Days} messages this week`} />
           <MetricCard label="Plans" value={analytics.planLessonsCompleted} detail={`${analytics.planCompletionRate}% lesson completion rate`} />
           <MetricCard label="Productivity" value={analytics.completedAllStandardsToday} detail="locked full productivity day" />
