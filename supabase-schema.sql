@@ -5,6 +5,8 @@ create table if not exists public.profiles (
   role text not null check (role in ('athlete', 'parent', 'admin')),
   full_name text not null default '',
   parent_access_code text not null default ('TCA-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8))),
+  last_active_at timestamptz not null default now(),
+  last_inactivity_notified_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -185,6 +187,9 @@ $$;
 
 create index if not exists profiles_role_created_idx
 on public.profiles (role, created_at desc);
+
+create index if not exists profiles_last_active_idx
+on public.profiles (last_active_at);
 
 create unique index if not exists profiles_parent_access_code_idx
 on public.profiles (parent_access_code)

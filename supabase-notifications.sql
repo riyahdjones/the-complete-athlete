@@ -9,6 +9,13 @@ create table if not exists public.app_notifications (
   created_at timestamptz not null default now()
 );
 
+alter table public.profiles
+  add column if not exists last_active_at timestamptz not null default now(),
+  add column if not exists last_inactivity_notified_at timestamptz;
+
+create index if not exists profiles_last_active_idx
+  on public.profiles (last_active_at);
+
 create index if not exists app_notifications_user_created_idx
   on public.app_notifications (user_id, created_at desc);
 
@@ -115,9 +122,13 @@ create table if not exists public.notification_preferences (
   productivity boolean not null default true,
   points boolean not null default true,
   parent_updates boolean not null default true,
+  inactivity_reminders boolean not null default true,
   browser_push boolean not null default false,
   updated_at timestamptz not null default now()
 );
+
+alter table public.notification_preferences
+  add column if not exists inactivity_reminders boolean not null default true;
 
 alter table public.notification_preferences enable row level security;
 

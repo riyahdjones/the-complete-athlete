@@ -2,7 +2,11 @@ alter table public.athlete_profiles
 add column if not exists photo_url text not null default '';
 
 alter table public.profiles
-add column if not exists parent_access_code text not null default ('TCA-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8)));
+  add column if not exists parent_access_code text not null default ('TCA-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8)));
+
+alter table public.profiles
+  add column if not exists last_active_at timestamptz not null default now(),
+  add column if not exists last_inactivity_notified_at timestamptz;
 
 alter table public.athlete_profiles
 add column if not exists updated_at timestamptz not null default now();
@@ -579,6 +583,9 @@ on public.athlete_points_ledger (entry_date desc);
 
 create index if not exists profiles_role_created_idx
 on public.profiles (role, created_at desc);
+
+create index if not exists profiles_last_active_idx
+on public.profiles (last_active_at);
 
 create unique index if not exists profiles_parent_access_code_idx
 on public.profiles (parent_access_code)

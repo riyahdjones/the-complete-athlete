@@ -35,9 +35,25 @@ async function pushDevices() {
 async function preferencesForUsers(userIds) {
   if (!userIds.length) return new Map();
   const result = await supabaseServiceRequest(
-    `notification_preferences?select=user_id,daily_deposits,performance_plans,streaks&user_id=in.(${userIds.join(',')})`
+    `notification_preferences?select=user_id,daily_deposits,performance_plans,streaks,inactivity_reminders&user_id=in.(${userIds.join(',')})`
   );
   return new Map((result.data ?? []).map((row) => [row.user_id, row]));
+}
+
+async function inactiveProfiles() {
+  const inactiveBefore = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const result = await supabaseServiceRequest(
+    `profiles?select=id,role,full_name,last_active_at&last_active_at=lt.${inactiveBefore}&last_inactivity_notified_at=is.null`
+  );
+  return new Map((result.data ?? []).map((profile) => [profile.id, profile]));
+}
+
+async function markInactivityNotified(userId) {
+  await supabaseServiceRequest(`profiles?id=eq.${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ last_inactivity_notified_at: new Date().toISOString() })
+  });
 }
 
 async function saveNotification(userId, notification) {
@@ -87,10 +103,11 @@ export default async function handler(req, res) {
   }
 
   const date = todayKey();
-  const [deposit, plan, devices] = await Promise.all([
+  const [deposit, plan, devices, inactiveUsers] = await Promise.all([
     latestDailyDeposit(date),
     todaysPlan(date),
-    pushDevices()
+    pushDevices(),
+    inactiveProfiles()
   ]);
   const uniqueUserIds = [...new Set(devices.map((device) => device.user_id))];
   const preferences = await preferencesForUsers(uniqueUserIds);
@@ -119,6 +136,25 @@ export default async function handler(req, res) {
         tone: 'info'
       }));
     }
+
+    const inactiveUser = inactiveUsers.get(device.user_id);
+    if (inactiveUser && prefs.inactivity_reminders !== false) {
+      const isParent = inactiveUser.role === 'parent';
+      sent.push(
+        sendToDevice(device, {
+          id: `push-inactivity-${date}-${device.user_id}`,
+          type: 'inactivityReminders',
+          title: isParent ? 'A quick check-in can help' : 'Your next deposit is waiting',
+          body: isParent
+            ? 'Open Parent Corner when you are ready for one simple way to support your athlete today.'
+            : 'Open The Complete Athlete and take one small step back into your routine.',
+          tone: 'info'
+        }).then(async (result) => {
+          await markInactivityNotified(device.user_id);
+          return result;
+        })
+      );
+    }
   }
 
   const results = await Promise.allSettled(sent);
@@ -131,6 +167,7 @@ export default async function handler(req, res) {
     devices: devices.length,
     stored,
     pushed,
+    inactivityCandidates: inactiveUsers.size,
     apnsConfigured: apnsConfigured()
   });
 }

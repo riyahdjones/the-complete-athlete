@@ -229,6 +229,7 @@ const notificationPreferenceSeed = {
   productivity: true,
   points: true,
   parentUpdates: true,
+  inactivityReminders: true,
   browserPush: false
 };
 
@@ -534,6 +535,7 @@ function notificationPreferencesFromSupabase(row) {
     productivity: row?.productivity ?? notificationPreferenceSeed.productivity,
     points: row?.points ?? notificationPreferenceSeed.points,
     parentUpdates: row?.parent_updates ?? notificationPreferenceSeed.parentUpdates,
+    inactivityReminders: row?.inactivity_reminders ?? notificationPreferenceSeed.inactivityReminders,
     browserPush: row?.browser_push ?? notificationPreferenceSeed.browserPush
   };
 }
@@ -548,6 +550,7 @@ function notificationPreferencesToSupabase(preferences, userId) {
     productivity: Boolean(preferences.productivity),
     points: Boolean(preferences.points),
     parent_updates: Boolean(preferences.parentUpdates),
+    inactivity_reminders: Boolean(preferences.inactivityReminders),
     browser_push: Boolean(preferences.browserPush),
     updated_at: new Date().toISOString()
   };
@@ -3145,7 +3148,7 @@ function App() {
           .limit(40),
         supabase
           .from('notification_preferences')
-          .select('daily_deposits, performance_plans, plan_unlocks, streaks, productivity, points, parent_updates, browser_push')
+          .select('daily_deposits, performance_plans, plan_unlocks, streaks, productivity, points, parent_updates, inactivity_reminders, browser_push')
           .eq('user_id', authSession.id)
           .maybeSingle()
       ]);
@@ -3210,6 +3213,54 @@ function App() {
       listenerHandles.forEach((handle) => handle.remove());
     };
   }, [authSession?.id, notificationPreferences.browserPush]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authSession?.id) return undefined;
+    let active = true;
+    let lastTrackedAt = 0;
+
+    async function trackActivity(force = false) {
+      const now = Date.now();
+      if (!force && now - lastTrackedAt < 30 * 60 * 1000) return;
+      lastTrackedAt = now;
+
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!active || !accessToken) return;
+
+      fetch(appApiUrl('/api/track-activity'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }).catch(() => {});
+    }
+
+    function handleActivity() {
+      trackActivity(false);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') trackActivity(true);
+    }
+
+    trackActivity(true);
+    window.addEventListener('focus', handleActivity);
+    window.addEventListener('pointerdown', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const interval = window.setInterval(() => trackActivity(false), 60 * 60 * 1000);
+
+    return () => {
+      active = false;
+      window.removeEventListener('focus', handleActivity);
+      window.removeEventListener('pointerdown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [authSession?.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete') {
@@ -7744,6 +7795,14 @@ function ProfileScreen({
                 />
               </label>
               <label>
+                <span>Inactivity reminders</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.inactivityReminders}
+                  onChange={(event) => updateNotificationPreference('inactivityReminders', event.target.checked)}
+                />
+              </label>
+              <label>
                 <span>Productivity updates</span>
                 <input
                   type="checkbox"
@@ -8079,6 +8138,14 @@ function ParentSettingsScreen({
                   type="checkbox"
                   checked={notificationPreferences.streaks}
                   onChange={(event) => updateNotificationPreference('streaks', event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>Inactivity reminders</span>
+                <input
+                  type="checkbox"
+                  checked={notificationPreferences.inactivityReminders}
+                  onChange={(event) => updateNotificationPreference('inactivityReminders', event.target.checked)}
                 />
               </label>
               <label>
