@@ -1,3 +1,5 @@
+import goalBlueprintPlanContent from './goalBlueprintPlanContent.json';
+
 export function createPerformancePlanSeeds(todayKey) {
   const releaseDate = todayKey();
   const plans = [
@@ -442,5 +444,17 @@ export function createPerformancePlanSeeds(todayKey) {
       ]
     }
   ];
+  plans.push(...createGoalBlueprintPlanSeeds(releaseDate));
   return plans;
+}
+
+function createGoalBlueprintPlanSeeds(releaseDate) {
+  const subject = "Series: Goal Blueprint. A four-day practical performance plan that helps athletes define a 90-day target, reverse engineer the work, identify who the goal requires them to become, and keep the system alive through daily priorities.";
+
+  return goalBlueprintPlanContent.map((plan) => ({
+    ...plan,
+    subject,
+    releaseDate,
+    challengeLength: 4
+  }));
 }

@@ -6118,7 +6118,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgre
                 <p>{planDisplaySubject(plan)}</p>
               </div>
               {plan.unlocked && plan.steps.length > 0 && (
-                <PlanEpisode steps={plan.steps} planId={plan.id} />
+                <PlanEpisode steps={plan.steps} planId={plan.id} preserveHeadings={shouldPreservePlanHeadings(plan.id)} />
               )}
               {!plan.unlocked && (
                 <div className="locked-message">
@@ -6224,6 +6224,7 @@ function planDisplaySubject(plan) {
 
 function planCategory(plan) {
   const text = `${planSeriesTitle(plan)} ${plan?.subject ?? ''}`.toLowerCase();
+  if (text.includes('goal blueprint') || text.includes('90-day target')) return 'Goals';
   if (text.includes('faith') || text.includes('god') || text.includes('scripture') || text.includes('compete differently')) return 'Faith';
   if (text.includes('90%') || text.includes('ninety') || text.includes('identity')) return 'Mindset';
   if (text.includes('slump') || text.includes('mindset') || text.includes('belief')) return 'Mindset';
@@ -6237,6 +6238,9 @@ function planCategory(plan) {
 
 function planCoverImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('goal blueprint')) {
+    return '/plan-covers/goal-blueprint-banner.jpg';
+  }
   if (normalized.includes('90') || normalized.includes('blueprint')) {
     return '/plan-covers/90-percent-blueprint.jpg';
   }
@@ -6275,6 +6279,9 @@ function planCoverImage(seriesTitle) {
 
 function planThumbnailImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('goal blueprint')) {
+    return '/plan-covers/goal-blueprint-thumbnail.jpg';
+  }
   if (normalized.includes('champion') || normalized.includes('habit')) {
     return '/plan-covers/champion-habits-thumbnail.jpg';
   }
@@ -6307,6 +6314,9 @@ function planThumbnailImage(seriesTitle) {
 
 function planCoverPosition(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('goal blueprint')) {
+    return '54% 50%';
+  }
   if (normalized.includes('90') || normalized.includes('blueprint')) {
     return '64% 52%';
   }
@@ -6571,8 +6581,82 @@ const explicitPlanSectionHeadings = new Set([
   'Final Thought',
   'Closing Reflection',
   'Series Finale',
-  'Final Complete Athlete Principle'
+  'Final Complete Athlete Principle',
+  'DAY 1 — GIVE YOUR MIND A TARGET',
+  'THE FOUR-MINUTE WALL',
+  'PULL BACK THE CURTAIN',
+  'YOUR MIND NEEDS DIRECTION',
+  'EVERYTHING HAPPENS THREE TIMES',
+  'FILM ROOM',
+  'PRACTICE INSTALL — BUILD YOUR TARGET',
+  'MY 90-DAY TARGET',
+  'NOW PUT IT IN THE APP',
+  'CLOSING THE DAY',
+  'DAY 2 — REVERSE ENGINEER THE WIN',
+  'THE SCOREBOARD PROBLEM',
+  'START AT THE FINISH LINE',
+  'THE GOAL LADDER',
+  'GOAL → MILESTONES → WEEKLY STANDARDS → DAILY PRIORITIES',
+  '1. THE GOAL',
+  '2. THE MILESTONES',
+  '3. THE WEEKLY STANDARDS',
+  '4. THE DAILY PRIORITIES',
+  'THE TWO SCOREBOARDS',
+  'PRACTICE INSTALL — BUILD YOUR GOAL LADDER',
+  'MY 90-DAY GOAL',
+  'MY MILESTONES',
+  'MY WEEKLY STANDARDS',
+  'MY DAILY PRIORITIES',
+  'NOW OPEN THE APP',
+  "DON'T CONFUSE MOTION WITH PROGRESS",
+  'DAY 3 — BECOME THE PERSON THE GOAL REQUIRES',
+  'BEFORE SHOHEI OHTANI BECAME SHOHEI OHTANI',
+  'THE BOX THAT CHANGES EVERYTHING',
+  'YOUR GOAL HAS HIDDEN REQUIREMENTS',
+  'THE OHTANI METHOD',
+  'CURRENT YOU VS. REQUIRED YOU',
+  "THE MOST IMPORTANT PART OF OHTANI'S CHART",
+  'FILM ROOM — BUILD YOUR 8',
+  'PRACTICE INSTALL — GO FROM 8 TO 64',
+  'NOW CONNECT IT TO THE APP',
+  "DON'T JUST CHASE THE ATHLETE",
+  'DAY 4 — KEEP THE TARGET ALIVE',
+  'BRUCE LEE WROTE IT DOWN',
+  'THE GOAL YOU FORGOT',
+  'A REVIEW SYSTEM.',
+  'THE GOAL LOOP',
+  'WRITE → REVIEW → PRIORITIZE → EXECUTE → MEASURE → ADJUST → REPEAT',
+  '1. WRITE',
+  '2. REVIEW',
+  '3. PRIORITIZE',
+  '4. EXECUTE',
+  '5. MEASURE',
+  '6. ADJUST',
+  '7. REPEAT',
+  'YOUR DAILY GOAL ROUTINE',
+  'YOUR WEEKLY RESET',
+  '1. WHAT DID I SAY I WOULD DO?',
+  '2. WHAT DID I ACTUALLY DO?',
+  "3. WHAT'S WORKING?",
+  '4. WHAT NEEDS TO CHANGE?',
+  'PRACTICE INSTALL — COMPLETE YOUR 90-DAY GOAL CARD',
+  'MY DEADLINE',
+  'MY WHY',
+  'MY 8 DEVELOPMENT AREAS',
+  'MY 64 ACTIONS',
+  'THE PERSON I MUST BECOME',
+  'PUT THE SYSTEM TO WORK',
+  "DON'T DIG UP THE SEED",
+  'CLOSING THE PLAN — FROM PAPER TO PROOF',
+  'DAY 1 — YOU DEFINED THE TARGET.',
+  'DAY 2 — YOU BUILT THE PATH.',
+  'DAY 3 — YOU BUILT THE ATHLETE.',
+  'DAY 4 — YOU BUILT THE SYSTEM.'
 ]);
+
+function shouldPreservePlanHeadings(planId) {
+  return String(planId ?? '').startsWith('goal-blueprint-');
+}
 
 function sectionTone(title) {
   const normalized = title.toLowerCase();
@@ -6618,6 +6702,19 @@ function sectionLinesToBlocks(lines) {
   }
 
   readableLines.forEach((line) => {
+    const imageMatch = line.match(/^\[IMAGE:([^|\]]+)(?:\|([^\]]+))?\]$/);
+    if (imageMatch) {
+      flushBody();
+      flushBullet();
+      flushQuote();
+      blocks.push({
+        type: 'image',
+        src: imageMatch[1].trim(),
+        alt: imageMatch[2]?.trim() || ''
+      });
+      return;
+    }
+
     const previousBody = bodyBuffer[bodyBuffer.length - 1] ?? '';
     const previousBullet = bulletBuffer[bulletBuffer.length - 1] ?? '';
     const previousQuote = quoteBuffer[quoteBuffer.length - 1] ?? '';
@@ -6775,6 +6872,15 @@ function PlanEpisode({ steps, planId, preserveHeadings = false }) {
                       <p key={`${planId}-quote-${sectionIndex}-${blockIndex}-${paragraphIndex}`}>{paragraph}</p>
                     ))}
                   </blockquote>
+                );
+              }
+
+              if (block.type === 'image') {
+                return (
+                  <figure className="reader-image" key={`${planId}-image-${sectionIndex}-${blockIndex}`}>
+                    <img alt={block.alt} src={block.src} />
+                    {block.alt && <figcaption>{block.alt}</figcaption>}
+                  </figure>
                 );
               }
 
@@ -8518,7 +8624,7 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
                   <p>{planDisplaySubject(selectedPlan)}</p>
                 </div>
                 {selectedPlan.unlocked ? (
-                  <PlanEpisode steps={selectedPlan.steps} planId={selectedPlan.id} />
+                  <PlanEpisode steps={selectedPlan.steps} planId={selectedPlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedPlan.id)} />
                 ) : (
                   <div className="locked-message">
                     <LockKeyhole size={18} />
