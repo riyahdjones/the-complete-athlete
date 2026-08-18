@@ -25,6 +25,10 @@ export default async function handler(req, res) {
   const apnsKeyId = process.env.APNS_KEY_ID;
   const apnsPrivateKey = process.env.APNS_PRIVATE_KEY;
   const apnsBundleId = process.env.APNS_BUNDLE_ID || process.env.IOS_BUNDLE_ID;
+  const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+  const elevenLabsVoiceId = process.env.ELEVENLABS_VOICE_ID;
+  const elevenLabsModelId = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
+  const elevenLabsAudioBucket = process.env.ELEVENLABS_AUDIO_BUCKET || 'plan-audio-cache';
 
   const checks = {
     supabase: {
@@ -52,6 +56,12 @@ export default async function handler(req, res) {
         configured(apnsPrivateKey) &&
         configured(apnsBundleId),
       bundleId: apnsBundleId || ''
+    },
+    audio: {
+      elevenLabsEnabled: configured(elevenLabsKey) && configured(elevenLabsVoiceId),
+      modelId: elevenLabsModelId,
+      sharedCacheEnabled: configured(supabaseUrl) && configured(serviceRoleKey),
+      cacheBucket: elevenLabsAudioBucket
     }
   };
 

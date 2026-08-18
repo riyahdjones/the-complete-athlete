@@ -13,6 +13,10 @@
     {
       "path": "/api/send-notifications",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/send-notifications",
+      "schedule": "0 0 * * *"
     }
   ]
 }

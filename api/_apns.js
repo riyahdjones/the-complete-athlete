@@ -57,10 +57,10 @@ export function apnsConfigured() {
   );
 }
 
-export async function sendApplePush({ token, title, body, data = {} }) {
+export async function sendApplePush({ token, title, body, data = {}, environment: overrideEnvironment = '' }) {
   if (!token) throw new Error('Missing device token.');
   const bundleId = envValue('APNS_BUNDLE_ID', 'IOS_BUNDLE_ID');
-  const environment = envValue('APNS_ENVIRONMENT') || 'production';
+  const environment = overrideEnvironment || envValue('APNS_ENVIRONMENT') || 'production';
   const host = environment === 'sandbox' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
   const jwt = await apnsJwt();
 

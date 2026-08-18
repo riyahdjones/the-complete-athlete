@@ -1,0 +1,9 @@
+{
+  "name": "Example Georgia High School",
+  "schoolType": "public",
+  "gradeLevels": ["high"],
+  "city": "Atlanta",
+  "county": "Fulton",
+  "state": "GA",
+  "websiteUrl": "https://example.edu/"
+}

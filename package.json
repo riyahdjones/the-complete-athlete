@@ -7,6 +7,10 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "test:outreach": "node --test tools/outreach/*.test.mjs",
+    "research:school": "node tools/outreach/research-school.mjs",
+    "seed:outreach-pilot": "node tools/outreach/seed-pilot.mjs",
+    "draft:outreach-pilot": "node tools/outreach/generate-drafts.mjs",
     "mobile:build": "vite build && cap sync ios",
     "ios:sync": "cap sync ios",
     "ios:open": "cap open ios"
@@ -19,6 +23,7 @@
     "@revenuecat/purchases-capacitor": "^13.2.5",
     "@supabase/supabase-js": "^2.108.2",
     "@vitejs/plugin-react": "latest",
+    "cheerio": "1.1.2",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",

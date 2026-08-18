@@ -1,6 +1,6 @@
 # The Complete Athlete App Store Connect Draft
 
-Last updated: July 23, 2026
+Last updated: August 17, 2026
 
 Use this as the working copy for App Store Connect. Final legal/privacy answers should be reviewed before public launch, but this matches the app as currently built.
 
@@ -75,7 +75,16 @@ The app includes athlete and parent account flows. Athletes can complete Daily D
 
 My Mindset Coach is designed for sports mindset support. It is not therapy, medical advice, diagnosis, emergency support, or injury treatment. Safety boundaries are included in the app and backend. For injury, self-harm, abuse, threats, or danger, the coach directs users to involve a trusted adult, emergency support, or a qualified professional.
 
-Account deletion is available inside the Profile area through the Delete Account flow.
+Account deletion is available inside the Profile/Settings account area through the Delete Account flow:
+- Athlete: Profile tab → Profile Details → Legal & Account → Delete Account.
+- Parent: Settings tab → Account → Legal & Account → Delete Account.
+
+Changes made after the August 17 rejection:
+- Removed any external accessory background-mode support from the shipped iOS app. The current `Info.plist` only declares `remote-notification` for background modes.
+- Added iOS camera and photo library usage descriptions for profile photo selection.
+- Renamed the profile photo action to Choose Photo and hardened the photo upload fallback so canceling or selecting a photo does not crash the app.
+- Moved Delete Account higher in both athlete and parent account screens so reviewers can easily initiate and complete deletion.
+- Replaced the 13-inch iPad login-only screenshot with an in-app screenshot that shows the athlete Today/Home experience.
 
 Push notifications are optional and used for Daily Deposits, performance plan updates, streaks, and app reminders.
 

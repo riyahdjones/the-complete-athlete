@@ -704,9 +704,9 @@ begin
   select *
   into direct_row
   from public.user_subscriptions
-  where user_id = checked_user_id
-    and public.subscription_is_active(status, expires_at)
-  order by expires_at nulls last, updated_at desc
+  where user_subscriptions.user_id = checked_user_id
+    and public.subscription_is_active(user_subscriptions.status, user_subscriptions.expires_at)
+  order by user_subscriptions.expires_at nulls last, user_subscriptions.updated_at desc
   limit 1;
 
   if direct_row.user_id is not null then

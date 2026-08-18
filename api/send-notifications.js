@@ -33,7 +33,7 @@ function authorized(req) {
 
 async function latestDailyDeposit(date) {
   const result = await supabaseServiceRequest(
-    `daily_deposits?select=id,body,focus_question,release_date,status&release_date=lte.${date}&order=release_date.desc&limit=1`
+    `daily_deposits?select=id,body,focus_question,release_date,status&status=eq.posted&release_date=lte.${date}&order=release_date.desc&limit=1`
   );
   return result.error ? null : result.data?.[0] ?? null;
 }
@@ -115,17 +115,80 @@ async function saveNotification(userId, notification) {
   });
 }
 
+function safePushError(error) {
+  const message = String(error?.message || 'Unknown APNs error').slice(0, 240);
+  try {
+    const parsed = JSON.parse(message);
+    return String(parsed.reason || parsed.error || message).slice(0, 120);
+  } catch {
+    return message;
+  }
+}
+
+async function recordNotificationEvent(eventType, severity, metadata) {
+  await supabaseServiceRequest('app_events', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      area: 'notifications',
+      event_type: eventType,
+      severity,
+      metadata
+    })
+  });
+}
+
 async function sendToDevice(device, notification) {
   await saveNotification(device.user_id, notification);
   if (!apnsConfigured()) return { pushed: false, stored: true };
 
-  await sendApplePush({
-    token: device.token,
-    title: notification.title,
-    body: notification.body,
-    data: { notificationType: notification.type }
-  });
-  return { pushed: true, stored: true };
+  const primaryEnvironment = process.env.APNS_ENVIRONMENT || 'production';
+  const secondaryEnvironment = primaryEnvironment === 'production' ? 'sandbox' : 'production';
+  try {
+    await sendApplePush({
+      token: device.token,
+      title: notification.title,
+      body: notification.body,
+      data: { notificationType: notification.type },
+      environment: primaryEnvironment
+    });
+    return { pushed: true, stored: true };
+  } catch (error) {
+    const primaryError = safePushError(error);
+    if (primaryError === 'BadDeviceToken' || primaryError === 'DeviceTokenNotForTopic') {
+      try {
+        await sendApplePush({
+          token: device.token,
+          title: notification.title,
+          body: notification.body,
+          data: { notificationType: notification.type },
+          environment: secondaryEnvironment
+        });
+        return {
+          pushed: true,
+          stored: true,
+          retriedEnvironment: secondaryEnvironment
+        };
+      } catch (retryError) {
+        return {
+          pushed: false,
+          stored: true,
+          error: `${primaryError}; retry ${secondaryEnvironment}: ${safePushError(retryError)}`.slice(0, 180),
+          platform: device.platform,
+          userId: device.user_id,
+          tokenTail: String(device.token || '').slice(-6)
+        };
+      }
+    }
+    return {
+      pushed: false,
+      stored: true,
+      error: primaryError,
+      platform: device.platform,
+      userId: device.user_id,
+      tokenTail: String(device.token || '').slice(-6)
+    };
+  }
 }
 
 export default async function handler(req, res) {
@@ -201,7 +264,7 @@ export default async function handler(req, res) {
         id: `push-streak-rescue-${date}-${device.user_id}`,
         type: 'streaks',
         title: 'Still time for today’s deposit',
-        body: 'Open the app, complete one priority, or ask Coach for a quick reset before the day ends.',
+        body: 'Keep your streak alive, lock in your day! 🔒',
         tone: 'info'
       }));
     }
@@ -269,8 +332,36 @@ export default async function handler(req, res) {
   }
 
   const results = await Promise.allSettled(sent);
-  const pushed = results.filter((result) => result.status === 'fulfilled' && result.value.pushed).length;
-  const stored = results.filter((result) => result.status === 'fulfilled' && result.value.stored).length;
+  const fulfilled = results
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value);
+  const pushed = fulfilled.filter((result) => result.pushed).length;
+  const stored = fulfilled.filter((result) => result.stored).length;
+  const failures = fulfilled
+    .filter((result) => result.error)
+    .map((result) => ({
+      error: result.error,
+      platform: result.platform,
+      userId: result.userId,
+      tokenTail: result.tokenTail
+    }));
+  const rejected = results
+    .filter((result) => result.status === 'rejected')
+    .map((result) => ({ error: safePushError(result.reason) }));
+
+  await recordNotificationEvent('notification_job_completed', failures.length || rejected.length ? 'warning' : 'info', {
+    date,
+    devices: devices.length,
+    stored,
+    pushed,
+    failed: failures.length + rejected.length,
+    inactivityCandidates: inactiveUsers.size,
+    planUnlockCandidates: unlockUsers.size,
+    streakRescueCandidates: rescueUsers.size,
+    easternHour: hour,
+    apnsConfigured: apnsConfigured(),
+    sampleFailures: [...failures, ...rejected].slice(0, 8)
+  });
 
   return json(res, 200, {
     ok: true,
@@ -278,6 +369,8 @@ export default async function handler(req, res) {
     devices: devices.length,
     stored,
     pushed,
+    failed: failures.length + rejected.length,
+    failures: [...failures, ...rejected].slice(0, 8),
     inactivityCandidates: inactiveUsers.size,
     planUnlockCandidates: unlockUsers.size,
     streakRescueCandidates: rescueUsers.size,

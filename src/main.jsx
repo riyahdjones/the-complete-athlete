@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
 import {
@@ -20,17 +20,22 @@ import {
   LineChart,
   LockKeyhole,
   MessageCircle,
+  Pause,
   PenLine,
+  Play,
   Plus,
+  RotateCcw,
   Send,
   Shield,
   Sparkles,
   Star,
+  Square,
   Target,
   Trash2,
   Trophy,
   UserRound,
   Users,
+  Volume2,
   X
 } from 'lucide-react';
 import { createCollegeRecruitingParentGuide } from './collegeRecruitingParentGuide';
@@ -221,6 +226,49 @@ const pointValues = {
   streakBonusPerDay: 5,
   streakBonusCap: 25
 };
+
+let pointsAudioContext = null;
+
+function playPointsEarnedSound(points = 0) {
+  if (typeof window === 'undefined') return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  try {
+    const context = pointsAudioContext && pointsAudioContext.state !== 'closed'
+      ? pointsAudioContext
+      : new AudioContextClass();
+    pointsAudioContext = context;
+    if (context.state === 'suspended') context.resume().catch(() => {});
+
+    const now = context.currentTime + 0.02;
+    const master = context.createGain();
+    const bonus = Number(points) >= 100;
+    const notes = bonus ? [392, 493.88, 659.25, 987.77, 1174.66] : [392, 493.88, 659.25, 987.77];
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.16, now + 0.035);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + (bonus ? 0.7 : 0.58));
+    master.connect(context.destination);
+
+    notes.forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = now + [0, 0.09, 0.18, 0.3, 0.43][index];
+      const stop = start + (index >= notes.length - 2 ? 0.26 : 0.18);
+      oscillator.type = index >= notes.length - 2 ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(index >= notes.length - 2 ? 0.16 : 0.22, start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, stop);
+      oscillator.connect(gain);
+      gain.connect(master);
+      oscillator.start(start);
+      oscillator.stop(stop + 0.02);
+    });
+  } catch {
+    // Audio feedback is a bonus; never block the points flow.
+  }
+}
 
 const notificationPreferenceSeed = {
   dailyDeposits: true,
@@ -3251,6 +3299,10 @@ function App() {
         });
         const received = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
           if (!active) return;
+          trackAnalyticsEvent('native_push_received', {
+            title: notification.title || '',
+            hasBody: Boolean(notification.body)
+          }, { area: 'notifications' });
           notifyUser(
             notification.title || 'The Complete Athlete',
             notification.body || 'You have a new update.',
@@ -3264,6 +3316,9 @@ function App() {
         listenerHandles.push(registration, registrationError, received);
 
         const permission = await PushNotifications.checkPermissions();
+        trackAnalyticsEvent('native_push_permission_checked', {
+          permission: permission.receive
+        }, { area: 'notifications' });
         if (notificationPreferences.browserPush) {
           const nextPermission = permission.receive === 'granted'
             ? permission
@@ -3272,10 +3327,16 @@ function App() {
               : await PushNotifications.requestPermissions();
           const granted = nextPermission.receive === 'granted';
           setNotificationPreferences((current) => ({ ...current, browserPush: granted }));
+          trackAnalyticsEvent(granted ? 'native_push_permission_ready' : 'native_push_permission_blocked', {
+            permission: nextPermission.receive
+          }, { area: 'notifications', severity: granted ? 'info' : 'warning' });
           if (granted) await PushNotifications.register();
         }
-      } catch {
+      } catch (error) {
         setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+        trackAnalyticsEvent('native_push_setup_failed', {
+          message: error?.message || 'unknown'
+        }, { area: 'notifications', severity: 'warning' });
       }
     }
 
@@ -4340,7 +4401,7 @@ function App() {
     const accessToken = data.session?.access_token;
     if (!accessToken) return;
 
-    await fetch(appApiUrl('/api/register-push-token'), {
+    const response = await fetch(appApiUrl('/api/register-push-token'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -4352,6 +4413,11 @@ function App() {
         appVersion: '1.0.0'
       })
     }).catch(() => {});
+    trackAnalyticsEvent(response?.ok ? 'push_token_registered' : 'push_token_registration_failed', {
+      platform,
+      status: response?.status || 0,
+      tokenTail: String(token).slice(-6)
+    }, { area: 'notifications', severity: response?.ok ? 'info' : 'warning' });
   }
 
   function updateNotificationPreference(field, value) {
@@ -4405,6 +4471,7 @@ function App() {
     });
 
     persistPointEvent(pointEvent);
+    if (notificationPreferences.points) playPointsEarnedSound(cleanPoints);
     trackAnalyticsEvent('points_awarded', {
       pointType: type,
       points: cleanPoints,
@@ -4535,7 +4602,7 @@ function App() {
 
     notifyUser(
       `${streakCount}-day streak on the line`,
-      'Check off today’s productivity list and lock in your day to keep your streak alive.',
+      'Keep your streak alive, lock in your day! 🔒',
       'warning',
       {
         type: 'streaks',
@@ -4747,7 +4814,7 @@ function App() {
   }
 
   const content = useMemo(() => {
-    if (view === 'parent') {
+      if (view === 'parent') {
       return (
         <ParentDashboard
           parentTab={parentTab}
@@ -4757,6 +4824,7 @@ function App() {
           standardsTotal={standards.length}
           linkedAthleteId={linkedAthleteId}
           linkedAthleteSummary={linkedAthleteSummary}
+          deleteAccount={deleteAccount}
           linkParentAccessCode={linkParentAccessCode}
           parentAccessDraft={parentAccessDraft}
           parentLinkChecked={parentLinkChecked}
@@ -4889,6 +4957,7 @@ function App() {
           athleteProfile={athleteProfile}
           athleteParentAccessDraft={athleteParentAccessDraft}
           athleteParentLinkFeedback={athleteParentLinkFeedback}
+          deleteAccount={deleteAccount}
           linkAthleteParentAccessCode={linkAthleteParentAccessCode}
           notificationPreferences={notificationPreferences}
           privacySettings={privacySettings}
@@ -5607,7 +5676,7 @@ function HomeScreen({
   return (
     <>
       <section className="panel daily-deposit-panel today-page-hero">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" action={submittedToday ? 'Locked in' : ''} />
+        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
         <div className="today-hero-copy">
           {lesson.title && <h2>{lesson.title}</h2>}
           <p>{lesson.body}</p>
@@ -6967,7 +7036,7 @@ function sectionTone(title) {
   if (normalized.includes('practice') || normalized.includes('blueprint') || normalized.includes('reset framework')) return 'practice';
   if (normalized.includes('daily challenge')) return 'practice';
   if (normalized.includes('journal') || normalized.includes('reflection')) return 'practice';
-  if (normalized.includes('film') || normalized.includes('story') || normalized.includes('curtain')) return 'film';
+  if (normalized.includes('film') || normalized.includes('story') || normalized.includes('curtain') || normalized.includes('deeper look')) return 'film';
   if (normalized.includes('principle') || normalized.includes('declaration') || normalized.includes('key takeaway')) return 'principle';
   if (normalized.includes('closing') || normalized.includes('next') || normalized.includes('last') || normalized.includes('finale') || normalized.includes('final thoughts')) return 'next';
   if (normalized.includes('mental') || normalized.includes('system') || normalized.includes('mirror')) return 'system';
@@ -7177,6 +7246,366 @@ function episodeDisplayLabel(label) {
   return label;
 }
 
+function blockAudioText(block) {
+  if (block.type === 'image') {
+    return block.alt ? `Image: ${block.alt}.` : '';
+  }
+  return (block.paragraphs ?? []).join(' ');
+}
+
+function cleanAudioText(text) {
+  return String(text ?? '')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/→/g, ' to ')
+    .replace(/[—–]/g, '. ')
+    .replace(/[•✓]/g, '')
+    .replace(/_{2,}/g, ' blank ')
+    .replace(/\s*\/\s*/g, ' or ')
+    .replace(/\bAPP\b/g, 'app')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .trim();
+}
+
+function sectionAudioText(section) {
+  const title = section.title ? `${section.title}. ` : '';
+  const body = section.blocks.map(blockAudioText).filter(Boolean).join(' ');
+  return cleanAudioText(`${title}${body}`);
+}
+
+function splitAudioChunks(text, maxLength = 720) {
+  const sentences = cleanAudioText(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const chunks = [];
+  let current = '';
+
+  sentences.forEach((sentence) => {
+    if (!current) {
+      current = sentence;
+      return;
+    }
+    if (`${current} ${sentence}`.length <= maxLength) {
+      current = `${current} ${sentence}`;
+      return;
+    }
+    chunks.push(current);
+    current = sentence;
+  });
+
+  if (current) chunks.push(current);
+  return chunks.length ? chunks : [cleanAudioText(text)].filter(Boolean);
+}
+
+function PlanAudioControls({ sections, planId }) {
+  const speechRef = useRef({
+    chunks: [],
+    chunkIndex: 0,
+    sectionIndex: 0,
+    mode: 'section',
+    stopped: true,
+    utterance: null
+  });
+  const audioRef = useRef(null);
+  const audioUrlRef = useRef('');
+  const audioCacheRef = useRef(new Map());
+  const playbackIdRef = useRef(0);
+  const [rate, setRate] = useState(1);
+  const [status, setStatus] = useState('idle');
+  const [sourceLabel, setSourceLabel] = useState('Device Voice');
+  const [activeSectionIndex, setActiveSectionIndex] = useState(-1);
+  const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+  const canPlayAudio = typeof window !== 'undefined' && typeof Audio !== 'undefined';
+  const availableSections = sections
+    .map((section, index) => ({ ...section, index, audioText: sectionAudioText(section) }))
+    .filter((section) => section.audioText.length > 12);
+
+  useEffect(() => () => stopSpeech(), [planId]);
+
+  useEffect(() => {
+    function handleSectionListen(event) {
+      if (event.detail?.planId !== planId) return;
+      const sectionIndex = Number(event.detail?.sectionIndex ?? 0);
+      startSpeech(sectionIndex, 'section');
+    }
+
+    window.addEventListener('tca-plan-section-listen', handleSectionListen);
+    return () => window.removeEventListener('tca-plan-section-listen', handleSectionListen);
+  });
+
+  function cleanupAudio() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = '';
+    }
+  }
+
+  function audioCacheKey(sectionIndex, text) {
+    return `${planId}:${sectionIndex}:${text.length}:${text.slice(0, 48)}`;
+  }
+
+  async function getNarratedAudio(sectionIndex, text) {
+    const cacheKey = audioCacheKey(sectionIndex, text);
+    let blob = audioCacheRef.current.get(cacheKey);
+    if (!blob) {
+      blob = await requestNarratedAudio(text);
+      audioCacheRef.current.set(cacheKey, blob);
+    }
+    return blob;
+  }
+
+  function prefetchNarratedSection(sectionIndex) {
+    if (!canPlayAudio || sectionIndex >= sections.length) return;
+    const nextText = sectionAudioText(sections[sectionIndex]);
+    if (!nextText) return;
+    const cacheKey = audioCacheKey(sectionIndex, nextText);
+    if (audioCacheRef.current.has(cacheKey)) return;
+    getNarratedAudio(sectionIndex, nextText).catch(() => {});
+  }
+
+  function stopSpeech() {
+    playbackIdRef.current += 1;
+    speechRef.current.stopped = true;
+    if (canSpeak) window.speechSynthesis.cancel();
+    cleanupAudio();
+    setStatus('idle');
+    setActiveSectionIndex(-1);
+  }
+
+  async function requestNarratedAudio(text) {
+    const session = await supabase?.auth?.getSession?.().catch(() => null);
+    const token = session?.data?.session?.access_token;
+    if (!token) throw new Error('No signed-in session for narrated audio.');
+
+    const response = await fetch(appApiUrl('/api/plan-audio'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ planId, text })
+    });
+
+    if (!response.ok) throw new Error('Narrated audio unavailable.');
+    return response.blob();
+  }
+
+  async function playNarratedSection(sectionIndex, mode, text, playbackId) {
+    if (!canPlayAudio) return false;
+    try {
+      cleanupAudio();
+      const blob = await getNarratedAudio(sectionIndex, text);
+      if (playbackId !== playbackIdRef.current || speechRef.current.stopped) return true;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.playbackRate = rate;
+      audio.preload = 'auto';
+      audioUrlRef.current = url;
+      audioRef.current = audio;
+      speechRef.current = {
+        chunks: [],
+        chunkIndex: 0,
+        sectionIndex,
+        mode,
+        stopped: false,
+        utterance: null,
+        playbackId
+      };
+      if (canSpeak) window.speechSynthesis.cancel();
+      setSourceLabel('Narrated Audio');
+      setActiveSectionIndex(sectionIndex);
+      setStatus('playing');
+      if (mode === 'plan') prefetchNarratedSection(sectionIndex + 1);
+      audio.onended = () => {
+        if (playbackId !== playbackIdRef.current) return;
+        cleanupAudio();
+        if (speechRef.current.stopped) return;
+        const nextSection = sectionIndex + 1;
+        if (mode === 'plan' && nextSection < sections.length) {
+          setSourceLabel('Loading Next Section');
+          setActiveSectionIndex(nextSection);
+          setStatus('loading');
+          startSpeech(nextSection, 'plan', false);
+          return;
+        }
+        setStatus('idle');
+        setActiveSectionIndex(-1);
+      };
+      audio.onerror = () => {
+        if (playbackId !== playbackIdRef.current) return;
+        cleanupAudio();
+        speakWithDeviceVoice(sectionIndex, mode, text, playbackId, false);
+      };
+      await audio.play();
+      return true;
+    } catch {
+      if (playbackId !== playbackIdRef.current) return true;
+      cleanupAudio();
+      return false;
+    }
+  }
+
+  function speakChunk() {
+    if (!canSpeak) return;
+    const state = speechRef.current;
+    if (state.playbackId !== playbackIdRef.current) return;
+    const chunk = state.chunks[state.chunkIndex];
+    if (!chunk) {
+      const nextSection = state.sectionIndex + 1;
+      if (state.mode === 'plan' && nextSection < sections.length) {
+        setSourceLabel('Loading Next Section');
+        setActiveSectionIndex(nextSection);
+        setStatus('loading');
+        startSpeech(nextSection, 'plan', false);
+        return;
+      }
+      setStatus('idle');
+      setActiveSectionIndex(-1);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(chunk);
+    utterance.rate = rate;
+    utterance.pitch = 1;
+    utterance.onend = () => {
+      if (speechRef.current.stopped) return;
+      if (speechRef.current.playbackId !== playbackIdRef.current) return;
+      speechRef.current.chunkIndex += 1;
+      setTimeout(speakChunk, 180);
+    };
+    utterance.onerror = () => {
+      setStatus('idle');
+      setActiveSectionIndex(-1);
+    };
+    state.utterance = utterance;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function speakWithDeviceVoice(sectionIndex, mode, audioText, playbackId = playbackIdRef.current, shouldCancel = true) {
+    if (!canSpeak) return;
+    if (!audioText) return;
+    if (playbackId !== playbackIdRef.current) return;
+    if (shouldCancel) window.speechSynthesis.cancel();
+    cleanupAudio();
+    speechRef.current = {
+      chunks: splitAudioChunks(audioText),
+      chunkIndex: 0,
+      sectionIndex,
+      mode,
+      stopped: false,
+      utterance: null,
+      playbackId
+    };
+    setSourceLabel('Device Voice');
+    setActiveSectionIndex(sectionIndex);
+    setStatus('playing');
+    setTimeout(() => {
+      if (playbackId === playbackIdRef.current) speakChunk();
+    }, shouldCancel ? 120 : 260);
+  }
+
+  async function startSpeech(sectionIndex = 0, mode = 'section', shouldCancel = true) {
+    const section = sections[sectionIndex];
+    const audioText = sectionAudioText(section);
+    if (!audioText) return;
+    if (shouldCancel) stopSpeech();
+    const playbackId = playbackIdRef.current + 1;
+    playbackIdRef.current = playbackId;
+    speechRef.current.stopped = false;
+    setSourceLabel('Preparing Audio');
+    setActiveSectionIndex(sectionIndex);
+    setStatus('loading');
+    const narrated = await playNarratedSection(sectionIndex, mode, audioText, playbackId);
+    if (!narrated && playbackId === playbackIdRef.current) {
+      speakWithDeviceVoice(sectionIndex, mode, audioText, playbackId, false);
+    }
+  }
+
+  function togglePause() {
+    if (status === 'loading') return;
+    if (status === 'playing') {
+      if (audioRef.current) audioRef.current.pause();
+      if (canSpeak) window.speechSynthesis.pause();
+      setStatus('paused');
+      return;
+    }
+    if (status === 'paused') {
+      if (audioRef.current) audioRef.current.play().catch(() => {});
+      if (canSpeak) window.speechSynthesis.resume();
+      setStatus('playing');
+      return;
+    }
+    startSpeech(availableSections[0]?.index ?? 0, 'plan');
+  }
+
+  function restartCurrentSection() {
+    const sectionIndex = activeSectionIndex >= 0 ? activeSectionIndex : availableSections[0]?.index ?? 0;
+    startSpeech(sectionIndex, speechRef.current.mode || 'section');
+  }
+
+  if ((!canSpeak && !canPlayAudio) || !availableSections.length) return null;
+
+  return (
+    <div className="plan-audio-panel" aria-label="Plan audio controls">
+      <div className="plan-audio-head">
+        <span>
+          <Volume2 size={16} />
+          Listen Mode
+        </span>
+        <em>{sourceLabel}</em>
+        <select
+          aria-label="Reading speed"
+          value={rate}
+          onChange={(event) => {
+            const nextRate = Number(event.target.value);
+            setRate(nextRate);
+            if (audioRef.current) {
+              audioRef.current.playbackRate = nextRate;
+            } else if (status === 'playing' && activeSectionIndex >= 0) {
+              setTimeout(() => startSpeech(activeSectionIndex, speechRef.current.mode || 'section'), 0);
+            }
+          }}
+        >
+          <option value="0.9">0.9x</option>
+          <option value="1">1x</option>
+          <option value="1.15">1.15x</option>
+          <option value="1.3">1.3x</option>
+        </select>
+      </div>
+      <div className="plan-audio-actions">
+        <button type="button" onClick={() => startSpeech(availableSections[0]?.index ?? 0, 'plan')} disabled={status === 'loading'}>
+          {status === 'loading' ? <Volume2 size={16} /> : <Play size={16} />}
+          {status === 'loading' ? 'Preparing' : 'Listen to Day'}
+        </button>
+        <button type="button" onClick={togglePause} disabled={status === 'loading'}>
+          {status === 'playing' ? <Pause size={16} /> : <Play size={16} />}
+          {status === 'playing' ? 'Pause' : status === 'paused' ? 'Resume' : 'Play'}
+        </button>
+        <button type="button" onClick={restartCurrentSection} disabled={status === 'loading'}>
+          <RotateCcw size={16} />
+          Restart
+        </button>
+        <button type="button" onClick={stopSpeech}>
+          <Square size={16} />
+          Stop
+        </button>
+      </div>
+      {status !== 'idle' && activeSectionIndex >= 0 && (
+        <p className="plan-audio-status">
+          {status === 'loading' ? 'Preparing audio' : status === 'paused' ? 'Paused' : 'Now reading'}: {sections[activeSectionIndex]?.title || 'Current section'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PlanEpisode({ steps, planId, preserveHeadings = false }) {
   const body = steps.join('\n\n');
   const sections = explicitPlanReaderSections(body, preserveHeadings);
@@ -7185,9 +7614,25 @@ function PlanEpisode({ steps, planId, preserveHeadings = false }) {
   return (
     <div className="episode-flow episode-page-flow">
       <article className="episode-section episode-page" key={`${planId}-page`}>
+        <PlanAudioControls sections={readerSections} planId={planId} />
         {readerSections.map((section, sectionIndex) => (
           <section className={`reader-section reader-section-${section.tone}`} key={`${planId}-section-${sectionIndex}`}>
-            {section.title && <h3>{section.title}</h3>}
+            <div className="reader-section-header">
+              {section.title && <h3>{section.title}</h3>}
+              <button
+                className="reader-section-listen"
+                onClick={() => {
+                  const event = new CustomEvent('tca-plan-section-listen', {
+                    detail: { planId, sectionIndex }
+                  });
+                  window.dispatchEvent(event);
+                }}
+                type="button"
+              >
+                <Volume2 size={14} />
+                Listen
+              </button>
+            </div>
             {section.blocks.map((block, blockIndex) => {
               if (block.type === 'quote') {
                 return (
@@ -7835,6 +8280,10 @@ function TrialPaywallScreen({
             Not now. Continue in free mode.
           </button>
         </div>
+        <div className="trial-legal-links">
+          <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
+          <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
+        </div>
       </section>
     </main>
   );
@@ -7860,7 +8309,10 @@ function PremiumAccessPanel({
         <strong>{subscription.active ? 'Unlocked' : priceLine}</strong>
       </div>
       <p className="privacy-note">
-        Unlock the full Complete Athlete experience with plans, mindset coaching, daily growth tools, and future member features.
+        Unlock the full Complete Athlete experience with plans, Daily Deposit and Today tools, goals, journal, parent access, and limited mindset coach messages.
+      </p>
+      <p className="subscription-terms-note">
+        The Complete Athlete is $5.99/month after the 7-day free trial. Payment is charged to your Apple ID, renews monthly unless canceled at least 24 hours before renewal, and can be managed in Apple subscription settings.
       </p>
       {subscription.message && <p className="inline-note">{subscription.message}</p>}
       <div className="premium-actions">
@@ -7891,11 +8343,59 @@ function PremiumAccessPanel({
   );
 }
 
+function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [accountMessage, setAccountMessage] = useState('');
+  const canRestore = subscription?.configured && subscription?.native;
+
+  async function confirmDeleteAccount() {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      setAccountMessage(subscription?.active
+        ? 'Tap Delete Account again to permanently remove this account and app data. Apple billing is managed separately, so cancel your subscription in Apple settings if needed.'
+        : 'Tap Delete Account again to permanently remove this account and app data.');
+      return;
+    }
+
+    const message = await deleteAccount();
+    if (message) {
+      setAccountMessage(message);
+      setConfirmingDelete(false);
+    }
+  }
+
+  return (
+    <section className="panel legal-account-panel">
+      <PanelTitle icon={<Shield size={18} />} title="Legal & Account" action="Review" />
+      <div className="legal-link-grid">
+        <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
+        <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
+        <a href="/support.html" target="_blank" rel="noreferrer">Support</a>
+        <a href="https://apps.apple.com/account/subscriptions" target="_blank" rel="noreferrer">Manage Subscription</a>
+      </div>
+      <p className="subscription-terms-note">
+        Purchases are handled by Apple. The subscription is $5.99/month after the 7-day free trial and can be canceled in Apple subscription settings.
+      </p>
+      {!canRestore && <p className="privacy-note">Restore Purchase is available inside the iPhone app when Apple purchases are enabled.</p>}
+      {accountMessage && <p className={confirmingDelete ? 'inline-warning' : 'inline-note'}>{accountMessage}</p>}
+      <div className="account-danger-actions">
+        <button className="secondary-action inline account-signout-button" onClick={logoutUser} type="button">
+          Sign Out
+        </button>
+        <button className="danger-action inline" onClick={confirmDeleteAccount} type="button">
+          {confirmingDelete ? 'Confirm Delete Account' : 'Delete Account'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ProfileScreen({
   authSession,
   athleteProfile,
   athleteParentAccessDraft,
   athleteParentLinkFeedback,
+  deleteAccount,
   linkAthleteParentAccessCode,
   logoutUser,
   notificationPreferences,
@@ -7919,27 +8419,37 @@ function ProfileScreen({
     setAthleteProfile((current) => ({ ...current, [field]: value }));
   }
 
+  function useLocalPhoto(file) {
+    const reader = new FileReader();
+    reader.onload = () => updateAthleteProfile('photo', reader.result);
+    reader.onerror = () => setShareFeedback('Photo could not be added. Choose a different image.');
+    reader.readAsDataURL(file);
+  }
+
   async function updatePhoto(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (isSupabaseConfigured && authSession?.id) {
-      const extension = file.name.split('.').pop() || 'jpg';
-      const path = `${authSession.id}/profile.${extension}`;
-      const { error } = await supabase.storage
-        .from('athlete-profile-photos')
-        .upload(path, file, { cacheControl: '3600', upsert: true });
+    try {
+      if (isSupabaseConfigured && authSession?.id) {
+        const extension = file.name.split('.').pop() || 'jpg';
+        const path = `${authSession.id}/profile.${extension}`;
+        const { error } = await supabase.storage
+          .from('athlete-profile-photos')
+          .upload(path, file, { cacheControl: '3600', upsert: true });
 
-      if (!error) {
-        const { data } = supabase.storage.from('athlete-profile-photos').getPublicUrl(path);
-        updateAthleteProfile('photo', data.publicUrl);
-        return;
+        if (!error) {
+          const { data } = supabase.storage.from('athlete-profile-photos').getPublicUrl(path);
+          updateAthleteProfile('photo', data.publicUrl);
+          return;
+        }
       }
+      useLocalPhoto(file);
+    } catch {
+      useLocalPhoto(file);
+    } finally {
+      event.target.value = '';
     }
-
-    const reader = new FileReader();
-    reader.onload = () => updateAthleteProfile('photo', reader.result);
-    reader.readAsDataURL(file);
   }
 
   function updatePrivacy(field, value) {
@@ -8008,14 +8518,11 @@ function ProfileScreen({
           <span>Registered email</span>
           <strong>{accountEmail}</strong>
         </div>
-        <button className="secondary-action inline account-signout-button" onClick={logoutUser} type="button">
-          Sign Out
-        </button>
         <div className="photo-actions">
           <label className="photo-upload">
             <Camera size={18} />
-            Add Photo
-            <input type="file" accept="image/*" onChange={updatePhoto} />
+            Choose Photo
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={updatePhoto} />
           </label>
           {athleteProfile.photo && (
             <button className="secondary-action inline" onClick={() => updateAthleteProfile('photo', '')}>
@@ -8046,6 +8553,7 @@ function ProfileScreen({
           </label>
         </div>
       </section>
+      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
       <section className={openProfileSections.notifications ? 'panel notification-settings-panel collapsible-panel open' : 'panel notification-settings-panel collapsible-panel'}>
         <button
           className="collapsible-trigger"
@@ -8252,6 +8760,7 @@ function ProfileScreen({
 function ParentSettingsScreen({
   athleteName,
   authSession,
+  deleteAccount,
   linkedAthleteSummary,
   linkParentAccessCode,
   logoutUser,
@@ -8263,6 +8772,7 @@ function ParentSettingsScreen({
   requestBrowserNotifications,
   setParentAccessDraft,
   setParentLinkFeedback,
+  subscription,
   updateNotificationPreference
 }) {
   const [parentNotificationsOpen, setParentNotificationsOpen] = useState(true);
@@ -8297,7 +8807,9 @@ function ParentSettingsScreen({
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => setParentPhoto(reader.result);
+    reader.onerror = () => setFamilyAccessFeedback('Photo could not be added. Choose a different image.');
     reader.readAsDataURL(file);
+    event.target.value = '';
   }
 
   function toggleBrowserPush(checked) {
@@ -8343,8 +8855,8 @@ function ParentSettingsScreen({
         <div className="photo-actions parent-photo-actions">
           <label className="photo-upload">
             <Camera size={18} />
-            Add Photo
-            <input type="file" accept="image/*" onChange={updateParentPhoto} />
+            Choose Photo
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={updateParentPhoto} />
           </label>
           {parentPhoto && (
             <button className="secondary-action inline" onClick={() => setParentPhoto('')} type="button">
@@ -8407,6 +8919,8 @@ function ParentSettingsScreen({
           </span>
         </div>
       </section>
+
+      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
 
       <section className={parentNotificationsOpen ? 'panel parent-notifications-panel collapsible-panel open' : 'panel parent-notifications-panel collapsible-panel'}>
         <button
@@ -8493,12 +9007,6 @@ function ParentSettingsScreen({
           </span>
         </div>
       </section>
-
-      <section className="parent-signout-panel">
-        <button className="secondary-action inline account-signout-button" onClick={logoutUser} type="button">
-          Sign Out
-        </button>
-      </section>
     </>
   );
 }
@@ -8508,6 +9016,7 @@ function ParentDashboard({
   authSession,
   athleteScore,
   athleteProfile,
+  deleteAccount,
   goals,
   journalEntries,
   lesson,
@@ -8696,6 +9205,7 @@ function ParentDashboard({
         <ParentSettingsScreen
           athleteName={athleteName}
           authSession={authSession}
+          deleteAccount={deleteAccount}
           linkParentAccessCode={linkParentAccessCode}
           linkedAthleteSummary={linkedAthleteSummary}
           logoutUser={logoutUser}
@@ -8707,6 +9217,7 @@ function ParentDashboard({
           requestBrowserNotifications={requestBrowserNotifications}
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
+          subscription={subscription}
           updateNotificationPreference={updateNotificationPreference}
         />
       )}
