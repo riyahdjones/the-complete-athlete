@@ -893,7 +893,7 @@ const goalsSeed = [
   { id: 1, label: 'Dream Goal', value: 'Earn a varsity leadership role', progress: 42 },
   { id: 2, label: 'Season Goal', value: 'Become a dependable fourth-quarter player', progress: 64 },
   { id: 3, label: 'Monthly Goal', value: 'Complete 22 of 30 Daily Deposit sessions', progress: 73 },
-  { id: 4, label: 'Today’s Productivity', value: 'Win today through controllables', progress: 50 }
+  { id: 4, label: 'Daily Activity Tracker', value: 'Win today through controllables', progress: 50 }
 ];
 
 const plansSeed = createPerformancePlanSeeds(todayKey);
@@ -5696,7 +5696,7 @@ function HomeScreen({
     const awarded = standardsPoints > 0 && awardPoints({
       type: 'standards_completed',
       points: standardsPoints,
-      label: streakBonus > 0 ? `Productivity tracker complete with ${nextStreak}-day streak bonus` : 'Productivity tracker complete',
+      label: streakBonus > 0 ? `Daily activity tracker complete with ${nextStreak}-day streak bonus` : 'Daily activity tracker complete',
       uniqueKey: `standards-completed-${submissionDate}`,
       metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus }
     });
@@ -5709,13 +5709,13 @@ function HomeScreen({
       streak: nextStreak,
       pointsAwarded: standardsPoints
     }, { area: 'daily' });
-    celebrate(awarded ? `Day locked in. +${standardsPoints} points.` : 'Day submitted. Finish every item to earn productivity points.');
+    celebrate(awarded ? `Day locked in. +${standardsPoints} points.` : 'Day submitted. Finish every item to earn activity points.');
 
     notifyUser(
-      allStandardsCompleted ? 'Productivity tracker locked' : 'Productivity submitted',
+      allStandardsCompleted ? 'Daily activity tracker locked' : 'Daily activity submitted',
       allStandardsCompleted
         ? `Your day is locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`
-        : `You submitted ${completedStandards.length} of ${standards.length} items. Complete every item to earn productivity points.`,
+        : `You submitted ${completedStandards.length} of ${standards.length} items. Complete every item to earn activity points.`,
       'success',
       {
         type: 'productivity',
@@ -5796,10 +5796,10 @@ function HomeScreen({
       </section>
 
       <section className="panel daily-standards-panel">
-        <PanelTitle icon={<BadgeCheck size={18} />} title="Today’s Productivity" action={`${completedStandards.length}/${standards.length} done`} />
+        <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Activity Tracker" action={`${completedStandards.length}/${standards.length} done`} />
         <div className="daily-standards-card">
           <p className="info-note">Add what you need to handle today. Update it as you go, then lock in the day once everything is complete.</p>
-          <div className="productivity-summary" aria-label="Today’s productivity summary">
+          <div className="productivity-summary" aria-label="Daily activity tracker summary">
             <span>
               <strong>{completedStandards.length}</strong>
               Done
@@ -5833,10 +5833,10 @@ function HomeScreen({
               value={standardDraft}
               onChange={(event) => setStandardDraft(event.target.value)}
               placeholder="Add something you need to do today"
-              aria-label="Add a productivity item"
+              aria-label="Add a daily activity item"
             />
             <select
-              aria-label="Connect productivity item to a goal"
+              aria-label="Connect daily activity item to a goal"
               value={standardGoalId}
               onChange={(event) => setStandardGoalId(event.target.value)}
             >
@@ -5847,7 +5847,7 @@ function HomeScreen({
                 </option>
               ))}
             </select>
-            <button className="icon-button dark" type="submit" aria-label="Add productivity item">
+            <button className="icon-button dark" type="submit" aria-label="Add daily activity item">
               <Plus size={18} />
             </button>
           </form>
@@ -5931,7 +5931,7 @@ function HomeScreen({
           </button>
           <button className="history-sheet-trigger" onClick={() => setStandardsHistoryOpen(true)} type="button">
             <BarChart3 size={16} />
-            View productivity history
+            View activity history
           </button>
           {submittedToday && (
             <button className="reflection-cta" onClick={openDailyReflection}>
@@ -5946,7 +5946,7 @@ function HomeScreen({
         <PanelTitle icon={<Star size={18} />} title="Complete Athlete Score" action={`Today +${todayPoints}`} />
         <div className="score-hero">
           <strong>{athleteScore}</strong>
-          <span>Total points earned through productivity, goals, plans, and reflection.</span>
+          <span>Total points earned through daily activity, goals, plans, and reflection.</span>
           <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
             <CircleHelp size={15} />
             How points work
@@ -5971,7 +5971,7 @@ function HomeScreen({
         <div className="progress-scoreboard">
           <span>
             <strong>{completion}%</strong>
-            Productivity today
+            Activity today
           </span>
           <span>
             <strong>{streakCount}</strong>
@@ -6017,7 +6017,7 @@ function HomeScreen({
             <div className="points-breakdown">
               <span>
                 <strong>+25</strong>
-                Full productivity day completed
+                Full activity day completed
               </span>
               <span>
                 <strong>+5</strong>
@@ -6062,14 +6062,14 @@ function HomeScreen({
             <div className="sheet-head">
               <div>
                 <span>Last 7 locked days</span>
-                <strong>Productivity History</strong>
+                <strong>Activity History</strong>
               </div>
-              <button className="icon-button sheet-close" onClick={() => setStandardsHistoryOpen(false)} type="button" aria-label="Close productivity history">
+              <button className="icon-button sheet-close" onClick={() => setStandardsHistoryOpen(false)} type="button" aria-label="Close activity history">
                 <X size={18} />
               </button>
             </div>
             {recentStandardsHistory.length === 0 ? (
-              <p className="empty-note">Your locked-in productivity days will appear here after you submit a day.</p>
+              <p className="empty-note">Your locked-in activity days will appear here after you submit a day.</p>
             ) : (
               <div className="standards-history sheet-history-list">
                 {recentStandardsHistory.map((entry) => (
@@ -6316,7 +6316,7 @@ function GoalsScreen({
         <p>Goals give your effort a direction, but it’s discipline to constantly pursue them that gives you momentum.</p>
         <div className="goal-reminder">
           <strong>How it works</strong>
-          <span>Link daily productivity to goals. When you complete those items and lock in the day, that goal earns progress.</span>
+          <span>Link daily activity to goals. When you complete those items and lock in the day, that goal earns progress.</span>
         </div>
       </section>
 
@@ -6405,7 +6405,7 @@ function GoalsScreen({
                 <strong>{goal.progress}%</strong>
               </label>
               <div className="goal-linked-standards">
-                <strong>Today’s productivity helping this goal</strong>
+                <strong>Daily activity helping this goal</strong>
                 {goalStandards.length === 0 ? (
                   <p>No items linked yet. Add something on Home and connect it to this goal.</p>
                 ) : (
@@ -7876,7 +7876,7 @@ function JournalScreen({
         <PanelTitle icon={<PenLine size={18} />} title="Journal" action="Private" />
         <div className="journal-intro">
           <strong>Write what you need to remember.</strong>
-          <span>Use this space for reflection. Your goals and productivity tracker live below.</span>
+          <span>Use this space for reflection. Your goals and daily activity tracker live below.</span>
         </div>
         <label className="journal-label" htmlFor="journal-type">
           Entry type
@@ -8841,7 +8841,7 @@ function ProfileScreen({
                 />
               </label>
               <label>
-                <span>Productivity tracker visible to parent</span>
+                <span>Daily activity tracker visible to parent</span>
                 <input
                   type="checkbox"
                   checked={privacySettings.standardsVisible}

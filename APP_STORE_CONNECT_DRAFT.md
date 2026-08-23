@@ -32,14 +32,14 @@ Build the habits, mindset, goals, and daily rhythm behind complete athletic grow
 
 The Complete Athlete helps athletes grow beyond the scoreboard.
 
-Athletes can read Daily Deposits, track daily productivity, set goals, complete performance plans, journal, build streaks, earn points, and use a mindset coach designed for sports moments like pressure, confidence, slumps, preparation, mistakes, and accountability.
+Athletes can read Daily Deposits, track daily activity, set goals, complete performance plans, journal, build streaks, earn points, and use a mindset coach designed for sports moments like pressure, confidence, slumps, preparation, mistakes, and accountability.
 
 Parents can create a connected experience to follow their athlete's progress, view performance plans, and support the growth process without crowding the athlete's personal reflection space.
 
 Inside the app:
 - Daily Deposits for mindset, faith, character, and performance growth.
 - Performance Plans built as guided reading experiences.
-- Goal and productivity tracking for daily accountability.
+- Goal and daily activity tracking for daily accountability.
 - Journaling for reflection and growth.
 - Complete Athlete Score points for consistency.
 - Parent access for support and accountability.
@@ -71,7 +71,7 @@ https://the-complete-athlete.vercel.app/
 
 The Complete Athlete is a sports mindset, daily growth, and parent-support app for athletes.
 
-The app includes athlete and parent account flows. Athletes can complete Daily Deposits, goals, productivity tasks, performance plans, journal entries, points/streak activities, and AI mindset coach conversations. Parents can link to an athlete through the parent access flow to support accountability and view approved athlete progress/content.
+The app includes athlete and parent account flows. Athletes can complete Daily Deposits, goals, daily activity tasks, performance plans, journal entries, points/streak activities, and AI mindset coach conversations. Parents can link to an athlete through the parent access flow to support accountability and view approved athlete progress/content.
 
 My Mindset Coach is designed for sports mindset support. It is not therapy, medical advice, diagnosis, emergency support, or injury treatment. Safety boundaries are included in the app and backend. For injury, self-harm, abuse, threats, or danger, the coach directs users to involve a trusted adult, emergency support, or a qualified professional.
 
@@ -99,7 +99,7 @@ If a network/auth request is slow during review, tap Continue with review access
 
 Suggested review path:
 1. Log in as the athlete.
-2. Open Home to view Daily Deposit, Today's Focus, productivity, score, and progress.
+2. Open Home to view Daily Deposit, Today's Focus, daily activity tracker, score, and progress.
 3. Open Performance Plans and review a plan lesson.
 4. Open Goals and Profile.
 5. Open Coach and ask a general sports mindset question.
