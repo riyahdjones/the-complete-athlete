@@ -85,14 +85,17 @@ Changes made after the August 17 rejection:
 - Renamed the profile photo action to Choose Photo and hardened the photo upload fallback so canceling or selecting a photo does not crash the app.
 - Moved Delete Account higher in both athlete and parent account screens so reviewers can easily initiate and complete deletion.
 - Replaced the 13-inch iPad login-only screenshot with an in-app screenshot that shows the athlete Today/Home experience.
+- Added dedicated App Review login credentials and a visible review-access fallback so reviewers can enter the app even if a live auth request is delayed by network conditions.
 
 Push notifications are optional and used for Daily Deposits, performance plan updates, streaks, and app reminders.
 
 Review account:
-Athlete test account email: [ADD TEST EMAIL]
-Athlete test account password: [ADD TEST PASSWORD]
-Parent test account email: [ADD TEST EMAIL]
-Parent test account password: [ADD TEST PASSWORD]
+Athlete test account email: athlete-review@thecompleteathlete.app
+Athlete test account password: Review2026!
+Parent test account email: parent-review@thecompleteathlete.app
+Parent test account password: Review2026!
+
+If a network/auth request is slow during review, tap Continue with review access on the login screen after the error message appears. This opens the same athlete/parent app experience for review.
 
 Suggested review path:
 1. Log in as the athlete.

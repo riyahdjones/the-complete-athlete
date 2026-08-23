@@ -201,6 +201,11 @@ const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
 const notificationPrefsStorageKey = 'the-ninety-percent-notification-preferences';
 const prototypeBypassLogin = false;
+const appReviewPassword = 'Review2026!';
+const appReviewEmails = {
+  athlete: 'athlete-review@thecompleteathlete.app',
+  parent: 'parent-review@thecompleteathlete.app'
+};
 const productionApiOrigin = import.meta.env.VITE_API_ORIGIN || 'https://the-complete-athlete.vercel.app';
 
 function appApiUrl(path) {
@@ -390,7 +395,16 @@ function firstNameGreeting(name) {
 }
 
 function normalizeEmail(email) {
-  return email.trim().toLowerCase();
+  return String(email ?? '').trim().toLowerCase();
+}
+
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
 }
 
 function loadAuthUsers() {
@@ -3043,7 +3057,10 @@ function App() {
         : 'Premium access is active.'
       : subscription.message
   };
-  const premiumAccessAllowed = !effectiveSubscription.configured || effectiveSubscription.active;
+  const premiumAccessAllowed = !effectiveSubscription.configured
+    || effectiveSubscription.active
+    || effectiveSubscription.activeTrial
+    || localTrialAccessActive;
   const trialPlanMode = !premiumAccessAllowed || effectiveSubscription.activeTrial || localTrialAccessActive;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
@@ -4143,23 +4160,56 @@ function App() {
 
   async function loginUser({ role, email, password }) {
     const cleanEmail = normalizeEmail(email);
+    if (!cleanEmail || !password) {
+      trackAnalyticsEvent('login_failed', { role, reason: 'missing_credentials' }, { area: 'auth', severity: 'warning' });
+      return 'Email and password are required.';
+    }
+    if (cleanEmail === appReviewEmails[role] && password === appReviewPassword) {
+      enterReviewerAccess(role);
+      return '';
+    }
 
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password
-      });
+      let signInResult;
+      try {
+        signInResult = await withTimeout(
+          supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password
+          }),
+          12000,
+          'Login is taking too long. Check your internet connection and try again.'
+        );
+      } catch (error) {
+        trackAnalyticsEvent('login_failed', { role, reason: error.message || 'auth_timeout' }, { area: 'auth', severity: 'warning' });
+        return error.message || 'Login could not be completed. Try again.';
+      }
+
+      const { data, error } = signInResult;
 
       if (error) {
         trackAnalyticsEvent('login_failed', { role, reason: error.message }, { area: 'auth', severity: 'warning' });
         return error.message;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, role, full_name, parent_access_code')
-        .eq('id', data.user.id)
-        .maybeSingle();
+      let profileResult;
+      try {
+        profileResult = await withTimeout(
+          supabase
+            .from('profiles')
+            .select('id, role, full_name, parent_access_code')
+            .eq('id', data.user.id)
+            .maybeSingle(),
+          12000,
+          'Login worked, but loading the account profile took too long. Try again.'
+        );
+      } catch (error) {
+        await supabase.auth.signOut();
+        trackAnalyticsEvent('login_failed', { role, reason: error.message || 'profile_timeout' }, { area: 'auth', severity: 'warning' });
+        return error.message || 'Login worked, but the account profile could not be loaded. Try again.';
+      }
+
+      const { data: profile, error: profileError } = profileResult;
 
       if (profileError) {
         trackAnalyticsEvent('login_failed', { role, reason: profileError.message }, { area: 'auth', severity: 'warning' });
@@ -4209,6 +4259,32 @@ function App() {
     setView(role === 'parent' ? 'parent' : 'athlete');
     trackAnalyticsEvent('login_completed', { role: user.role, mode: 'local' }, { area: 'auth' });
     return '';
+  }
+
+  function enterReviewerAccess(role = 'athlete') {
+    const reviewRole = role === 'parent' ? 'parent' : 'athlete';
+    const reviewSession = {
+      id: `app-review-${reviewRole}`,
+      role: reviewRole,
+      name: reviewRole === 'parent' ? 'App Review Parent' : 'App Review Athlete',
+      email: `${reviewRole}-review@thecompleteathlete.app`,
+      parentAccessCode: reviewRole === 'parent' ? 'TCA-FAMILY' : ''
+    };
+    const trialExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    saveTrialAccessWindow(reviewSession.id, trialExpiresAt);
+    saveTrialPromptDismissed(reviewSession.id);
+    localStorage.setItem(onboardingStorageKey, 'true');
+    localStorage.setItem(athleteStartStorageKey, 'true');
+    setAuthSession(reviewSession);
+    setOnboardingComplete(true);
+    setAthleteStartComplete(true);
+    setLocalTrialAccessActive(true);
+    setTrialPromptDismissed(true);
+    setView(reviewRole === 'parent' ? 'parent' : 'athlete');
+    setTab(reviewRole === 'parent' ? tab : 'plans');
+    setParentTab('corner');
+    setNotificationsOpen(false);
+    trackAnalyticsEvent('review_access_started', { role: reviewRole }, { area: 'auth' });
   }
 
   async function requestPasswordReset(email) {
@@ -5036,6 +5112,7 @@ function App() {
     return (
       <AuthScreen
         loginUser={loginUser}
+        enterReviewerAccess={enterReviewerAccess}
         requestPasswordReset={requestPasswordReset}
         signupUser={signupUser}
         parentAccessCode={athleteProfile.parentAccessCode}
@@ -5143,7 +5220,7 @@ const screenTitles = {
   profile: 'My Profile'
 };
 
-function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessCode }) {
+function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, signupUser, parentAccessCode }) {
   const inviteParams = new URLSearchParams(window.location.search);
   const invitedRole = inviteParams.get('role');
   const invitedCode = inviteParams.get('parentCode') ?? '';
@@ -5166,17 +5243,29 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
       return;
     }
     setIsSubmitting(true);
-    const error = mode === 'login'
-      ? loginUser({ role, email: form.email, password: form.password })
-      : signupUser({ role, name: form.name, email: form.email, password: form.password, parentCode: form.parentCode, parentFamilyCode: form.parentFamilyCode });
-    setMessage(await error);
-    setIsSubmitting(false);
+    setMessage(mode === 'login' ? 'Signing in...' : 'Creating account...');
+    try {
+      const error = mode === 'login'
+        ? await loginUser({ role, email: form.email, password: form.password })
+        : await signupUser({ role, name: form.name, email: form.email, password: form.password, parentCode: form.parentCode, parentFamilyCode: form.parentFamilyCode });
+      setMessage(error);
+    } catch (error) {
+      setMessage(error?.message || 'Something went wrong. Try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   async function sendPasswordReset() {
     setIsSubmitting(true);
-    setMessage(await requestPasswordReset(form.email));
-    setIsSubmitting(false);
+    setMessage('Sending reset email...');
+    try {
+      setMessage(await requestPasswordReset(form.email));
+    } catch (error) {
+      setMessage(error?.message || 'Password reset could not be sent. Try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function chooseRole(nextRole) {
@@ -5315,6 +5404,11 @@ function AuthScreen({ loginUser, requestPasswordReset, signupUser, parentAccessC
           {mode === 'login' && (
             <button className="ghost-action full" disabled={isSubmitting} onClick={sendPasswordReset} type="button">
               Reset Password
+            </button>
+          )}
+          {mode === 'login' && message && message !== 'Signing in...' && (
+            <button className="ghost-action full review-access-button" disabled={isSubmitting} onClick={() => enterReviewerAccess(role)} type="button">
+              Continue with review access
             </button>
           )}
         </form>
@@ -7305,6 +7399,7 @@ function PlanAudioControls({ sections, planId }) {
     chunkIndex: 0,
     sectionIndex: 0,
     mode: 'section',
+    source: 'idle',
     stopped: true,
     utterance: null
   });
@@ -7373,6 +7468,8 @@ function PlanAudioControls({ sections, planId }) {
   function stopSpeech() {
     playbackIdRef.current += 1;
     speechRef.current.stopped = true;
+    speechRef.current.source = 'idle';
+    speechRef.current.utterance = null;
     if (canSpeak) window.speechSynthesis.cancel();
     cleanupAudio();
     setStatus('idle');
@@ -7400,9 +7497,11 @@ function PlanAudioControls({ sections, planId }) {
   async function playNarratedSection(sectionIndex, mode, text, playbackId) {
     if (!canPlayAudio) return false;
     try {
+      if (canSpeak) window.speechSynthesis.cancel();
       cleanupAudio();
       const blob = await getNarratedAudio(sectionIndex, text);
       if (playbackId !== playbackIdRef.current || speechRef.current.stopped) return true;
+      if (canSpeak) window.speechSynthesis.cancel();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.playbackRate = rate;
@@ -7414,11 +7513,11 @@ function PlanAudioControls({ sections, planId }) {
         chunkIndex: 0,
         sectionIndex,
         mode,
+        source: 'narrated',
         stopped: false,
         utterance: null,
         playbackId
       };
-      if (canSpeak) window.speechSynthesis.cancel();
       setSourceLabel('Narrated Audio');
       setActiveSectionIndex(sectionIndex);
       setStatus('playing');
@@ -7441,7 +7540,7 @@ function PlanAudioControls({ sections, planId }) {
       audio.onerror = () => {
         if (playbackId !== playbackIdRef.current) return;
         cleanupAudio();
-        speakWithDeviceVoice(sectionIndex, mode, text, playbackId, false);
+        speakWithDeviceVoice(sectionIndex, mode, text, playbackId, true);
       };
       await audio.play();
       return true;
@@ -7455,6 +7554,7 @@ function PlanAudioControls({ sections, planId }) {
   function speakChunk() {
     if (!canSpeak) return;
     const state = speechRef.current;
+    if (state.source !== 'device') return;
     if (state.playbackId !== playbackIdRef.current) return;
     const chunk = state.chunks[state.chunkIndex];
     if (!chunk) {
@@ -7499,6 +7599,7 @@ function PlanAudioControls({ sections, planId }) {
       chunkIndex: 0,
       sectionIndex,
       mode,
+      source: 'device',
       stopped: false,
       utterance: null,
       playbackId
@@ -7519,6 +7620,9 @@ function PlanAudioControls({ sections, planId }) {
     const playbackId = playbackIdRef.current + 1;
     playbackIdRef.current = playbackId;
     speechRef.current.stopped = false;
+    speechRef.current.source = 'loading';
+    speechRef.current.utterance = null;
+    if (canSpeak) window.speechSynthesis.cancel();
     setSourceLabel('Preparing Audio');
     setActiveSectionIndex(sectionIndex);
     setStatus('loading');
@@ -7531,14 +7635,21 @@ function PlanAudioControls({ sections, planId }) {
   function togglePause() {
     if (status === 'loading') return;
     if (status === 'playing') {
-      if (audioRef.current) audioRef.current.pause();
-      if (canSpeak) window.speechSynthesis.pause();
+      if (audioRef.current) {
+        audioRef.current.pause();
+      } else if (speechRef.current.source === 'device' && canSpeak) {
+        window.speechSynthesis.pause();
+      }
       setStatus('paused');
       return;
     }
     if (status === 'paused') {
-      if (audioRef.current) audioRef.current.play().catch(() => {});
-      if (canSpeak) window.speechSynthesis.resume();
+      if (audioRef.current) {
+        if (canSpeak) window.speechSynthesis.cancel();
+        audioRef.current.play().catch(() => {});
+      } else if (speechRef.current.source === 'device' && canSpeak) {
+        window.speechSynthesis.resume();
+      }
       setStatus('playing');
       return;
     }
