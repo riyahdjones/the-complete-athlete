@@ -18,7 +18,12 @@ alter table public.goals
 add column if not exists updated_at timestamptz not null default now();
 
 alter table public.daily_standards
-add column if not exists updated_at timestamptz not null default now();
+add column if not exists updated_at timestamptz not null default now(),
+add column if not exists done boolean not null default false,
+add column if not exists entry_date date not null default current_date;
+
+create index if not exists daily_standards_athlete_entry_date_idx
+on public.daily_standards (athlete_user_id, entry_date);
 
 alter table public.daily_deposits
 add column if not exists focus_question text not null default '';

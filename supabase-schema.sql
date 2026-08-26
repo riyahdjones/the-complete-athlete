@@ -46,6 +46,8 @@ create table if not exists public.daily_standards (
   athlete_user_id uuid not null references public.profiles(id) on delete cascade,
   goal_id uuid references public.goals(id) on delete set null,
   label text not null,
+  done boolean not null default false,
+  entry_date date not null default current_date,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -212,6 +214,9 @@ on public.goals (athlete_user_id, created_at);
 
 create index if not exists daily_standards_athlete_active_created_idx
 on public.daily_standards (athlete_user_id, active, created_at);
+
+create index if not exists daily_standards_athlete_entry_date_idx
+on public.daily_standards (athlete_user_id, entry_date);
 
 create index if not exists daily_standards_goal_idx
 on public.daily_standards (goal_id);

@@ -979,10 +979,11 @@ function profileFromSupabase(row, authSession, currentProfile) {
 }
 
 function standardFromSupabase(row) {
+  const isToday = !row.entry_date || row.entry_date === todayKey();
   return {
     id: row.id,
     label: row.label ?? '',
-    done: false,
+    done: isToday ? Boolean(row.done) : false,
     goalId: row.goal_id ?? null
   };
 }
@@ -992,6 +993,8 @@ function standardToSupabase(standard, athleteUserId) {
     athlete_user_id: athleteUserId,
     label: standard.label ?? '',
     goal_id: isSupabaseId(standard.goalId) ? standard.goalId : null,
+    done: Boolean(standard.done),
+    entry_date: todayKey(),
     active: true
   };
 
@@ -3445,7 +3448,7 @@ function App() {
           .order('created_at', { ascending: true }),
         supabase
           .from('daily_standards')
-          .select('id, label, goal_id')
+          .select('id, label, goal_id, done, entry_date')
           .eq('athlete_user_id', authSession.id)
           .eq('active', true)
           .order('created_at', { ascending: true }),
@@ -3486,7 +3489,7 @@ function App() {
         setAthleteProfile((current) => profileFromSupabase(profileResult.data, authSession, current));
       }
 
-      if (!goalsResult.error && Array.isArray(goalsResult.data) && goalsResult.data.length) {
+      if (!goalsResult.error && Array.isArray(goalsResult.data)) {
         setGoals(goalsResult.data.map(goalFromSupabase));
       }
 
@@ -3495,7 +3498,9 @@ function App() {
           const doneByLabel = new Map(current.map((standard) => [standard.label, standard.done]));
           return standardsResult.data.map((row) => ({
             ...standardFromSupabase(row),
-            done: doneByLabel.get(row.label) ?? false
+            done: row.entry_date === todayKey()
+              ? Boolean(row.done)
+              : doneByLabel.get(row.label) ?? false
           }));
         });
       }
@@ -3904,7 +3909,7 @@ function App() {
         const { data, error } = await supabase
           .from('daily_standards')
           .insert(localStandards.map((standard) => standardToSupabase(standard, authSession.id)))
-          .select('id, label, goal_id');
+          .select('id, label, goal_id, done, entry_date');
 
         if (!cancelled && !error && Array.isArray(data)) {
           const savedStandards = data.map(standardFromSupabase);
@@ -4164,8 +4169,9 @@ function App() {
       trackAnalyticsEvent('login_failed', { role, reason: 'missing_credentials' }, { area: 'auth', severity: 'warning' });
       return 'Email and password are required.';
     }
-    if (cleanEmail === appReviewEmails[role] && password === appReviewPassword) {
-      enterReviewerAccess(role);
+    const reviewRole = Object.entries(appReviewEmails).find(([, reviewEmail]) => cleanEmail === reviewEmail)?.[0];
+    if (reviewRole && password === appReviewPassword) {
+      enterReviewerAccess(reviewRole);
       return '';
     }
 
@@ -4282,7 +4288,7 @@ function App() {
     setTrialPromptDismissed(true);
     setView(reviewRole === 'parent' ? 'parent' : 'athlete');
     setTab(reviewRole === 'parent' ? tab : 'plans');
-    setParentTab('corner');
+    setParentTab('parent-corner');
     setNotificationsOpen(false);
     trackAnalyticsEvent('review_access_started', { role: reviewRole }, { area: 'auth' });
   }
