@@ -16,7 +16,23 @@
     },
     {
       "path": "/api/send-notifications",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/send-notifications",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/send-notifications",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/send-notifications",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/send-notifications",
+      "schedule": "0 1 * * *"
     }
   ]
 }

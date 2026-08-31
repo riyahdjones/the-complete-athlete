@@ -5697,7 +5697,7 @@ function HomeScreen({
       }
     );
 
-    if (nextStreak % 7 === 0) {
+    if (nextStreak === 3 || nextStreak % 7 === 0) {
       notifyUser(
         `${nextStreak}-day streak`,
         `You have protected your daily work for ${nextStreak} straight days.`,

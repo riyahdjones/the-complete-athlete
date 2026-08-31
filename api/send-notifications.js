@@ -1,22 +1,19 @@
 import { apnsConfigured, sendApplePush } from './_apns.js';
 import { envValue, json, setCorsHeaders, supabaseServiceRequest } from './_supabase.js';
 
-function todayKey() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-}
-
-function yesterdayKey() {
+function dateKey(offsetDays = 0) {
   const date = new Date();
-  date.setDate(date.getDate() - 1);
+  date.setDate(date.getDate() + offsetDays);
   return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
 function easternHour() {
-  return Number(new Date().toLocaleTimeString('en-US', {
+  const hour = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
-    hour: '2-digit',
-    hour12: false
-  }));
+    hour: 'numeric',
+    hourCycle: 'h23'
+  }).formatToParts(new Date()).find((part) => part.type === 'hour')?.value;
+  return Number(hour);
 }
 
 function daysInactive(lastActiveAt) {
@@ -98,8 +95,38 @@ async function streakRescueUsers(today, yesterday) {
   return new Set([...yesterdayUsers].filter((userId) => !todayUsers.has(userId)));
 }
 
+async function streakMilestoneUsers(date) {
+  const dates = [dateKey(-2), dateKey(-1), date];
+  const result = await supabaseServiceRequest(
+    `standards_history?select=athlete_user_id,entry_date,completed,total&entry_date=in.(${dates.join(',')})`
+  );
+  const completedDatesByUser = new Map();
+
+  (result.data ?? []).forEach((row) => {
+    const completed = Number(row.completed) || 0;
+    const total = Number(row.total) || 0;
+    if (completed <= 0 || (total > 0 && completed < total)) return;
+    const userDates = completedDatesByUser.get(row.athlete_user_id) ?? new Set();
+    userDates.add(row.entry_date);
+    completedDatesByUser.set(row.athlete_user_id, userDates);
+  });
+
+  return new Set(
+    [...completedDatesByUser.entries()]
+      .filter(([, userDates]) => dates.every((entryDate) => userDates.has(entryDate)))
+      .map(([userId]) => userId)
+  );
+}
+
+async function notificationExists(userId, notificationId) {
+  const result = await supabaseServiceRequest(
+    `app_notifications?select=id&id=eq.${encodeURIComponent(notificationId)}&user_id=eq.${encodeURIComponent(userId)}&limit=1`
+  );
+  return Boolean(!result.error && result.data?.length);
+}
+
 async function saveNotification(userId, notification) {
-  await supabaseServiceRequest('app_notifications?on_conflict=id', {
+  const result = await supabaseServiceRequest('app_notifications?on_conflict=id', {
     method: 'POST',
     headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
     body: JSON.stringify({
@@ -113,6 +140,7 @@ async function saveNotification(userId, notification) {
       created_at: new Date().toISOString()
     })
   });
+  return !result.error;
 }
 
 function safePushError(error) {
@@ -139,6 +167,10 @@ async function recordNotificationEvent(eventType, severity, metadata) {
 }
 
 async function sendToDevice(device, notification) {
+  if (await notificationExists(device.user_id, notification.id)) {
+    return { pushed: false, stored: true, duplicate: true };
+  }
+
   await saveNotification(device.user_id, notification);
   if (!apnsConfigured()) return { pushed: false, stored: true };
 
@@ -207,19 +239,20 @@ export default async function handler(req, res) {
     return json(res, 401, { error: 'Notification job is not authorized.' });
   }
 
-  const date = todayKey();
-  const yesterday = yesterdayKey();
+  const date = dateKey();
+  const yesterday = dateKey(-1);
   const hour = easternHour();
-  const isMorningWindow = hour === 7;
-  const isReengagementWindow = hour === 7 || hour === 10;
-  const isEveningWindow = hour === 20;
-  const [deposit, plan, devices, inactiveUsers, unlockUsers, rescueUsers] = await Promise.all([
+  const isMorningWindow = hour >= 6 && hour <= 8;
+  const isReengagementWindow = isMorningWindow || (hour >= 9 && hour <= 11);
+  const isEveningWindow = hour >= 19 && hour <= 21;
+  const [deposit, plan, devices, inactiveUsers, unlockUsers, rescueUsers, milestoneUsers] = await Promise.all([
     latestDailyDeposit(date),
     todaysPlan(date),
     pushDevices(),
     inactiveProfiles(),
     isMorningWindow ? planUnlockUsers(yesterday) : Promise.resolve(new Set()),
-    isEveningWindow ? streakRescueUsers(date, yesterday) : Promise.resolve(new Set())
+    isEveningWindow ? streakRescueUsers(date, yesterday) : Promise.resolve(new Set()),
+    isEveningWindow ? streakMilestoneUsers(date) : Promise.resolve(new Set())
   ]);
   const uniqueUserIds = [...new Set(devices.map((device) => device.user_id))];
   const preferences = await preferencesForUsers(uniqueUserIds);
@@ -263,9 +296,19 @@ export default async function handler(req, res) {
       sent.push(sendToDevice(device, {
         id: `push-streak-rescue-${date}-${device.user_id}`,
         type: 'streaks',
-        title: 'Still time for today’s deposit',
+        title: 'You are about to miss your streak',
         body: 'Keep your streak alive, lock in your day! 🔒',
         tone: 'info'
+      }));
+    }
+
+    if (isEveningWindow && milestoneUsers.has(device.user_id) && prefs.streaks !== false) {
+      sent.push(sendToDevice(device, {
+        id: `push-streak-3-day-${date}-${device.user_id}`,
+        type: 'streaks',
+        title: '3-day streak',
+        body: 'Three straight days of showing up. Keep stacking the small wins.',
+        tone: 'success'
       }));
     }
 
@@ -358,6 +401,7 @@ export default async function handler(req, res) {
     inactivityCandidates: inactiveUsers.size,
     planUnlockCandidates: unlockUsers.size,
     streakRescueCandidates: rescueUsers.size,
+    streakMilestoneCandidates: milestoneUsers.size,
     easternHour: hour,
     apnsConfigured: apnsConfigured(),
     sampleFailures: [...failures, ...rejected].slice(0, 8)
@@ -374,6 +418,7 @@ export default async function handler(req, res) {
     inactivityCandidates: inactiveUsers.size,
     planUnlockCandidates: unlockUsers.size,
     streakRescueCandidates: rescueUsers.size,
+    streakMilestoneCandidates: milestoneUsers.size,
     easternHour: hour,
     apnsConfigured: apnsConfigured()
   });
