@@ -204,9 +204,17 @@ const prototypeBypassLogin = false;
 const appReviewPassword = 'Review2026!';
 const appReviewEmails = {
   athlete: 'athlete-review@thecompleteathlete.app',
-  parent: 'parent-review@thecompleteathlete.app'
+  parent: 'parent-review@thecompleteathlete.app',
+  demo: 'review@thecompleteathlete.app'
 };
 const productionApiOrigin = import.meta.env.VITE_API_ORIGIN || 'https://the-complete-athlete.vercel.app';
+
+function appReviewRoleForEmail(email, fallbackRole = 'athlete') {
+  if (email === appReviewEmails.athlete) return 'athlete';
+  if (email === appReviewEmails.parent) return 'parent';
+  if (email === appReviewEmails.demo) return fallbackRole === 'parent' ? 'parent' : 'athlete';
+  return '';
+}
 
 function appApiUrl(path) {
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
@@ -4169,7 +4177,7 @@ function App() {
       trackAnalyticsEvent('login_failed', { role, reason: 'missing_credentials' }, { area: 'auth', severity: 'warning' });
       return 'Email and password are required.';
     }
-    const reviewRole = Object.entries(appReviewEmails).find(([, reviewEmail]) => cleanEmail === reviewEmail)?.[0];
+    const reviewRole = appReviewRoleForEmail(cleanEmail, role);
     if (reviewRole && password === appReviewPassword) {
       enterReviewerAccess(reviewRole);
       return '';
@@ -5232,7 +5240,7 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   const invitedCode = inviteParams.get('parentCode') ?? '';
   const invitedAsParent = invitedRole === 'parent' && invitedCode;
   const [mode, setMode] = useState(invitedAsParent ? 'signup' : 'login');
-  const [role, setRole] = useState(invitedAsParent ? 'parent' : '');
+  const [role, setRole] = useState(invitedAsParent ? 'parent' : 'athlete');
   const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode, parentFamilyCode: '' });
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -5274,41 +5282,6 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
     }
   }
 
-  function chooseRole(nextRole) {
-    setRole(nextRole);
-    setMessage('');
-    if (nextRole === 'parent' && invitedCode) setMode('signup');
-  }
-
-  if (!role) {
-    return (
-      <main className="auth-shell role-gate-shell" aria-label="Choose The Complete Athlete role">
-        <section className="auth-brand-panel auth-photo-panel">
-          <p className="eyebrow">The Complete Athlete</p>
-          <h1>How are you using the app?</h1>
-          <p>Start in the space built for your role. Athletes train the habits. Parents stay connected to the growth.</p>
-        </section>
-
-        <section className="auth-card role-choice-card">
-          <button className="role-choice-button" onClick={() => chooseRole('athlete')} type="button">
-            <span><Trophy size={18} /> Athlete</span>
-            <strong>I’m an Athlete</strong>
-            <em>Build goals, track daily work, train plans, journal, and use mindset coaching.</em>
-          </button>
-          <button className="role-choice-button" onClick={() => chooseRole('parent')} type="button">
-            <span><Users size={18} /> Parent</span>
-            <strong>I’m a Parent</strong>
-            <em>Follow progress, support the plans, and stay connected to your athlete’s growth.</em>
-          </button>
-          <div className="auth-legal-links role-gate-links">
-            <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
-            <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main className="auth-shell auth-login-shell" aria-label="The Complete Athlete login">
       <section className="auth-brand-panel auth-photo-panel">
@@ -5322,11 +5295,6 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
       </section>
 
       <section className="auth-card">
-        {!invitedAsParent && (
-          <button className="plan-back-button auth-back-button" onClick={() => setRole('')} type="button">
-            Change role
-          </button>
-        )}
         <div className="auth-mode">
           <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">
             Login
