@@ -50,6 +50,12 @@ import {
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import './styles.css';
 
+const LEGAL_URLS = {
+  privacy: 'https://the-complete-athlete.vercel.app/privacy.html',
+  support: 'https://the-complete-athlete.vercel.app/support.html',
+  terms: 'https://the-complete-athlete.vercel.app/terms.html'
+};
+
 if (typeof window !== 'undefined') {
   const isNativeShell =
     window.location.protocol === 'capacitor:' ||
@@ -5387,9 +5393,9 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
           )}
         </form>
         <div className="auth-legal-links">
-          <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy</a>
-          <a href="/terms.html" target="_blank" rel="noreferrer">Terms</a>
-          <a href="/support.html" target="_blank" rel="noreferrer">Support</a>
+          <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy</a>
+          <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms</a>
+          <a href={LEGAL_URLS.support} target="_blank" rel="noreferrer">Support</a>
         </div>
       </section>
     </main>
@@ -8366,8 +8372,8 @@ function TrialPaywallScreen({
           </button>
         </div>
         <div className="trial-legal-links">
-          <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
-          <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
+          <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>
+          <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a>
         </div>
       </section>
     </main>
@@ -8399,6 +8405,10 @@ function PremiumAccessPanel({
       <p className="subscription-terms-note">
         The Complete Athlete is $5.99/month after the 7-day free trial. Payment is charged to your Apple ID, renews monthly unless canceled at least 24 hours before renewal, and can be managed in Apple subscription settings.
       </p>
+      <div className="premium-legal-links" aria-label="Subscription legal links">
+        <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>
+        <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a>
+      </div>
       {subscription.message && <p className="inline-note">{subscription.message}</p>}
       <div className="premium-actions">
         {!subscription.active && (
@@ -8453,9 +8463,9 @@ function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
     <section className="panel legal-account-panel">
       <PanelTitle icon={<Shield size={18} />} title="Legal & Account" action="Review" />
       <div className="legal-link-grid">
-        <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
-        <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
-        <a href="/support.html" target="_blank" rel="noreferrer">Support</a>
+        <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a>
+        <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>
+        <a href={LEGAL_URLS.support} target="_blank" rel="noreferrer">Support</a>
         <a href="https://apps.apple.com/account/subscriptions" target="_blank" rel="noreferrer">Manage Subscription</a>
       </div>
       <p className="subscription-terms-note">
