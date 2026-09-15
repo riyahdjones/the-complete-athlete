@@ -29,7 +29,6 @@ import {
   Shield,
   Sparkles,
   Star,
-  Square,
   Target,
   Trash2,
   Trophy,
@@ -764,6 +763,30 @@ function sequencedPlanAccess(plans, planProgress, date = todayKey()) {
     const unlockDate = !previousPlan ? plan.releaseDate : previousCompletedAt ? addDays(previousCompletedAt, 1) : '';
     previousBySeries.set(series, plan);
     return { ...plan, completedAt, unlocked, unlockDate };
+  });
+}
+
+function parentSequencedPlanAccess(plans, planProgress, date = todayKey()) {
+  const sortedPlans = [...plans].sort((first, second) => (
+    planSeriesTitle(first).localeCompare(planSeriesTitle(second))
+    || planDayNumber(first) - planDayNumber(second)
+    || String(first.title).localeCompare(String(second.title))
+  ));
+  const previousBySeries = new Map();
+
+  return sortedPlans.map((plan) => {
+    const series = planSeriesTitle(plan);
+    const previousPlan = previousBySeries.get(series);
+    const previousCompleted = !previousPlan || Boolean(planProgress[String(previousPlan.id)]);
+    const completedAt = planProgress[String(plan.id)] || '';
+    const released = !plan.releaseDate || plan.releaseDate <= date;
+    previousBySeries.set(series, plan);
+    return {
+      ...plan,
+      completedAt,
+      unlocked: released && previousCompleted,
+      unlockDate: previousCompleted ? '' : 'Complete the previous day'
+    };
   });
 }
 
@@ -2964,6 +2987,10 @@ function App() {
       ? false
       : loadOnboardingComplete()
   ));
+  const [parentOnboardingAccounts, setParentOnboardingAccounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('tca-parent-onboarding-accounts') || '{}'); }
+    catch { return {}; }
+  });
   const [athleteStartComplete, setAthleteStartComplete] = useState(() => (loadOnboardingComplete() ? true : loadAthleteStartComplete()));
   const [viewportRevision, setViewportRevision] = useState(0);
   const [isPhoneViewport, setIsPhoneViewport] = useState(() => (
@@ -2976,11 +3003,7 @@ function App() {
       : 'athlete'
   ));
   const [tab, setTab] = useState('home');
-  const [parentTab, setParentTab] = useState(() => (
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('role') === 'parent'
-      ? 'parent-corner'
-      : 'overview'
-  ));
+  const [parentTab, setParentTab] = useState('overview');
   const [standards, setStandards] = useState(initialDailyState.standards);
   const [standardDraft, setStandardDraft] = useState('');
   const [standardGoalId, setStandardGoalId] = useState('');
@@ -4302,7 +4325,7 @@ function App() {
     setTrialPromptDismissed(true);
     setView(reviewRole === 'parent' ? 'parent' : 'athlete');
     setTab(reviewRole === 'parent' ? tab : 'plans');
-    setParentTab('parent-corner');
+    setParentTab('overview');
     setNotificationsOpen(false);
     trackAnalyticsEvent('review_access_started', { role: reviewRole }, { area: 'auth' });
   }
@@ -4617,6 +4640,17 @@ function App() {
   }
 
   function completeOnboarding(setup) {
+    if (effectiveSession?.role === 'parent') {
+      const nextAccounts = { ...parentOnboardingAccounts, [effectiveSession.id]: true };
+      setParentOnboardingAccounts(nextAccounts);
+      localStorage.setItem('tca-parent-onboarding-accounts', JSON.stringify(nextAccounts));
+      setView('parent');
+      setParentTab('overview');
+      setOnboardingComplete(true);
+      localStorage.setItem(onboardingStorageKey, 'true');
+      trackAnalyticsEvent('onboarding_completed', { role: 'parent' }, { area: 'activation' });
+      return;
+    }
     const selectedChallenge = athleteChallengeById(setup.currentChallenge);
     const accountName = effectiveSession?.name || athleteProfile.name || 'Athlete';
     const nextProfile = {
@@ -5140,7 +5174,15 @@ function App() {
     );
   }
 
-  if (!prototypeBypassLogin && !localParentInviteSession && !athleteTodayPreview && !onboardingComplete) {
+  if (!prototypeBypassLogin && !localParentInviteSession && !athleteTodayPreview && (effectiveSession?.role === 'parent'
+    ? !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
+    : !onboardingComplete)) {
+    if (effectiveSession?.role === 'parent') {
+      return <ParentOnboardingScreen completeOnboarding={completeOnboarding}
+        linkParentAccessCode={linkParentAccessCode} parentAccessDraft={parentAccessDraft}
+        setParentAccessDraft={setParentAccessDraft} parentLinkFeedback={parentLinkFeedback}
+        setParentLinkFeedback={setParentLinkFeedback} linkedAthleteId={linkedAthleteId} />;
+    }
     return <OnboardingScreen completeOnboarding={completeOnboarding} />;
   }
 
@@ -5203,7 +5245,7 @@ function App() {
               {view === 'athlete' ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
             </p>
             {!isAthleteHome && (
-              <h1>{view === 'athlete' ? screenTitles[tab] : 'Parent Dashboard'}</h1>
+              <h1>{view === 'athlete' ? screenTitles[tab] : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
             )}
           </div>
           <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
@@ -5393,11 +5435,45 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
           )}
         </form>
         <div className="auth-legal-links">
-          <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy</a>
-          <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms</a>
-          <a href={LEGAL_URLS.support} target="_blank" rel="noreferrer">Support</a>
+          <LegalLink href={LEGAL_URLS.privacy}>Privacy</LegalLink>
+          <LegalLink href={LEGAL_URLS.terms}>Terms</LegalLink>
+          <LegalLink href={LEGAL_URLS.support}>Support</LegalLink>
         </div>
       </section>
+    </main>
+  );
+}
+
+function ParentOnboardingScreen({ completeOnboarding, linkParentAccessCode, parentAccessDraft, setParentAccessDraft, parentLinkFeedback, setParentLinkFeedback, linkedAthleteId }) {
+  return (
+    <main className="onboarding-shell parent-onboarding" aria-label="Parent onboarding">
+      <section className="onboarding-hero">
+        <p className="eyebrow">The Complete Athlete · Parents</p>
+        <h1>Support their growth.</h1>
+        <p>Your space for better conversations, steady encouragement, and a clear view of your athlete’s progress.</p>
+      </section>
+      <div className="onboarding-form">
+        <section className="panel onboarding-panel">
+          <PanelTitle icon={<Users size={18} />} title="Your parent space" />
+          <p>Overview brings you a Daily Deposit and, once connected, your athlete’s progress and current plan.</p>
+          <p>Parent Corner brings together guides and resources to help you support your athlete. You can explore it before linking an account.</p>
+        </section>
+        <section className="panel onboarding-panel">
+          <PanelTitle icon={<Users size={18} />} title="Connect your athlete" action="Optional" />
+          {linkedAthleteId ? <p className="inline-note">Your athlete is connected.</p> : <>
+            <p>Have their parent access code? Enter it below. You can also connect later from Overview or Settings.</p>
+            <form className="standard-form" onSubmit={linkParentAccessCode}>
+              <input className="text-field" aria-label="Parent access code" placeholder="Enter athlete code"
+                value={parentAccessDraft} onChange={(event) => { setParentAccessDraft(event.target.value); setParentLinkFeedback(''); }} />
+              <button className="primary-action" type="submit">Link Athlete</button>
+            </form>
+          </>}
+          {parentLinkFeedback && <p className="inline-note" role="status">{parentLinkFeedback}</p>}
+        </section>
+        <button className="primary-action full onboarding-start" type="button" onClick={() => completeOnboarding({})}>
+          Go to Parent Overview
+        </button>
+      </div>
     </main>
   );
 }
@@ -7348,40 +7424,12 @@ function sectionAudioText(section) {
   return cleanAudioText(`${title}${body}`);
 }
 
-function splitAudioChunks(text, maxLength = 720) {
-  const sentences = cleanAudioText(text)
-    .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-  const chunks = [];
-  let current = '';
-
-  sentences.forEach((sentence) => {
-    if (!current) {
-      current = sentence;
-      return;
-    }
-    if (`${current} ${sentence}`.length <= maxLength) {
-      current = `${current} ${sentence}`;
-      return;
-    }
-    chunks.push(current);
-    current = sentence;
-  });
-
-  if (current) chunks.push(current);
-  return chunks.length ? chunks : [cleanAudioText(text)].filter(Boolean);
-}
-
 function PlanAudioControls({ sections, planId }) {
   const speechRef = useRef({
-    chunks: [],
-    chunkIndex: 0,
     sectionIndex: 0,
     mode: 'section',
     source: 'idle',
     stopped: true,
-    utterance: null
   });
   const audioRef = useRef(null);
   const audioUrlRef = useRef('');
@@ -7389,13 +7437,37 @@ function PlanAudioControls({ sections, planId }) {
   const playbackIdRef = useRef(0);
   const [rate, setRate] = useState(1);
   const [status, setStatus] = useState('idle');
-  const [sourceLabel, setSourceLabel] = useState('Device Voice');
   const [activeSectionIndex, setActiveSectionIndex] = useState(-1);
-  const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+  const [playbackMode, setPlaybackMode] = useState('plan');
+  const [currentTime, setCurrentTime] = useState(0);
+  const [currentDuration, setCurrentDuration] = useState(0);
   const canPlayAudio = typeof window !== 'undefined' && typeof Audio !== 'undefined';
   const availableSections = sections
     .map((section, index) => ({ ...section, index, audioText: sectionAudioText(section) }))
     .filter((section) => section.audioText.length > 12);
+  const estimatedSectionSeconds = sections.map((section) => {
+    const wordCount = sectionAudioText(section).split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round((wordCount / 150) * 60));
+  });
+  const estimatedDaySeconds = estimatedSectionSeconds.reduce((total, seconds) => total + seconds, 0);
+  const estimatedCompletedSeconds = estimatedSectionSeconds
+    .slice(0, Math.max(activeSectionIndex, 0))
+    .reduce((total, seconds) => total + seconds, 0);
+  const activeEstimate = estimatedSectionSeconds[activeSectionIndex] || 1;
+  const activeProgress = currentDuration > 0 ? Math.min(currentTime / currentDuration, 1) : 0;
+  const progressSeconds = playbackMode === 'plan'
+    ? estimatedCompletedSeconds + (activeEstimate * activeProgress)
+    : currentTime;
+  const totalSeconds = playbackMode === 'plan' ? estimatedDaySeconds : (currentDuration || activeEstimate);
+  const progressPercent = totalSeconds > 0
+    ? Math.min(100, Math.max(0, (progressSeconds / totalSeconds) * 100))
+    : 0;
+
+  function formatAudioTime(seconds) {
+    const adjustedSeconds = Math.max(0, Math.round(seconds / rate));
+    const minutes = Math.floor(adjustedSeconds / 60);
+    return `${minutes}:${String(adjustedSeconds % 60).padStart(2, '0')}`;
+  }
 
   useEffect(() => () => stopSpeech(), [planId]);
 
@@ -7449,11 +7521,11 @@ function PlanAudioControls({ sections, planId }) {
     playbackIdRef.current += 1;
     speechRef.current.stopped = true;
     speechRef.current.source = 'idle';
-    speechRef.current.utterance = null;
-    if (canSpeak) window.speechSynthesis.cancel();
     cleanupAudio();
     setStatus('idle');
     setActiveSectionIndex(-1);
+    setCurrentTime(0);
+    setCurrentDuration(0);
   }
 
   async function requestNarratedAudio(text) {
@@ -7471,17 +7543,17 @@ function PlanAudioControls({ sections, planId }) {
     });
 
     if (!response.ok) throw new Error('Narrated audio unavailable.');
-    return response.blob();
+    const blob = await response.blob();
+    if (!blob.size || !blob.type.startsWith('audio/')) throw new Error('Invalid narrated audio.');
+    return blob;
   }
 
   async function playNarratedSection(sectionIndex, mode, text, playbackId) {
     if (!canPlayAudio) return false;
     try {
-      if (canSpeak) window.speechSynthesis.cancel();
       cleanupAudio();
       const blob = await getNarratedAudio(sectionIndex, text);
       if (playbackId !== playbackIdRef.current || speechRef.current.stopped) return true;
-      if (canSpeak) window.speechSynthesis.cancel();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.playbackRate = rate;
@@ -7489,18 +7561,25 @@ function PlanAudioControls({ sections, planId }) {
       audioUrlRef.current = url;
       audioRef.current = audio;
       speechRef.current = {
-        chunks: [],
-        chunkIndex: 0,
         sectionIndex,
         mode,
         source: 'narrated',
         stopped: false,
-        utterance: null,
         playbackId
       };
-      setSourceLabel('Narrated Audio');
+      setPlaybackMode(mode);
       setActiveSectionIndex(sectionIndex);
       setStatus('playing');
+      setCurrentTime(0);
+      setCurrentDuration(0);
+      audio.onloadedmetadata = () => {
+        if (playbackId !== playbackIdRef.current) return;
+        setCurrentDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+      };
+      audio.ontimeupdate = () => {
+        if (playbackId !== playbackIdRef.current) return;
+        setCurrentTime(audio.currentTime || 0);
+      };
       if (mode === 'plan') prefetchNarratedSection(sectionIndex + 1);
       audio.onended = () => {
         if (playbackId !== playbackIdRef.current) return;
@@ -7508,8 +7587,9 @@ function PlanAudioControls({ sections, planId }) {
         if (speechRef.current.stopped) return;
         const nextSection = sectionIndex + 1;
         if (mode === 'plan' && nextSection < sections.length) {
-          setSourceLabel('Loading Next Section');
           setActiveSectionIndex(nextSection);
+          setCurrentTime(0);
+          setCurrentDuration(0);
           setStatus('loading');
           startSpeech(nextSection, 'plan', false);
           return;
@@ -7520,76 +7600,25 @@ function PlanAudioControls({ sections, planId }) {
       audio.onerror = () => {
         if (playbackId !== playbackIdRef.current) return;
         cleanupAudio();
-        speakWithDeviceVoice(sectionIndex, mode, text, playbackId, true);
+        audioCacheRef.current.delete(audioCacheKey(sectionIndex, text));
+        showAudioError(playbackId);
       };
       await audio.play();
       return true;
     } catch {
       if (playbackId !== playbackIdRef.current) return true;
       cleanupAudio();
+      audioCacheRef.current.delete(audioCacheKey(sectionIndex, text));
       return false;
     }
   }
 
-  function speakChunk() {
-    if (!canSpeak) return;
-    const state = speechRef.current;
-    if (state.source !== 'device') return;
-    if (state.playbackId !== playbackIdRef.current) return;
-    const chunk = state.chunks[state.chunkIndex];
-    if (!chunk) {
-      const nextSection = state.sectionIndex + 1;
-      if (state.mode === 'plan' && nextSection < sections.length) {
-        setSourceLabel('Loading Next Section');
-        setActiveSectionIndex(nextSection);
-        setStatus('loading');
-        startSpeech(nextSection, 'plan', false);
-        return;
-      }
-      setStatus('idle');
-      setActiveSectionIndex(-1);
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(chunk);
-    utterance.rate = rate;
-    utterance.pitch = 1;
-    utterance.onend = () => {
-      if (speechRef.current.stopped) return;
-      if (speechRef.current.playbackId !== playbackIdRef.current) return;
-      speechRef.current.chunkIndex += 1;
-      setTimeout(speakChunk, 180);
-    };
-    utterance.onerror = () => {
-      setStatus('idle');
-      setActiveSectionIndex(-1);
-    };
-    state.utterance = utterance;
-    window.speechSynthesis.speak(utterance);
-  }
-
-  function speakWithDeviceVoice(sectionIndex, mode, audioText, playbackId = playbackIdRef.current, shouldCancel = true) {
-    if (!canSpeak) return;
-    if (!audioText) return;
+  function showAudioError(playbackId) {
     if (playbackId !== playbackIdRef.current) return;
-    if (shouldCancel) window.speechSynthesis.cancel();
+    playbackIdRef.current += 1;
+    speechRef.current.stopped = true;
     cleanupAudio();
-    speechRef.current = {
-      chunks: splitAudioChunks(audioText),
-      chunkIndex: 0,
-      sectionIndex,
-      mode,
-      source: 'device',
-      stopped: false,
-      utterance: null,
-      playbackId
-    };
-    setSourceLabel('Device Voice');
-    setActiveSectionIndex(sectionIndex);
-    setStatus('playing');
-    setTimeout(() => {
-      if (playbackId === playbackIdRef.current) speakChunk();
-    }, shouldCancel ? 120 : 260);
+    setStatus('error');
   }
 
   async function startSpeech(sectionIndex = 0, mode = 'section', shouldCancel = true) {
@@ -7601,38 +7630,35 @@ function PlanAudioControls({ sections, planId }) {
     playbackIdRef.current = playbackId;
     speechRef.current.stopped = false;
     speechRef.current.source = 'loading';
-    speechRef.current.utterance = null;
-    if (canSpeak) window.speechSynthesis.cancel();
-    setSourceLabel('Preparing Audio');
+    speechRef.current.sectionIndex = sectionIndex;
+    speechRef.current.mode = mode;
+    setPlaybackMode(mode);
     setActiveSectionIndex(sectionIndex);
+    setCurrentTime(0);
+    setCurrentDuration(0);
     setStatus('loading');
     const narrated = await playNarratedSection(sectionIndex, mode, audioText, playbackId);
     if (!narrated && playbackId === playbackIdRef.current) {
-      speakWithDeviceVoice(sectionIndex, mode, audioText, playbackId, false);
+      showAudioError(playbackId);
     }
   }
 
-  function togglePause() {
+  async function togglePause() {
     if (status === 'loading') return;
-    if (status === 'playing') {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      } else if (speechRef.current.source === 'device' && canSpeak) {
-        window.speechSynthesis.pause();
-      }
+    if (status === 'playing' && audioRef.current) {
+      audioRef.current.pause();
       setStatus('paused');
       return;
     }
-    if (status === 'paused') {
-      if (audioRef.current) {
-        if (canSpeak) window.speechSynthesis.cancel();
-        audioRef.current.play().catch(() => {});
-      } else if (speechRef.current.source === 'device' && canSpeak) {
-        window.speechSynthesis.resume();
-      }
-      setStatus('playing');
+    if (status === 'paused' && audioRef.current) {
+      const playbackId = playbackIdRef.current;
+      try {
+        await audioRef.current.play();
+        if (playbackId === playbackIdRef.current) setStatus('playing');
+      } catch { showAudioError(playbackId); }
       return;
     }
+    if (status === 'error') { restartCurrentSection(); return; }
     startSpeech(availableSections[0]?.index ?? 0, 'plan');
   }
 
@@ -7641,16 +7667,16 @@ function PlanAudioControls({ sections, planId }) {
     startSpeech(sectionIndex, speechRef.current.mode || 'section');
   }
 
-  if ((!canSpeak && !canPlayAudio) || !availableSections.length) return null;
+
+  if (!canPlayAudio || !availableSections.length) return null;
 
   return (
     <div className="plan-audio-panel" aria-label="Plan audio controls">
       <div className="plan-audio-head">
         <span>
           <Volume2 size={16} />
-          Listen Mode
+          Listen to this day
         </span>
-        <em>{sourceLabel}</em>
         <select
           aria-label="Reading speed"
           value={rate}
@@ -7670,25 +7696,27 @@ function PlanAudioControls({ sections, planId }) {
           <option value="1.3">1.3x</option>
         </select>
       </div>
-      <div className="plan-audio-actions">
-        <button type="button" onClick={() => startSpeech(availableSections[0]?.index ?? 0, 'plan')} disabled={status === 'loading'}>
-          {status === 'loading' ? <Volume2 size={16} /> : <Play size={16} />}
-          {status === 'loading' ? 'Preparing' : 'Listen to Day'}
-        </button>
-        <button type="button" onClick={togglePause} disabled={status === 'loading'}>
-          {status === 'playing' ? <Pause size={16} /> : <Play size={16} />}
-          {status === 'playing' ? 'Pause' : status === 'paused' ? 'Resume' : 'Play'}
-        </button>
-        <button type="button" onClick={restartCurrentSection} disabled={status === 'loading'}>
-          <RotateCcw size={16} />
-          Restart
-        </button>
-        <button type="button" onClick={stopSpeech}>
-          <Square size={16} />
-          Stop
-        </button>
+      <div className="plan-audio-progress-row">
+        <div className="plan-audio-progress" role="progressbar" aria-label="Audio progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(progressPercent)}>
+          <span style={{ width: `${progressPercent}%` }} />
+        </div>
+        <span className="plan-audio-time">
+          {formatAudioTime(progressSeconds)} / {status === 'idle' ? '~' : ''}{formatAudioTime(totalSeconds)}
+        </span>
       </div>
-      {status !== 'idle' && activeSectionIndex >= 0 && (
+      <div className="plan-audio-actions">
+        <button className="plan-audio-primary" type="button" onClick={togglePause} disabled={status === 'loading'}>
+          {status === 'playing' ? <Pause size={16} /> : <Play size={16} />}
+          {status === 'playing' ? 'Pause' : status === 'paused' ? 'Resume' : status === 'error' ? 'Retry Audio' : 'Play audio'}
+        </button>
+        {activeSectionIndex >= 0 && status !== 'loading' && (
+          <button className="plan-audio-restart" type="button" onClick={restartCurrentSection} aria-label="Restart current audio">
+            <RotateCcw size={15} /> Restart
+          </button>
+        )}
+      </div>
+      {status === 'error' && <p className="plan-audio-status" role="status">ElevenLabs audio is unavailable right now. Tap Retry Audio to try again.</p>}
+      {status !== 'idle' && status !== 'error' && activeSectionIndex >= 0 && (
         <p className="plan-audio-status">
           {status === 'loading' ? 'Preparing audio' : status === 'paused' ? 'Paused' : 'Now reading'}: {sections[activeSectionIndex]?.title || 'Current section'}
         </p>
@@ -8372,8 +8400,8 @@ function TrialPaywallScreen({
           </button>
         </div>
         <div className="trial-legal-links">
-          <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>
-          <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a>
+          <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
+          <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
         </div>
       </section>
     </main>
@@ -8406,8 +8434,8 @@ function PremiumAccessPanel({
         The Complete Athlete is $5.99/month after the 7-day free trial. Payment is charged to your Apple ID, renews monthly unless canceled at least 24 hours before renewal, and can be managed in Apple subscription settings.
       </p>
       <div className="premium-legal-links" aria-label="Subscription legal links">
-        <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>
-        <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a>
+        <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
+        <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
       </div>
       {subscription.message && <p className="inline-note">{subscription.message}</p>}
       <div className="premium-actions">
@@ -8438,6 +8466,29 @@ function PremiumAccessPanel({
   );
 }
 
+function LegalLink({ href, children }) {
+  const [open, setOpen] = useState(false);
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    if (open && dialogRef.current && !dialogRef.current.open) dialogRef.current.showModal();
+  }, [open]);
+  return <>
+    <a href={href} onClick={(event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      setOpen(true);
+    }}>{children}</a>
+    {open && <dialog ref={dialogRef} className="legal-document-dialog" aria-label={children}
+      onCancel={() => setOpen(false)} onClose={() => setOpen(false)}>
+      <header>
+        <strong>{children}</strong>
+        <button className="secondary-action inline" type="button" autoFocus onClick={() => setOpen(false)}>Close</button>
+      </header>
+      <iframe src={new URL(href).pathname} title={children} />
+    </dialog>}
+  </>;
+}
+
 function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [accountMessage, setAccountMessage] = useState('');
@@ -8463,9 +8514,9 @@ function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
     <section className="panel legal-account-panel">
       <PanelTitle icon={<Shield size={18} />} title="Legal & Account" action="Review" />
       <div className="legal-link-grid">
-        <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a>
-        <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>
-        <a href={LEGAL_URLS.support} target="_blank" rel="noreferrer">Support</a>
+        <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
+        <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
+        <LegalLink href={LEGAL_URLS.support}>Support</LegalLink>
         <a href="https://apps.apple.com/account/subscriptions" target="_blank" rel="noreferrer">Manage Subscription</a>
       </div>
       <p className="subscription-terms-note">
@@ -8937,7 +8988,7 @@ function ParentSettingsScreen({
         <div>
           <p className="eyebrow">Parent Profile</p>
           <h2>{parentName}</h2>
-          <span>Linked to {athleteName} | {sportLine}</span>
+          <span>{linkedAthleteSummary ? `Linked to ${athleteName} | ${sportLine}` : 'Not linked yet'}</span>
         </div>
       </section>
 
@@ -9001,7 +9052,7 @@ function ParentSettingsScreen({
         </div>
         <div className="parent-settings-stats">
           <span>
-            <strong>{athleteName}</strong>
+            <strong>{linkedAthleteSummary ? athleteName : '—'}</strong>
             Linked athlete
           </span>
           <span>
@@ -9009,7 +9060,7 @@ function ParentSettingsScreen({
             Parent guides
           </span>
           <span>
-            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
+            <strong>{linkedAthleteSummary ? `${planSeriesStats.completed}/${planSeriesStats.total}` : '—'}</strong>
             Plans complete
           </span>
         </div>
@@ -9188,7 +9239,7 @@ function ParentDashboard({
     setActionFeedback('Saved as a parent action. Athlete alerts require the live linked backend.');
   }
 
-  if (!parentLinkChecked) {
+  if (!parentLinkChecked && parentTab === 'overview') {
     return (
       <section className="panel parent-access-panel">
         <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Checking" />
@@ -9197,9 +9248,9 @@ function ParentDashboard({
     );
   }
 
-  if (!linkedAthleteId) {
-    return (
-      <>
+  return (
+    <>
+      {parentTab === 'overview' && !linkedAthleteId && (
         <section className="panel parent-access-panel">
           <PanelTitle icon={<Users size={18} />} title="Link Athlete" action="Access code" />
           <p className="info-note">Enter the parent access code from your athlete’s profile or invite link.</p>
@@ -9219,13 +9270,7 @@ function ParentDashboard({
           </form>
           {parentLinkFeedback && <p className="inline-note">{parentLinkFeedback}</p>}
         </section>
-        <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
-      </>
-    );
-  }
-
-  return (
-    <>
+      )}
       {parentTab === 'overview' && (
       <section className="panel daily-deposit-panel parent-daily-deposit-panel">
         <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
@@ -9240,36 +9285,36 @@ function ParentDashboard({
         <div className="parent-progress-hero">
           <div>
             <span>Complete Athlete Score</span>
-            <strong>{athleteScore}</strong>
+            <strong>{linkedAthleteId ? athleteScore : '—'}</strong>
           </div>
-          <p>{parentProgressTone(weeklySnapshot, streakCount)}</p>
+          <p>{linkedAthleteId ? parentProgressTone(weeklySnapshot, streakCount) : 'Link your athlete to see their progress.'}</p>
         </div>
         <div className="parent-progress-grid">
           <span>
-            <strong>{streakCount}</strong>
+            <strong>{linkedAthleteId ? streakCount : '—'}</strong>
             Day streak
           </span>
           <span>
-            <strong>{weeklySnapshot.productivityAverage}%</strong>
+            <strong>{linkedAthleteId ? `${weeklySnapshot.productivityAverage}%` : '—'}</strong>
             7-day work rate
           </span>
           <span>
-            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
+            <strong>{linkedAthleteId ? `${planSeriesStats.completed}/${planSeriesStats.total}` : '—'}</strong>
             Plans completed
           </span>
         </div>
         <div className="parent-action-grid parent-action-grid-inline">
-          <button onClick={() => sendParentEncouragement('effort')} type="button">
+          <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('effort')} type="button">
             <BadgeCheck size={18} />
             <strong>Encourage effort</strong>
             <span>Reinforce the work, not just the result.</span>
           </button>
-          <button onClick={() => sendParentEncouragement('plan')} type="button">
+          <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('plan')} type="button">
             <BookOpen size={18} />
             <strong>Talk through plan</strong>
             <span>Use today’s lesson as the bridge.</span>
           </button>
-          <button onClick={() => sendParentEncouragement('goals')} type="button">
+          <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('goals')} type="button">
             <Goal size={18} />
             <strong>Hold accountable</strong>
             <span>Point them back to the goals they chose.</span>
@@ -9282,6 +9327,7 @@ function ParentDashboard({
       {parentTab === 'overview' && (
       <section className="panel parent-current-plan-panel">
         <PanelTitle icon={<BookOpen size={18} />} title="Your Athlete’s Current Plan" />
+        {linkedAthleteId ? <>
         <div className="parent-current-plan">
           <span>{currentPlan.seriesTitle}</span>
           <strong>{currentPlan.lessonTitle}</strong>
@@ -9293,6 +9339,7 @@ function ParentDashboard({
           <strong>Tonight’s conversation starter</strong>
           <span>{currentPlan.cue}</span>
         </div>
+        </> : <p className="empty-note">Link your athlete to see their current plan, lesson progress, and conversation starters.</p>}
       </section>
       )}
 
@@ -9317,6 +9364,9 @@ function ParentDashboard({
         />
       )}
 
+      {parentTab === 'parent-corner' && !linkedAthleteId && !premiumAccessAllowed && (
+        <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
+      )}
       {parentTab === 'parent-corner' && (
         premiumAccessAllowed ? (
           <>
@@ -9333,7 +9383,7 @@ function ParentDashboard({
         )
       )}
 
-      {parentTab === 'overview' && privacySettings.goalsVisible && (
+      {parentTab === 'overview' && linkedAthleteId && privacySettings.goalsVisible && (
         <section className="panel parent-goal-panel">
           <PanelTitle icon={<Goal size={18} />} title="Goal Snapshot" action={`${goals.length} goals`} />
           <div className="parent-goals">
@@ -9388,18 +9438,35 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
     ];
   const selectedContent = parentContent.find((item) => item.id === selectedParentContentId);
   const latestGuide = parentContent[0];
+  const selectedGuideSteps = selectedContent?.steps ?? [];
+  const selectedGuideDayCount = selectedGuideSteps.length;
+  const completedGuideDays = selectedContent?.completedAt
+    ? selectedGuideDayCount
+    : selectedGuideSteps.reduce((count, step, index) => (
+      parentGuideProgress[`${selectedContent.id}:day:${index + 1}`] ? count + 1 : count
+    ), 0);
+  const activeGuideDayIndex = selectedGuideDayCount
+    ? Math.min(completedGuideDays, selectedGuideDayCount - 1)
+    : 0;
+  const activeGuideDayCompleted = Boolean(
+    selectedContent?.completedAt
+    || parentGuideProgress[`${selectedContent?.id}:day:${activeGuideDayIndex + 1}`]
+  );
 
   useEffect(() => {
     localStorage.setItem(parentGuideProgressStorageKey, JSON.stringify(parentGuideProgress));
   }, [parentGuideProgress]);
 
-  function completeParentGuide(guideId) {
+  function completeParentGuideDay(guideId, dayIndex, dayCount) {
     setParentGuideProgress((current) => {
-      if (current[String(guideId)]) return current;
-      return {
+      const dayKey = `${guideId}:day:${dayIndex + 1}`;
+      if (current[dayKey]) return current;
+      const next = {
         ...current,
-        [String(guideId)]: todayKey()
+        [dayKey]: todayKey()
       };
+      if (dayIndex + 1 >= dayCount) next[String(guideId)] = todayKey();
+      return next;
     });
   }
 
@@ -9417,8 +9484,19 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
           <p>{selectedContent.promise}</p>
         </div>
         <div className="parent-guide-reader-body">
-          {selectedContent.steps.length ? (
-            <PlanEpisode steps={selectedContent.steps} planId={selectedContent.id} preserveHeadings />
+          {selectedGuideDayCount ? (
+            <>
+              <div className="parent-guide-day-status">
+                <span>Day {activeGuideDayIndex + 1} of {selectedGuideDayCount}</span>
+                <Progress value={Math.round((completedGuideDays / selectedGuideDayCount) * 100)} />
+                <p>{selectedContent.completedAt ? 'Plan complete' : 'Complete this day to unlock the next one.'}</p>
+              </div>
+              <PlanEpisode
+                steps={[selectedGuideSteps[activeGuideDayIndex]]}
+                planId={`${selectedContent.id}-day-${activeGuideDayIndex + 1}`}
+                preserveHeadings
+              />
+            </>
           ) : (
             <div className="parent-cues">
               <span>
@@ -9432,13 +9510,19 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
             </div>
           )}
           <button
-            className={selectedContent.completedAt ? 'secondary-action submitted parent-guide-complete' : 'secondary-action parent-guide-complete'}
-            disabled={Boolean(selectedContent.completedAt)}
-            onClick={() => completeParentGuide(selectedContent.id)}
+            className={activeGuideDayCompleted ? 'secondary-action submitted parent-guide-complete' : 'secondary-action parent-guide-complete'}
+            disabled={activeGuideDayCompleted}
+            onClick={() => completeParentGuideDay(selectedContent.id, activeGuideDayIndex, Math.max(selectedGuideDayCount, 1))}
             type="button"
           >
             <Check size={16} />
-            {selectedContent.completedAt ? 'Guide Completed' : 'Mark as Complete'}
+            {selectedContent.completedAt
+              ? 'Plan Completed'
+              : activeGuideDayCompleted
+                ? `Day ${activeGuideDayIndex + 1} Completed`
+                : selectedGuideDayCount
+                  ? `Complete Day ${activeGuideDayIndex + 1}`
+                  : 'Mark as Complete'}
           </button>
         </div>
       </section>
@@ -9501,17 +9585,15 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
 
 function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser }) {
   const today = todayKey();
-  const sequencedPlans = sequencedPlanAccess(plans, planProgress, today);
+  const sequencedPlans = parentSequencedPlanAccess(plans, planProgress, today);
   const planLibrary = buildPlanLibrary(sequencedPlans);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
-  const defaultLesson = selectedSeries?.plans.find((plan) => plan.unlocked && !plan.completedAt)
-    ?? selectedSeries?.plans.find((plan) => plan.unlocked)
+  const selectedPlan = selectedSeries?.plans.find((plan) => plan.unlocked && !plan.completedAt)
+    ?? [...(selectedSeries?.plans ?? [])].reverse().find((plan) => plan.completedAt)
     ?? selectedSeries?.plans[0]
     ?? null;
-  const [selectedPlanId, setSelectedPlanId] = useState('');
-  const selectedPlan = selectedSeries?.plans.find((plan) => String(plan.id) === String(selectedPlanId)) ?? defaultLesson;
   const openSeriesCount = planLibrary.filter((series) => series.openCount > 0).length;
   const completedSeriesCount = planLibrary.filter((series) => series.completedCount === series.plans.length).length;
 
@@ -9523,7 +9605,7 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
       ...current,
       [String(planId)]: today
     }));
-    notifyUser?.('Lesson marked complete', 'The next lesson will open tomorrow.', 'success', {
+    notifyUser?.('Day complete', 'The next day is now ready.', 'success', {
       type: 'planUnlocks',
       id: `parent-plan-complete-${planId}-${Date.now()}`
     });
@@ -9540,16 +9622,6 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
       setSelectedSeriesId('');
     }
   }, [planLibrary, selectedSeriesId]);
-
-  useEffect(() => {
-    if (!selectedSeries) {
-      setSelectedPlanId('');
-      return;
-    }
-    if (!selectedPlanId || !selectedSeries.plans.some((plan) => String(plan.id) === String(selectedPlanId))) {
-      setSelectedPlanId(defaultLesson?.id ?? '');
-    }
-  }, [defaultLesson?.id, selectedPlanId, selectedSeries]);
 
   if (!libraryOpen) {
     return (
@@ -9577,34 +9649,19 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
           <PanelTitle icon={<BookOpen size={18} />} title={selectedSeries.title} action={`${selectedSeries.completedCount}/${selectedSeries.plans.length} done`} />
           <p>{selectedSeries.tagline}</p>
         </div>
-        <div className="parent-plan-detail-layout">
-          <div className="parent-lesson-list" aria-label={`${selectedSeries.title} lessons`}>
-            {selectedSeries.plans.map((plan) => (
-              <button
-                className={String(selectedPlan?.id) === String(plan.id) ? 'active' : ''}
-                key={plan.id}
-                onClick={() => setSelectedPlanId(plan.id)}
-                type="button"
-              >
-                <span>{plan.completedAt ? 'Completed' : plan.unlocked ? plan.challengeDay : 'Locked'}</span>
-                <strong>{plan.title}</strong>
-                <em>
-                  {plan.completedAt
-                    ? `Completed ${plan.completedAt}`
-                    : plan.unlocked
-                      ? 'Available to review'
-                      : 'Unlocks through athlete progress'}
-                </em>
-              </button>
-            ))}
-          </div>
+        <div className="parent-plan-sequence-status">
+          <span>{selectedSeries.completedCount} of {selectedSeries.plans.length} days completed</span>
+          <Progress value={selectedSeries.plans.length ? Math.round((selectedSeries.completedCount / selectedSeries.plans.length) * 100) : 0} />
+          <p>Complete today’s lesson to open the next day.</p>
+        </div>
+        <div className="parent-plan-detail-layout single-plan">
           <article className={selectedPlan?.unlocked ? 'goal-card plan-card readonly-plan parent-plan-reader' : 'goal-card plan-card readonly-plan parent-plan-reader locked-plan'}>
             {selectedPlan ? (
               <>
                 <div className="plan-read-header">
                   <span>{selectedPlan.completedAt ? 'Completed' : selectedPlan.unlocked ? selectedPlan.challengeDay : 'Locked'}</span>
                   <strong>{selectedPlan.title}</strong>
-                  <em>{selectedPlan.unlocked ? 'Parent review mode' : 'Athlete unlock required'}</em>
+                  <em>{selectedPlan.unlocked ? `${selectedPlan.challengeDay || 'Current day'} of ${selectedSeries.plans.length}` : 'Complete the previous day to unlock'}</em>
                   <p>{planDisplaySubject(selectedPlan)}</p>
                 </div>
                 {selectedPlan.unlocked ? (
@@ -9612,7 +9669,7 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
                 ) : (
                   <div className="locked-message">
                     <LockKeyhole size={18} />
-                    <p>This lesson is still locked for the athlete. Parents can see the roadmap here without crowding the dashboard.</p>
+                    <p>Complete the previous day before opening this lesson.</p>
                   </div>
                 )}
                 {selectedPlan.unlocked && (
