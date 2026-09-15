@@ -311,6 +311,7 @@ const athleteChallengeOptions = [
     lessonTitle: 'Pressure is information',
     lessonBody: 'Pressure does not mean you are unprepared. It means the moment matters. Today, your job is to slow the moment down and control the next response.',
     focus: 'What pressure can I treat as information instead of a threat today?',
+    recommendedPlanTitle: 'Control the Controllables',
     planKeywords: ['pressure', 'game']
   },
   {
@@ -323,6 +324,7 @@ const athleteChallengeOptions = [
     lessonTitle: 'Confidence needs evidence',
     lessonBody: 'Confidence grows when you prove something to yourself. Today, do one thing that gives your future self evidence to trust.',
     focus: 'What proof can I collect today that I am becoming the athlete I say I am?',
+    recommendedPlanTitle: 'Building a Positive Self Image',
     planKeywords: ['confidence', 'belief']
   },
   {
@@ -335,6 +337,7 @@ const athleteChallengeOptions = [
     lessonTitle: 'Run your race',
     lessonBody: 'Comparison steals energy from the work in front of you. Today, bring your attention back to what you can control.',
     focus: 'What part of my own game deserves my full attention today?',
+    recommendedPlanTitle: 'The 90%',
     planKeywords: ['identity', '90%', 'ninety']
   },
   {
@@ -347,6 +350,7 @@ const athleteChallengeOptions = [
     lessonTitle: 'Discipline goes first',
     lessonBody: 'Motivation is helpful, but discipline is dependable. Today, choose the next right action before you negotiate with it.',
     focus: 'What is one small action I can complete before I feel ready?',
+    recommendedPlanTitle: 'Champion Habits',
     planKeywords: ['discipline', 'training', 'leader']
   },
   {
@@ -359,6 +363,7 @@ const athleteChallengeOptions = [
     lessonTitle: 'Correction can sharpen you',
     lessonBody: 'Feedback is not an attack on who you are. Today, separate your identity from correction and look for the useful part.',
     focus: 'What feedback can I receive without letting it define me?',
+    recommendedPlanTitle: 'The Thermostat',
     planKeywords: ['coach', 'leadership']
   },
   {
@@ -371,6 +376,7 @@ const athleteChallengeOptions = [
     lessonTitle: 'You are more than the result',
     lessonBody: 'The scoreboard can measure a game. It cannot measure your worth. Today, compete with freedom because your identity is already bigger than performance.',
     focus: 'What identity do I need to train today, no matter what the scoreboard says?',
+    recommendedPlanTitle: 'Compete Differently',
     planKeywords: ['identity', '90%', 'ninety']
   },
   {
@@ -383,12 +389,23 @@ const athleteChallengeOptions = [
     lessonTitle: 'Start with what is true',
     lessonBody: 'You do not have to have the perfect label for what you are feeling. Start by being honest, choose one controllable, and take the next right step.',
     focus: 'What is the real thing I need help with today?',
+    recommendedPlanTitle: 'The Next Play',
     planKeywords: ['mindset', 'identity', 'confidence']
   }
 ];
 
 function athleteChallengeById(id) {
   return athleteChallengeOptions.find((challenge) => challenge.id === id) ?? athleteChallengeOptions[0];
+}
+
+function athleteChallengesByIds(ids, fallbackId = '') {
+  const requestedIds = Array.isArray(ids) ? ids : [];
+  const cleanIds = [...new Set(requestedIds.map(String).filter(Boolean))];
+  if (!cleanIds.length && fallbackId) cleanIds.push(String(fallbackId));
+  const matches = cleanIds
+    .map((id) => athleteChallengeOptions.find((challenge) => challenge.id === id))
+    .filter(Boolean);
+  return matches.length ? matches : [athleteChallengeOptions[0]];
 }
 
 function todayKey() {
@@ -850,10 +867,13 @@ function loadAthleteProfile() {
       photo: saved.photo ?? '',
       parentContact: saved.parentContact ?? '',
       currentChallenge: saved.currentChallenge ?? '',
+      currentChallenges: Array.isArray(saved.currentChallenges)
+        ? saved.currentChallenges
+        : saved.currentChallenge ? [saved.currentChallenge] : [],
       parentAccessCode: saved.parentAccessCode ?? 'TCA-PARENT'
     };
   } catch {
-    return { name: '', sport: '', age: '', location: '', photo: '', parentContact: '', currentChallenge: '', parentAccessCode: 'TCA-PARENT' };
+    return { name: '', sport: '', age: '', location: '', photo: '', parentContact: '', currentChallenge: '', currentChallenges: [], parentAccessCode: 'TCA-PARENT' };
   }
 }
 
@@ -1011,6 +1031,7 @@ function profileFromSupabase(row, authSession, currentProfile) {
     photo: row?.photo_url ?? currentProfile.photo,
     parentContact: row?.parent_contact ?? currentProfile.parentContact,
     currentChallenge: currentProfile.currentChallenge ?? '',
+    currentChallenges: Array.isArray(currentProfile.currentChallenges) ? currentProfile.currentChallenges : [],
     parentAccessCode: row?.parent_access_code ?? currentProfile.parentAccessCode ?? 'TCA-PARENT'
   };
 }
@@ -3003,6 +3024,7 @@ function App() {
       : 'athlete'
   ));
   const [tab, setTab] = useState('home');
+  const [requestedPlanSeriesId, setRequestedPlanSeriesId] = useState('');
   const [parentTab, setParentTab] = useState('overview');
   const [standards, setStandards] = useState(initialDailyState.standards);
   const [standardDraft, setStandardDraft] = useState('');
@@ -4651,7 +4673,8 @@ function App() {
       trackAnalyticsEvent('onboarding_completed', { role: 'parent' }, { area: 'activation' });
       return;
     }
-    const selectedChallenge = athleteChallengeById(setup.currentChallenge);
+    const selectedChallenges = athleteChallengesByIds(setup.currentChallenges, setup.currentChallenge);
+    const selectedChallenge = selectedChallenges[0];
     const accountName = effectiveSession?.name || athleteProfile.name || 'Athlete';
     const nextProfile = {
       ...athleteProfile,
@@ -4660,9 +4683,10 @@ function App() {
       age: setup.age,
       location: setup.location,
       parentContact: setup.parentContact,
-      currentChallenge: selectedChallenge.id
+      currentChallenge: selectedChallenge.id,
+      currentChallenges: selectedChallenges.map((challenge) => challenge.id)
     };
-    const nextGoals = (setup.goals?.length ? setup.goals : [selectedChallenge.goal])
+    const nextGoals = (setup.goals?.length ? setup.goals : selectedChallenges.map((challenge) => challenge.goal))
       .map((goal, index) => ({
         id: Date.now() + index,
         label: index === 0 ? 'Main Goal' : `Goal ${index + 1}`,
@@ -4670,7 +4694,7 @@ function App() {
         progress: 0
       }))
       .filter((goal) => goal.value.trim());
-    const nextStandards = (setup.standards?.length ? setup.standards : [selectedChallenge.standard])
+    const nextStandards = (setup.standards?.length ? setup.standards : selectedChallenges.map((challenge) => challenge.standard))
       .map((label, index) => ({
         id: Date.now() + 100 + index,
         label,
@@ -4690,6 +4714,8 @@ function App() {
     localStorage.setItem(athleteStartStorageKey, 'false');
     trackAnalyticsEvent('onboarding_completed', {
       challengeId: selectedChallenge.id,
+      challengeIds: selectedChallenges.map((challenge) => challenge.id),
+      challengeCount: selectedChallenges.length,
       sportProvided: Boolean(setup.sport),
       ageProvided: Boolean(setup.age),
       locationProvided: Boolean(setup.location),
@@ -5014,6 +5040,7 @@ function App() {
           setJournal={setJournal}
           setJournalType={setJournalType}
           setTab={setTab}
+          setRequestedPlanSeriesId={setRequestedPlanSeriesId}
           notifyUser={notifyUser}
           celebrate={celebrate}
           lastSubmittedDate={lastSubmittedDate}
@@ -5033,6 +5060,8 @@ function App() {
           plans={plans}
           planProgress={planProgress}
           trialPlanMode={trialPlanMode}
+          requestedPlanSeriesId={requestedPlanSeriesId}
+          setRequestedPlanSeriesId={setRequestedPlanSeriesId}
           setPlanProgress={setPlanProgress}
           awardPoints={awardPoints}
           notifyUser={notifyUser}
@@ -5142,6 +5171,7 @@ function App() {
     recentPointEvents,
     privacySettings,
     readinessHistory,
+    requestedPlanSeriesId,
     scores,
     selectedLessonId,
     standardDraft,
@@ -5485,6 +5515,7 @@ function OnboardingScreen({ completeOnboarding }) {
     location: '',
     parentContact: '',
     currentChallenge: '',
+    currentChallenges: [],
     goals: [],
     standards: []
   });
@@ -5492,6 +5523,21 @@ function OnboardingScreen({ completeOnboarding }) {
 
   function updateField(field, value) {
     setSetup((current) => ({ ...current, [field]: value }));
+    setMessage('');
+  }
+
+  function toggleChallenge(challengeId) {
+    setSetup((current) => {
+      const selected = current.currentChallenges.includes(challengeId);
+      const currentChallenges = selected
+        ? current.currentChallenges.filter((id) => id !== challengeId)
+        : [...current.currentChallenges, challengeId];
+      return {
+        ...current,
+        currentChallenge: currentChallenges[0] || '',
+        currentChallenges
+      };
+    });
     setMessage('');
   }
 
@@ -5509,8 +5555,8 @@ function OnboardingScreen({ completeOnboarding }) {
       return;
     }
 
-    if (!cleanSetup.currentChallenge) {
-      setMessage('Choose what you want help with first.');
+    if (!cleanSetup.currentChallenges.length) {
+      setMessage('Choose at least one area you want help with.');
       return;
     }
 
@@ -5553,13 +5599,15 @@ function OnboardingScreen({ completeOnboarding }) {
         </section>
 
         <section className="panel onboarding-panel">
-          <PanelTitle icon={<Target size={18} />} title="What do you need help with?" action="Step 2" />
+          <PanelTitle icon={<Target size={18} />} title="What do you need help with?" action={`${setup.currentChallenges.length} selected`} />
+          <p className="challenge-choice-helper">Choose every area you want to work on. We’ll recommend one plan for each choice.</p>
           <div className="challenge-choice-grid" aria-label="Athlete challenge options">
             {athleteChallengeOptions.map((challenge) => (
               <button
-                className={setup.currentChallenge === challenge.id ? 'challenge-choice active' : 'challenge-choice'}
+                aria-pressed={setup.currentChallenges.includes(challenge.id)}
+                className={setup.currentChallenges.includes(challenge.id) ? 'challenge-choice active' : 'challenge-choice'}
                 key={challenge.id}
-                onClick={() => updateField('currentChallenge', challenge.id)}
+                onClick={() => toggleChallenge(challenge.id)}
                 type="button"
               >
                 <strong>{challenge.shortLabel}</strong>
@@ -5620,6 +5668,7 @@ function HomeScreen({
   setReadinessHistory,
   setStandardsHistory,
   setTab,
+  setRequestedPlanSeriesId,
   notifyUser,
   lastSubmittedDate,
   lesson,
@@ -5818,6 +5867,7 @@ function HomeScreen({
         setJournalType={setJournalType}
         setStandards={setStandards}
         setTab={setTab}
+        setRequestedPlanSeriesId={setRequestedPlanSeriesId}
         trackAnalyticsEvent={trackAnalyticsEvent}
       />
     );
@@ -6168,14 +6218,23 @@ function AthleteStartToday({
   setJournalType,
   setStandards,
   setTab,
+  setRequestedPlanSeriesId,
   trackAnalyticsEvent
 }) {
-  const challenge = athleteChallengeById(athleteProfile?.currentChallenge);
+  const challenges = athleteChallengesByIds(athleteProfile?.currentChallenges, athleteProfile?.currentChallenge);
+  const challenge = challenges[0];
   const planLibrary = buildPlanLibrary(sequencedPlanAccess(plans, planProgress, todayKey()));
-  const recommendedSeries = planLibrary.find((series) => {
-    const text = `${series.title} ${series.tagline} ${series.category}`.toLowerCase();
-    return challenge.planKeywords.some((keyword) => text.includes(keyword));
-  }) ?? planLibrary.find((series) => series.openCount > 0) ?? planLibrary[0];
+  const recommendedPlans = challenges.map((selectedChallenge) => {
+    const exactMatch = planLibrary.find((series) => series.title === selectedChallenge.recommendedPlanTitle);
+    const keywordMatch = planLibrary.find((series) => {
+      const text = `${series.title} ${series.tagline} ${series.category}`.toLowerCase();
+      return selectedChallenge.planKeywords.some((keyword) => text.includes(keyword));
+    });
+    return {
+      challenge: selectedChallenge,
+      series: exactMatch ?? keywordMatch ?? planLibrary.find((series) => series.openCount > 0) ?? planLibrary[0]
+    };
+  });
 
   function markStartComplete() {
     setStandards((current) => {
@@ -6196,13 +6255,14 @@ function AthleteStartToday({
     celebrate('First rep complete. Your full dashboard is ready.');
   }
 
-  function openRecommendedPlan() {
+  function openRecommendedPlan(recommendation) {
     setAthleteStartComplete(true);
     localStorage.setItem(athleteStartStorageKey, 'true');
     trackAnalyticsEvent?.('recommended_plan_opened', {
-      challengeId: challenge.id,
-      seriesTitle: recommendedSeries?.title || ''
+      challengeId: recommendation.challenge.id,
+      seriesTitle: recommendation.series?.title || ''
     }, { area: 'activation' });
+    setRequestedPlanSeriesId?.(recommendation.series?.id || '');
     setTab('plans');
   }
 
@@ -6245,16 +6305,18 @@ function AthleteStartToday({
         <BadgeCheck size={24} />
       </article>
 
-      {recommendedSeries && (
-        <button className="recommended-start-plan has-cover" onClick={openRecommendedPlan} style={{ '--plan-cover': `url(${recommendedSeries.thumbnailImage})`, '--plan-cover-position': recommendedSeries.coverPosition }} type="button">
-          <div className="plan-cover-thumb" aria-hidden="true" />
-          <div>
-            <span>Recommended plan</span>
-            <strong>{recommendedSeries.title}</strong>
-            <em>{nextPlanLabel(recommendedSeries)}</em>
-          </div>
-        </button>
-      )}
+      <div className="recommended-start-plans" aria-label="Recommended plans">
+        {recommendedPlans.map((recommendation) => recommendation.series && (
+          <button className="recommended-start-plan has-cover" key={recommendation.challenge.id} onClick={() => openRecommendedPlan(recommendation)} style={{ '--plan-cover': `url(${recommendation.series.thumbnailImage})`, '--plan-cover-position': recommendation.series.coverPosition }} type="button">
+            <div className="plan-cover-thumb" aria-hidden="true" />
+            <div>
+              <span>For {recommendation.challenge.shortLabel}</span>
+              <strong>{recommendation.series.title}</strong>
+              <em>{nextPlanLabel(recommendation.series)}</em>
+            </div>
+          </button>
+        ))}
+      </div>
 
       <button className="primary-action full start-today-complete" onClick={markStartComplete} type="button">
         <Check size={18} />
@@ -6510,7 +6572,7 @@ function GoalsScreen({
   );
 }
 
-function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, trackAnalyticsEvent }) {
+function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', setRequestedPlanSeriesId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, trackAnalyticsEvent }) {
   const readOnly = !setPlanProgress;
   const today = todayKey();
   const sequencedPlans = trialPlanMode
@@ -6535,6 +6597,14 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, setPlanProgre
       setSelectedSeriesId('');
     }
   }, [planLibrary, selectedSeriesId]);
+
+  useEffect(() => {
+    if (!requestedPlanSeriesId) return;
+    if (planLibrary.some((series) => series.id === requestedPlanSeriesId)) {
+      setSelectedSeriesId(requestedPlanSeriesId);
+    }
+    setRequestedPlanSeriesId?.('');
+  }, [planLibrary, requestedPlanSeriesId, setRequestedPlanSeriesId]);
 
   function openSeries(series, source) {
     setSelectedSeriesId(series.id);
