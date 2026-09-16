@@ -6927,6 +6927,9 @@ function planCategory(plan) {
 
 function planCoverImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('coachable athlete')) {
+    return '/plan-covers/coachable-athlete-banner.jpg';
+  }
   if (normalized.includes('goal blueprint')) {
     return '/plan-covers/goal-blueprint-banner.jpg';
   }
@@ -6968,6 +6971,9 @@ function planCoverImage(seriesTitle) {
 
 function planThumbnailImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('coachable athlete')) {
+    return '/plan-covers/coachable-athlete-thumbnail.jpg';
+  }
   if (normalized.includes('goal blueprint')) {
     return '/plan-covers/goal-blueprint-thumbnail.jpg';
   }
@@ -7003,6 +7009,9 @@ function planThumbnailImage(seriesTitle) {
 
 function planCoverPosition(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
+  if (normalized.includes('coachable athlete')) {
+    return '50% 50%';
+  }
   if (normalized.includes('goal blueprint')) {
     return '54% 50%';
   }

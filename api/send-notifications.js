@@ -53,6 +53,28 @@ async function markPlanNotificationSent(planId) {
   });
 }
 
+function planSeriesTitle(plan) {
+  const subject = String(plan?.subject ?? '');
+  const match = subject.match(/Series:\s*([^.!]+)[.!]?/i);
+  return match?.[1]?.trim() || String(plan?.title || 'A new plan').trim();
+}
+
+function groupPlanNotifications(plans) {
+  const groups = new Map();
+
+  plans.forEach((plan) => {
+    const title = planSeriesTitle(plan);
+    const key = String(plan?.subject || '').match(/Series:/i)
+      ? title.toLowerCase()
+      : String(plan.id);
+    const group = groups.get(key) ?? { title, plans: [] };
+    group.plans.push(plan);
+    groups.set(key, group);
+  });
+
+  return [...groups.values()];
+}
+
 async function notificationRecipients() {
   const result = await supabaseServiceRequest(
     'profiles?select=id,role&role=in.(athlete,parent)'
@@ -292,20 +314,24 @@ export default async function handler(req, res) {
     }
   });
 
-  for (const plan of addedPlans) {
+  const addedPlanGroups = groupPlanNotifications(addedPlans);
+  for (const planGroup of addedPlanGroups) {
+    const firstPlan = planGroup.plans[0];
+    const releaseDates = planGroup.plans.map((plan) => plan.release_date).filter(Boolean).sort();
+    const releaseDate = releaseDates[0] || '';
     const planDeliveries = [];
     for (const recipient of recipients) {
       const prefs = preferences.get(recipient.id) ?? {};
       if (prefs.performance_plans === false) continue;
 
-      const availableNow = !plan.release_date || plan.release_date <= date;
+      const availableNow = !releaseDate || releaseDate <= date;
       const notification = {
-        id: `performance-plan-added-${plan.id}-${recipient.id}`,
+        id: `performance-plan-added-${firstPlan.id}-${recipient.id}`,
         type: 'performancePlans',
         title: availableNow ? 'New performance plan available' : 'New performance plan added',
         body: availableNow
-          ? `${plan.title || 'A new plan'} is ready in Performance Plans.`
-          : `${plan.title || 'A new plan'} has been added and will open on ${plan.release_date}.`,
+          ? `${planGroup.title} is ready in Performance Plans.`
+          : `${planGroup.title} has been added and will open on ${releaseDate}.`,
         tone: 'info'
       };
       const device = newestDeviceByUser.get(recipient.id);
@@ -318,7 +344,7 @@ export default async function handler(req, res) {
       result.status === 'fulfilled' && (result.value.stored || result.value.duplicate)
     );
     if (planStored || planDeliveries.length === 0) {
-      await markPlanNotificationSent(plan.id);
+      await Promise.all(planGroup.plans.map((plan) => markPlanNotificationSent(plan.id)));
     }
     deliveryResults.forEach((result) => {
       sent.push(result.status === 'fulfilled'
