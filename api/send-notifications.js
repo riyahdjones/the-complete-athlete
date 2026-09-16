@@ -24,8 +24,11 @@ function daysInactive(lastActiveAt) {
 
 function authorized(req) {
   const secret = envValue('CRON_SECRET', 'NOTIFICATION_CRON_SECRET');
-  if (!secret) return false;
-  return req.headers.authorization === `Bearer ${secret}`;
+  const planWebhookSecret = envValue('PLAN_NOTIFICATION_WEBHOOK_SECRET');
+  const cronAuthorized = Boolean(secret) && req.headers.authorization === `Bearer ${secret}`;
+  const planWebhookAuthorized = Boolean(planWebhookSecret)
+    && req.headers['x-plan-notification-secret'] === planWebhookSecret;
+  return cronAuthorized || planWebhookAuthorized;
 }
 
 async function latestDailyDeposit(date) {
