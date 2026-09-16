@@ -54,6 +54,43 @@ function buildDailyActivity(readinessChecks, standardsHistory) {
   return days;
 }
 
+function buildUserGrowth(profiles, days = 30) {
+  return Array.from({ length: days }, (_, index) => {
+    const date = daysAgoKey(days - 1 - index);
+    const throughDate = profiles.filter((profile) => profile.created_at && dateKeyFromDate(new Date(profile.created_at)) <= date);
+    const newUsers = throughDate.filter((profile) => dateKeyFromDate(new Date(profile.created_at)) === date).length;
+    return {
+      date,
+      label: formatShortDate(date),
+      total: throughDate.filter((profile) => ['athlete', 'parent'].includes(profile.role)).length,
+      newUsers,
+      athletes: throughDate.filter((profile) => profile.role === 'athlete').length,
+      parents: throughDate.filter((profile) => profile.role === 'parent').length
+    };
+  });
+}
+
+function buildActivityHeatmap(events) {
+  const cells = Array.from({ length: 7 }, () => Array(24).fill(0));
+  events.forEach((event) => {
+    if (!event.created_at) return;
+    const date = new Date(event.created_at);
+    if (!Number.isFinite(date.getTime())) return;
+    cells[date.getUTCDay()][date.getUTCHours()] += 1;
+  });
+  return cells;
+}
+
+function percentage(part, whole) {
+  if (!whole) return null;
+  return Math.round((part / whole) * 100);
+}
+
+function seriesTitle(plan) {
+  const match = String(plan?.subject ?? '').match(/Series:\s*([^.!]+)[.!]?/i);
+  return match?.[1]?.trim() || plan?.title || 'Performance plan';
+}
+
 function maxDate(values) {
   const valid = values.filter(Boolean).map((value) => new Date(value).getTime()).filter(Number.isFinite);
   if (!valid.length) return null;
@@ -106,6 +143,7 @@ export async function getDashboardData() {
   const supabase = supabaseAdmin();
   const activityStart = daysAgoKey(13);
   const sevenDayStart = daysAgoKey(6);
+  const thirtyDayStart = daysAgoKey(29);
 
   const [
     profiles,
@@ -159,7 +197,7 @@ export async function getDashboardData() {
     supabase.from('app_events').select('id', { count: 'exact', head: true }).in('severity', ['error', 'critical']).gte('created_at', `${sevenDayStart}T00:00:00Z`),
     supabase.from('readiness_checks').select('id', { count: 'exact', head: true }).eq('entry_date', todayKey()),
     supabase.from('standards_history').select('id', { count: 'exact', head: true }).eq('entry_date', todayKey()),
-    supabase.from('performance_plans').select('id, title, challenge_day, challenge_length, release_date').order('release_date', { ascending: true }).limit(500),
+    supabase.from('performance_plans').select('id, title, subject, challenge_day, challenge_length, release_date').order('release_date', { ascending: true }).limit(500),
     supabase.from('performance_plan_progress').select('athlete_user_id, plan_id, completed_at').order('completed_at', { ascending: false }).limit(5000),
     supabase.from('athlete_points_ledger').select('athlete_user_id, event_type, points, label, entry_date, created_at').order('created_at', { ascending: false }).limit(5000),
     supabase.from('app_events').select('id, user_id, area, event_type, severity, created_at').or('severity.eq.critical,event_type.ilike.%crisis%,event_type.ilike.%safety%').order('created_at', { ascending: false }).limit(30)
@@ -180,6 +218,7 @@ export async function getDashboardData() {
   const coachUsageAllRows = coachUsageAll.data ?? [];
   const eventRows = appEvents.data ?? [];
   const events7Days = eventsSince(eventRows, sevenDayStart);
+  const events30Days = eventsSince(eventRows, thirtyDayStart);
   const eventsToday = eventsSince(eventRows, todayKey());
   const planRows = plans.data ?? [];
   const planProgressRows = planProgress.data ?? [];
@@ -221,22 +260,62 @@ export async function getDashboardData() {
   const topScore = Math.max(0, ...pointsByAthlete.values());
   const averageScore = pointsByAthlete.size ? Math.round(totalPoints / pointsByAthlete.size) : 0;
   const planTitleById = new Map(planRows.map((plan) => [plan.id, plan.title]));
+  const planSeriesById = new Map(planRows.map((plan) => [plan.id, seriesTitle(plan)]));
   const planCompletionsById = new Map();
   planProgressRows.forEach((row) => planCompletionsById.set(row.plan_id, (planCompletionsById.get(row.plan_id) ?? 0) + 1));
   const topPlans = [...planCompletionsById.entries()]
     .map(([planId, count]) => ({ title: planTitleById.get(planId) || 'Unknown plan', count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
+  const planSeriesMap = new Map();
+  planRows.forEach((plan) => {
+    const title = seriesTitle(plan);
+    const series = planSeriesMap.get(title) ?? { title, lessonIds: [], completions: 0, athletes: new Set(), completedAthletes: 0 };
+    series.lessonIds.push(plan.id);
+    planSeriesMap.set(title, series);
+  });
+  planProgressRows.forEach((row) => {
+    const title = planSeriesById.get(row.plan_id);
+    if (!title || !planSeriesMap.has(title)) return;
+    const series = planSeriesMap.get(title);
+    series.completions += 1;
+    series.athletes.add(row.athlete_user_id);
+  });
+  planSeriesMap.forEach((series) => {
+    const completionCounts = new Map();
+    planProgressRows.forEach((row) => {
+      if (!series.lessonIds.includes(row.plan_id)) return;
+      completionCounts.set(row.athlete_user_id, (completionCounts.get(row.athlete_user_id) ?? 0) + 1);
+    });
+    series.completedAthletes = [...completionCounts.values()].filter((count) => count >= series.lessonIds.length).length;
+  });
+  const planSeriesStats = [...planSeriesMap.values()]
+    .map((series) => ({
+      title: series.title,
+      started: series.athletes.size,
+      completed: series.completedAthletes,
+      lessonsCompleted: series.completions,
+      completionRate: percentage(series.completedAthletes, series.athletes.size)
+    }))
+    .sort((first, second) => second.started - first.started || second.lessonsCompleted - first.lessonsCompleted);
+  const plansCompleted = planSeriesStats.reduce((sum, series) => sum + series.completed, 0);
+  const plansStarted = planSeriesStats.reduce((sum, series) => sum + series.started, 0);
+  const planCompletionRate = percentage(plansCompleted, plansStarted) ?? 0;
   const planDayCounts = planRows.map((plan) => ({
     label: plan.challenge_day || 'Lesson',
     title: plan.title,
     completed: planCompletionsById.get(plan.id) ?? 0
   }));
-  const plansStarted = new Set(planProgressRows.map((row) => `${row.athlete_user_id}:${row.plan_id}`)).size;
-  const planCompletionRate = planRows.length && (athleteCount.count ?? 0)
-    ? Math.round((planProgressRows.length / (planRows.length * (athleteCount.count ?? 1))) * 100)
-    : 0;
   const coachLimitHits = coachUsageTodayRows.filter((row) => Number(row.message_count || 0) >= 15).length;
+  const coachUniqueUsers7Days = new Set(coachUsage7DayRows.map((row) => row.athlete_user_id).filter(Boolean)).size;
+  const coachDatesByUser = new Map();
+  coachUsageAllRows.forEach((row) => {
+    const dates = coachDatesByUser.get(row.athlete_user_id) ?? new Set();
+    dates.add(row.usage_date);
+    coachDatesByUser.set(row.athlete_user_id, dates);
+  });
+  const coachRepeatUsers = [...coachDatesByUser.values()].filter((dates) => dates.size > 1).length;
+  const coachMessagesAllTime = coachUsageAllRows.reduce((sum, row) => sum + Number(row.message_count || 0), 0);
   const userRows = profileRows.map((profile) => {
     const authUser = authUserMap.get(profile.id);
     const athleteProfile = athleteProfileMap.get(profile.id);
@@ -277,6 +356,51 @@ export async function getDashboardData() {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 8);
 
+  const athleteTotal = athleteCount.count ?? 0;
+  const linkedAthleteCount = new Set(parentLinkRows.map((row) => row.athlete_user_id).filter(Boolean)).size;
+  const featureAdoption = [
+    { label: 'Goals', value: percentage(new Set(goalRows.map((row) => row.athlete_user_id)).size, athleteTotal), detail: 'athletes with a goal' },
+    { label: 'Daily Activity', value: percentage(new Set(standardsRows.map((row) => row.athlete_user_id)).size, athleteTotal), detail: 'active in the last 14 days' },
+    { label: 'Performance Plans', value: percentage(new Set(planProgressRows.map((row) => row.athlete_user_id)).size, athleteTotal), detail: 'athletes completing lessons' },
+    { label: 'AI Coach', value: percentage(new Set(coachUsageAllRows.map((row) => row.athlete_user_id)).size, athleteTotal), detail: 'athletes with recorded usage' },
+    { label: 'Journal', value: percentage(new Set(journalRows.map((row) => row.athlete_user_id)).size, athleteTotal), detail: 'athletes with journal entries' },
+    { label: 'Parent Linking', value: percentage(new Set(parentLinkRows.map((row) => row.athlete_user_id)).size, athleteTotal), detail: 'athletes linked to a parent' },
+    { label: 'Daily Deposits', value: null, detail: 'view tracking unavailable' }
+  ];
+  const queryErrors = [
+    profiles.error,
+    parentLinks.error,
+    athleteCount.error,
+    parentCount.error,
+    parentLinkCount.error,
+    readinessChecks.error,
+    standardsHistory.error,
+    goals.error,
+    journalEntries.error,
+    dailyStandards.error,
+    coachUsageToday.error,
+    coachUsage7Days.error,
+    coachUsageAll.error,
+    appEvents.error,
+    criticalEvents.error,
+    checkInsToday.error,
+    standardsToday.error,
+    plans.error,
+    planProgress.error,
+    pointsLedger.error,
+    safetyEvents.error,
+    authUsers.error
+  ].filter(Boolean);
+  const systemStatus = [
+    { label: 'API', status: queryErrors.length ? 'warning' : 'operational', detail: queryErrors.length ? 'Dashboard query warning' : 'Responding normally' },
+    { label: 'Database', status: queryErrors.length ? 'warning' : 'operational', detail: queryErrors.length ? `${queryErrors.length} query warning${queryErrors.length === 1 ? '' : 's'}` : 'Connected' },
+    { label: 'Authentication', status: authUsers.error ? 'warning' : 'operational', detail: authUsers.error ? 'Admin lookup warning' : 'Admin access verified' },
+    { label: 'Analytics', status: criticalEvents.error ? 'warning' : 'operational', detail: criticalEvents.error ? 'Event query warning' : `${eventRows.length} recent events available` },
+    { label: 'AI Coach', status: countEvents(events7Days, ['coach_reply_failed']) ? 'warning' : 'operational', detail: `${countEvents(events7Days, ['coach_reply_failed'])} reply failures / 7d` },
+    { label: 'Subscriptions', status: countEvents(events7Days, ['purchase_failed', 'restore_purchase_failed']) ? 'warning' : 'operational', detail: `${countEvents(events7Days, ['purchase_failed', 'restore_purchase_failed'])} purchase issues / 7d` },
+    { label: 'Push Notifications', status: countEvents(events7Days, ['notification_send_failed']) ? 'warning' : 'operational', detail: `${countEvents(events7Days, ['notification_send_failed'])} send failures / 7d` }
+  ];
+
   return {
     profiles: userRows,
     parentLinks: parentLinkRows,
@@ -291,9 +415,11 @@ export async function getDashboardData() {
       standardsToday: standardsToday.count ?? 0,
       completedAllStandardsToday,
       parentLinks: parentLinkCount.count ?? 0,
+      linkedAthleteCount,
+      unlinkedAthletes: Math.max(athleteTotal - linkedAthleteCount, 0),
       parentLinkRate:
         athleteCount.count && athleteCount.count > 0
-          ? Math.round(((parentLinkCount.count ?? 0) / athleteCount.count) * 100)
+          ? Math.round((linkedAthleteCount / athleteCount.count) * 100)
           : 0,
       activeParents7Days,
       averageReadiness: averageReadiness(readinessRows),
@@ -308,6 +434,10 @@ export async function getDashboardData() {
       appEventsToday: eventsToday.length,
       appEvents7Days: events7Days.length,
       activeEventUsers7Days: uniqueUsersForEvents(events7Days),
+      dailyActiveUsers: uniqueUsersForEvents(eventsToday),
+      monthlyActiveUsers: uniqueUsersForEvents(events30Days),
+      dauMauRatio: percentage(uniqueUsersForEvents(eventsToday), uniqueUsersForEvents(events30Days)),
+      appOpens7Days: countEvents(events7Days, ['app_opened', 'app_open']),
       signups7Days: countEvents(events7Days, 'signup_completed'),
       onboardingCompletions7Days: countEvents(events7Days, 'onboarding_completed'),
       trialStarts7Days: countEvents(events7Days, 'trial_start_clicked'),
@@ -323,6 +453,10 @@ export async function getDashboardData() {
       notificationOptIns7Days: countEvents(events7Days, 'notification_permission_granted'),
       notificationOptOuts7Days: countEvents(events7Days, 'notification_permission_denied'),
       coachEventVolume7Days: countAreaEvents(events7Days, 'coach'),
+      coachMessagesAllTime,
+      coachUniqueUsers7Days,
+      coachRepeatUsers,
+      coachMessagesPerUser: coachUniqueUsers7Days ? Math.round((coachUsage7DayRows.reduce((sum, row) => sum + Number(row.message_count || 0), 0) / coachUniqueUsers7Days) * 10) / 10 : null,
       coachMessageSends7Days: countEvents(events7Days, 'coach_message_sent'),
       coachReplyFailures7Days: countEvents(events7Days, ['coach_reply_failed', 'coach_daily_limit_hit']),
       topEventTypes7Days: topEventTypes(events7Days),
@@ -330,11 +464,17 @@ export async function getDashboardData() {
       safetyEvents: safetyEvents.data ?? [],
       recentEvents: eventRows.slice(0, 100),
       dailyActivity: buildDailyActivity(readinessRows, standardsRows),
+      userGrowth: buildUserGrowth(profileRows),
+      activityHeatmap: buildActivityHeatmap(events30Days),
+      featureAdoption,
+      systemStatus,
       recentActivity,
       plansAvailable: planRows.length,
       plansStarted,
       planLessonsCompleted: planProgressRows.length,
       planCompletionRate,
+      plansCompleted,
+      planSeriesStats,
       topPlans,
       planDayCounts,
       totalPoints,
@@ -344,29 +484,6 @@ export async function getDashboardData() {
       topScore,
       recentPoints: pointsRows.slice(0, 12)
     },
-    errors: [
-      profiles.error,
-      parentLinks.error,
-      athleteCount.error,
-      parentCount.error,
-      parentLinkCount.error,
-      readinessChecks.error,
-      standardsHistory.error,
-      goals.error,
-      journalEntries.error,
-      dailyStandards.error,
-      coachUsageToday.error,
-      coachUsage7Days.error,
-      coachUsageAll.error,
-      appEvents.error,
-      criticalEvents.error,
-      checkInsToday.error,
-      standardsToday.error,
-      plans.error,
-      planProgress.error,
-      pointsLedger.error,
-      safetyEvents.error,
-      authUsers.error
-    ].filter(Boolean)
+    errors: queryErrors
   };
 }

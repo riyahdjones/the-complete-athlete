@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { deleteDailyDeposit, saveDailyDeposit } from '../actions';
 import { isAdminAuthed } from '../../lib/admin-auth';
 import { formatShortDate, todayKey } from '../../lib/dashboard-data';
 import { supabaseAdmin } from '../../lib/supabase-admin';
+import AdminShell from '../components/AdminShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,15 +153,7 @@ export default async function DailyDepositsPage() {
   const latestDeposit = recentDeposits[0];
 
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Content</p>
-          <h1>Daily Deposits</h1>
-          <span>Update the daily message and the matching Today&apos;s Focus without managing a title.</span>
-        </div>
-        <Link className="ghost-link" href="/">Back to Dashboard</Link>
-      </header>
+    <AdminShell eyebrow="Content Operations" title="Daily Deposits" description="Create, schedule, publish, and review the daily message delivered to athletes.">
 
       {error && (
         <section className="warning-panel">
@@ -221,6 +213,6 @@ export default async function DailyDepositsPage() {
           {recentDeposits.length ? recentDeposits.map((deposit) => <DepositRow key={deposit.id} deposit={deposit} />) : <p>No deposits yet.</p>}
         </div>
       </section>
-    </main>
+    </AdminShell>
   );
 }

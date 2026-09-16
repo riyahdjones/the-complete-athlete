@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAdminAuthed } from '../../lib/admin-auth';
 import { getDashboardData } from '../../lib/dashboard-data';
+import AdminShell from '../components/AdminShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,15 +15,7 @@ export default async function SystemPage() {
   const errorEvents = analytics.recentEvents.filter((event) => ['error', 'critical'].includes(event.severity));
 
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Backend</p>
-          <h1>System Health</h1>
-          <span>Operational logs, account events, backend warnings, and app health.</span>
-        </div>
-        <Link className="ghost-link" href="/">Overview</Link>
-      </header>
+    <AdminShell eyebrow="Infrastructure Intelligence" title="System Health" description="Operational logs, backend warnings, telemetry quality, and app health.">
 
       {errors.length > 0 && (
         <section className="warning-panel">
@@ -62,6 +54,6 @@ export default async function SystemPage() {
           )) : <div className="empty-row">No system events recorded yet.</div>}
         </div>
       </section>
-    </main>
+    </AdminShell>
   );
 }

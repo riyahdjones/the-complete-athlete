@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAdminAuthed } from '../../lib/admin-auth';
 import { getDashboardData } from '../../lib/dashboard-data';
+import AdminShell from '../components/AdminShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,17 +14,9 @@ export default async function EngagementPage() {
   const { analytics } = await getDashboardData();
 
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Core App</p>
-          <h1>Engagement</h1>
-          <span>Plans, productivity, goals, points, and parent connection.</span>
-        </div>
-        <Link className="ghost-link" href="/">Overview</Link>
-      </header>
+    <AdminShell eyebrow="Product Intelligence" title="Engagement" description="Performance plans, daily execution, goals, points, and family connection across the core product.">
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="plans">
         <div className="section-head">
           <p className="eyebrow">Performance Plans</p>
           <h2>Plan Engagement</h2>
@@ -57,7 +49,7 @@ export default async function EngagementPage() {
         </div>
       </section>
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="goals">
         <div className="section-head">
           <p className="eyebrow">Daily Work</p>
           <h2>Productivity, Goals, and Points</h2>
@@ -77,7 +69,7 @@ export default async function EngagementPage() {
         </div>
       </section>
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="subscriptions">
         <div className="section-head">
           <p className="eyebrow">Parents</p>
           <h2>Parent Engagement</h2>
@@ -91,6 +83,6 @@ export default async function EngagementPage() {
           <Metric label="Push Opt-Ins" value={analytics.notificationOptIns7Days} detail={`${analytics.notificationOptOuts7Days} denied this week`} />
         </div>
       </section>
-    </main>
+    </AdminShell>
   );
 }

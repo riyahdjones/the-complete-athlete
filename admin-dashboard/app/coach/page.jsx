@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { isAdminAuthed } from '../../lib/admin-auth';
 import { getDashboardData } from '../../lib/dashboard-data';
+import AdminShell from '../components/AdminShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,17 +15,9 @@ export default async function CoachPage() {
   const coachEvents = analytics.recentEvents.filter((event) => event.area === 'coach' || event.event_type.includes('coach')).slice(0, 20);
 
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">AI + Safety</p>
-          <h1>Coach Usage</h1>
-          <span>AI coach volume, daily limit pressure, safety signals, and private operational events.</span>
-        </div>
-        <Link className="ghost-link" href="/">Overview</Link>
-      </header>
+    <AdminShell eyebrow="AI Intelligence" title="AI Coach" description="AI Coach usage, daily limit pressure, safety signals, and private operational telemetry.">
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="safety">
         <div className="section-head">
           <p className="eyebrow">AI Coach</p>
           <h2>Usage</h2>
@@ -73,6 +65,6 @@ export default async function CoachPage() {
           )) : <div className="empty-row">No coach events recorded.</div>}
         </div>
       </section>
-    </main>
+    </AdminShell>
   );
 }

@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { deleteUserAccount } from '../actions';
 import { isAdminAuthed } from '../../lib/admin-auth';
 import { getDashboardData } from '../../lib/dashboard-data';
+import AdminShell from '../components/AdminShell';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,17 +11,9 @@ export default async function UsersPage() {
   const { profiles, parentLinks, analytics } = await getDashboardData();
 
   return (
-    <main className="dashboard-shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">Accounts</p>
-          <h1>Users</h1>
-          <span>Names, emails, roles, account IDs, links, and last active dates.</span>
-        </div>
-        <Link className="ghost-link" href="/">Overview</Link>
-      </header>
+    <AdminShell eyebrow="Account Intelligence" title="Users" description="Account identity, role distribution, athlete profiles, family connections, and last-observed activity.">
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="athletes">
         <div className="analytics-grid overview-grid">
           <article className="analytics-card"><span>Total Users</span><strong>{analytics.totalUsers}</strong><em>All accounts</em></article>
           <article className="analytics-card"><span>Athletes</span><strong>{analytics.athleteCount}</strong><em>Athlete accounts</em></article>
@@ -30,7 +22,7 @@ export default async function UsersPage() {
         </div>
       </section>
 
-      <section className="dashboard-section">
+      <section className="dashboard-section" id="parents">
         <div className="section-head">
           <p className="eyebrow">Directory</p>
           <h2>Account Info</h2>
@@ -91,6 +83,6 @@ export default async function UsersPage() {
           )) : <div className="empty-row">No parent links recorded yet.</div>}
         </div>
       </section>
-    </main>
+    </AdminShell>
   );
 }
