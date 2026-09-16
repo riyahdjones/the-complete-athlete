@@ -5009,22 +5009,29 @@ textarea,
 
 .coach-conversation .composer {
   align-items: flex-end;
+  min-width: 0;
   margin-top: 0;
   padding: 7px;
   border: 1px solid var(--line);
   border-radius: 22px;
   background: #ffffff;
+  overflow: hidden;
 }
 
 .coach-conversation .composer textarea {
+  width: 100%;
+  min-width: 0;
   min-height: 46px;
+  height: 46px;
   max-height: 118px;
   border: 0;
   padding: 10px 4px 8px 6px;
   background: transparent;
   resize: none;
   line-height: 1.35;
-  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  overflow-anchor: none;
 }
 
 .coach-conversation .composer textarea:focus {
@@ -9073,7 +9080,28 @@ select {
   min-height: 42px;
   padding-left: 11px;
   padding-right: 11px;
-  font-size: 0.9rem;
+  font-size: 16px;
+  line-height: 1.35;
+  color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+  caret-color: #2f6df6;
+}
+
+.native-shell input::placeholder,
+.native-shell textarea::placeholder {
+  color: #7b8798;
+  -webkit-text-fill-color: #7b8798;
+  opacity: 1;
+}
+
+.native-shell textarea {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.native-shell .goal-textarea,
+.native-shell .goal-card textarea {
+  overflow-y: auto;
 }
 
 .native-shell .progress-scoreboard {
@@ -9774,6 +9802,8 @@ select {
 
 .native-shell.keyboard-open .content {
   padding-bottom: max(14px, env(safe-area-inset-bottom));
+  scroll-behavior: auto;
+  overflow-anchor: none;
 }
 
 .native-shell.keyboard-open .auth-login-shell {
@@ -9797,6 +9827,13 @@ select {
 .native-shell.keyboard-open .coach-conversation .composer {
   position: relative;
   z-index: 5;
+}
+
+.native-shell.keyboard-open .composer,
+.native-shell.keyboard-open .goal-form,
+.native-shell.keyboard-open .standard-form,
+.native-shell.keyboard-open .auth-form {
+  scroll-margin-bottom: 8px;
 }
 
 /* Parent guide reader: keep the opened guide in a book-like white reading mode. */

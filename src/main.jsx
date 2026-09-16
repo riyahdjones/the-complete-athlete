@@ -8062,6 +8062,30 @@ function CoachScreen({
 }) {
   const [coachStatus, setCoachStatus] = useState('');
   const [coachThinking, setCoachThinking] = useState(false);
+  const chatPanelRef = useRef(null);
+  const coachDraftRef = useRef(null);
+
+  function resizeCoachDraft(target = coachDraftRef.current) {
+    if (!target) return;
+    target.style.height = '46px';
+    const nextHeight = Math.min(Math.max(target.scrollHeight, 46), 120);
+    target.style.height = `${nextHeight}px`;
+    target.style.overflowY = target.scrollHeight > 120 ? 'auto' : 'hidden';
+    if (target.scrollHeight > 120) {
+      target.scrollTop = target.scrollHeight;
+    }
+  }
+
+  useEffect(() => {
+    resizeCoachDraft();
+  }, [messageDraft]);
+
+  useEffect(() => {
+    const panel = chatPanelRef.current;
+    if (panel) {
+      panel.scrollTop = panel.scrollHeight;
+    }
+  }, [messages, coachThinking]);
 
   function coachReply(text) {
     const lower = text.toLowerCase();
@@ -8321,7 +8345,7 @@ function CoachScreen({
           My Mindset Coach is for performance mindset support, not therapy or medical care. If safety, injury, abuse, or self-harm is involved, tell a trusted adult immediately.
         </p>
 
-        <section className="chat-panel">
+        <section className="chat-panel" ref={chatPanelRef}>
           {messages.length === 0 && (
             <div className="coach-empty-state">
               <MessageCircle size={24} />
@@ -8346,13 +8370,15 @@ function CoachScreen({
         {coachStatus && <p className="coach-status">{coachStatus}</p>}
         <div className="composer">
           <textarea
+            ref={coachDraftRef}
             value={messageDraft}
-            onChange={(event) => setMessageDraft(event.target.value)}
+            onChange={(event) => {
+              setMessageDraft(event.target.value);
+              resizeCoachDraft(event.currentTarget);
+            }}
             onFocus={(event) => {
               setCoachComposerFocused(true);
-              setTimeout(() => {
-                event.target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-              }, 120);
+              resizeCoachDraft(event.currentTarget);
             }}
             onBlur={() => {
               setTimeout(() => setCoachComposerFocused(false), 140);
@@ -8365,6 +8391,7 @@ function CoachScreen({
             }}
             disabled={coachThinking}
             placeholder="Ask your coach..."
+            enterKeyHint="send"
             rows={2}
           />
           <button className="icon-button dark" onClick={sendMessage} aria-label="Send message" disabled={coachThinking}>
