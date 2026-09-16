@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export function SectionHeader({ eyebrow, title, description, action }) {
   return (
     <header className="section-header">
@@ -18,9 +20,10 @@ export function Sparkline({ values = [], tone = 'blue' }) {
   );
 }
 
-export function MetricCard({ label, value, detail, trend, values, tone = 'blue' }) {
+export function MetricCard({ label, value, detail, trend, values, tone = 'blue', href }) {
+  const Card = href ? Link : 'article';
   return (
-    <article className={`metric-card tone-${tone}`}>
+    <Card className={`metric-card tone-${tone}`} {...(href ? { href, 'aria-label': `Open ${label}` } : {})}>
       <div className="metric-topline"><span>{label}</span><i /></div>
       <strong>{value ?? '—'}</strong>
       <div className="metric-context">
@@ -28,7 +31,7 @@ export function MetricCard({ label, value, detail, trend, values, tone = 'blue' 
         <em>{detail}</em>
       </div>
       <Sparkline values={values} tone={tone} />
-    </article>
+    </Card>
   );
 }
 

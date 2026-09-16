@@ -6,12 +6,21 @@ import AdminShell from '../components/AdminShell';
 
 export const dynamic = 'force-dynamic';
 
-export default async function UsersPage() {
+export default async function UsersPage({ searchParams }) {
   if (!(await isAdminAuthed())) redirect('/');
   const { profiles, parentLinks, analytics } = await getDashboardData();
+  const params = await searchParams;
+  const selectedRole = params?.role === 'parent' || params?.role === 'athlete' ? params.role : '';
+  const visibleProfiles = selectedRole ? profiles.filter((profile) => profile.role === selectedRole) : profiles;
+  const pageTitle = selectedRole === 'parent' ? 'Parents' : selectedRole === 'athlete' ? 'Athletes' : 'Users';
+  const pageDescription = selectedRole === 'parent'
+    ? 'Parent accounts, family connections, and last-observed activity.'
+    : selectedRole === 'athlete'
+      ? 'Athlete accounts, profiles, development signals, and last-observed activity.'
+      : 'Account identity, role distribution, athlete profiles, family connections, and last-observed activity.';
 
   return (
-    <AdminShell eyebrow="Account Intelligence" title="Users" description="Account identity, role distribution, athlete profiles, family connections, and last-observed activity.">
+    <AdminShell eyebrow="Account Intelligence" title={pageTitle} description={pageDescription}>
 
       <section className="dashboard-section" id="athletes">
         <div className="analytics-grid overview-grid">
@@ -22,10 +31,10 @@ export default async function UsersPage() {
         </div>
       </section>
 
-      <section className="dashboard-section" id="parents">
+      <section className="dashboard-section" id="directory">
         <div className="section-head">
           <p className="eyebrow">Directory</p>
-          <h2>Account Info</h2>
+          <h2>{pageTitle} Account Info</h2>
           <p>Use this to quickly identify who is in the app and whether their account is connected.</p>
         </div>
         <div className="user-table">
@@ -40,7 +49,7 @@ export default async function UsersPage() {
             <span>Account ID</span>
             <span>Manage</span>
           </div>
-          {profiles.map((profile) => (
+          {visibleProfiles.map((profile) => (
             <div className="user-table-row" key={profile.id}>
               <strong>{profile.name}</strong>
               <span>{profile.email}</span>
@@ -68,7 +77,7 @@ export default async function UsersPage() {
         </div>
       </section>
 
-      <section className="dashboard-section">
+      {selectedRole !== 'athlete' && <section className="dashboard-section">
         <div className="section-head">
           <p className="eyebrow">Families</p>
           <h2>Parent Links</h2>
@@ -82,7 +91,7 @@ export default async function UsersPage() {
             </div>
           )) : <div className="empty-row">No parent links recorded yet.</div>}
         </div>
-      </section>
+      </section>}
     </AdminShell>
   );
 }

@@ -1713,6 +1713,11 @@ label span,
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
+a.metric-card {
+  color: inherit;
+  text-decoration: none;
+}
+
 .metric-card:hover,
 .intelligence-panel:hover {
   border-color: rgba(78, 157, 255, 0.24);

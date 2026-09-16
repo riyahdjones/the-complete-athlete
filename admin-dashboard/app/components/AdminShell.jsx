@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const navigation = [
   { label: 'Overview', href: '/', icon: 'grid' },
   { label: 'Users', href: '/users', icon: 'users' },
-  { label: 'Athletes', href: '/users#athletes', icon: 'athlete' },
-  { label: 'Parents', href: '/users#parents', icon: 'link' },
+  { label: 'Athletes', href: '/users?role=athlete', icon: 'athlete' },
+  { label: 'Parents', href: '/users?role=parent', icon: 'link' },
   { label: 'Engagement', href: '/engagement', icon: 'pulse' },
   { label: 'Performance Plans', href: '/engagement#plans', icon: 'plans' },
   { label: 'AI Coach', href: '/coach', icon: 'coach' },
@@ -52,6 +52,7 @@ function LiveClock() {
 
 export default function AdminShell({ eyebrow, title, description, children }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -66,7 +67,12 @@ export default function AdminShell({ eyebrow, title, description, children }) {
         </button>
         <nav className="command-nav" aria-label="Admin navigation">
           {navigation.map((item) => {
-            const active = !item.href.includes('#') && pathname === item.href;
+            const role = searchParams.get('role');
+            const active = item.href === '/users'
+              ? pathname === '/users' && !role
+              : item.href.startsWith('/users?role=')
+                ? pathname === '/users' && role === item.href.split('=')[1]
+                : !item.href.includes('#') && pathname === item.href;
             return <Link className={active ? 'active' : ''} href={item.href} key={item.label} title={item.label}><Icon name={item.icon} /><span>{item.label}</span></Link>;
           })}
         </nav>
