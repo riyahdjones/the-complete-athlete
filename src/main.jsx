@@ -4415,7 +4415,7 @@ function App() {
       return;
     }
 
-    const { error } = await supabase.rpc('link_parent_to_athlete', { access_code: accessCode });
+    const { data: athleteUserId, error } = await supabase.rpc('link_parent_to_athlete', { access_code: accessCode });
     if (error) {
       trackAnalyticsEvent('family_link_failed', { source: 'parent_settings', reason: error.message }, { area: 'family', severity: 'warning' });
       setParentLinkFeedback('That code did not link. Check the code and try again.');
@@ -4425,6 +4425,8 @@ function App() {
     trackAnalyticsEvent('family_linked', { source: 'parent_settings' }, { area: 'family' });
     setParentAccessDraft('');
     setParentLinkFeedback('Athlete linked. Loading parent dashboard...');
+    if (athleteUserId) setLinkedAthleteId(athleteUserId);
+    completeParentOnboarding();
     setParentLinkRefreshKey((value) => value + 1);
   }
 
@@ -4661,16 +4663,21 @@ function App() {
     window.setTimeout(() => setCelebration(''), 2800);
   }
 
+  function completeParentOnboarding() {
+    if (!effectiveSession?.id) return;
+    const nextAccounts = { ...parentOnboardingAccounts, [effectiveSession.id]: true };
+    setParentOnboardingAccounts(nextAccounts);
+    localStorage.setItem('tca-parent-onboarding-accounts', JSON.stringify(nextAccounts));
+    setView('parent');
+    setParentTab('overview');
+    setOnboardingComplete(true);
+    localStorage.setItem(onboardingStorageKey, 'true');
+    trackAnalyticsEvent('onboarding_completed', { role: 'parent' }, { area: 'activation' });
+  }
+
   function completeOnboarding(setup) {
     if (effectiveSession?.role === 'parent') {
-      const nextAccounts = { ...parentOnboardingAccounts, [effectiveSession.id]: true };
-      setParentOnboardingAccounts(nextAccounts);
-      localStorage.setItem('tca-parent-onboarding-accounts', JSON.stringify(nextAccounts));
-      setView('parent');
-      setParentTab('overview');
-      setOnboardingComplete(true);
-      localStorage.setItem(onboardingStorageKey, 'true');
-      trackAnalyticsEvent('onboarding_completed', { role: 'parent' }, { area: 'activation' });
+      completeParentOnboarding();
       return;
     }
     const selectedChallenges = athleteChallengesByIds(setup.currentChallenges, setup.currentChallenge);
@@ -5207,7 +5214,7 @@ function App() {
   }
 
   if (!prototypeBypassLogin && !localParentInviteSession && !athleteTodayPreview && (effectiveSession?.role === 'parent'
-    ? !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
+    ? parentLinkChecked && !linkedAthleteId && !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
     : !onboardingComplete)) {
     if (effectiveSession?.role === 'parent') {
       return <ParentOnboardingScreen completeOnboarding={completeOnboarding}
