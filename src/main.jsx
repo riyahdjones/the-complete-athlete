@@ -5792,7 +5792,7 @@ function HomeScreen({
     setGoals((current) =>
       current.map((goal) =>
         completedGoalIds.includes(goal.id)
-          ? { ...goal, progress: Math.min(100, Number(goal.progress) + 5) }
+          ? { ...goal, progress: Math.min(100, Number(goal.progress) + 1) }
           : goal
       )
     );
@@ -6375,7 +6375,12 @@ function GoalsScreen({
     setGoals((current) =>
       current.map((goal) =>
         goal.id === id
-          ? { ...goal, [field]: field === 'progress' ? Number(value) : value }
+          ? {
+              ...goal,
+              [field]: field === 'progress'
+                ? Math.max(0, Math.min(100, Number(value) || 0))
+                : value
+            }
           : goal
       )
     );
@@ -6434,7 +6439,7 @@ function GoalsScreen({
         <p>Goals give your effort a direction, but it’s discipline to constantly pursue them that gives you momentum.</p>
         <div className="goal-reminder">
           <strong>How it works</strong>
-          <span>Link daily activity to goals. When you complete those items and lock in the day, that goal earns progress.</span>
+          <span>Link daily activity to goals. Each locked-in day adds 1% to goals connected to completed activity. You can also slide a goal’s progress bar to set your own estimate.</span>
         </div>
       </section>
 
@@ -6479,6 +6484,8 @@ function GoalsScreen({
         {goals.map((goal) => {
           const goalStandards = standards.filter((standard) => standard.goalId === goal.id);
           const completedGoalStandards = goalStandards.filter((standard) => standard.done);
+          const goalProgress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
+          const progressInputId = `goal-progress-${goal.id}`;
           return (
             <section className="goal-card editable" key={goal.id}>
               <label>
@@ -6505,23 +6512,29 @@ function GoalsScreen({
                   Done today
                 </span>
                 <span>
-                  <strong>{goal.progress}%</strong>
+                  <strong>{goalProgress}%</strong>
                   Goal progress
                 </span>
               </div>
-              <Progress value={goal.progress} />
-              <label className="goal-progress">
-                <span>Progress</span>
+              <div className="goal-progress">
+                <div className="goal-progress-heading">
+                  <label htmlFor={progressInputId}>How close are you?</label>
+                  <strong>{goalProgress}%</strong>
+                </div>
                 <input
+                  id={progressInputId}
                   type="range"
                   min="0"
                   max="100"
-                  value={goal.progress}
+                  step="1"
+                  value={goalProgress}
                   onChange={(event) => updateGoal(goal.id, 'progress', event.target.value)}
-                  onInput={(event) => updateGoal(goal.id, 'progress', event.target.value)}
+                  aria-label={`Set progress for ${goal.label || 'goal'}`}
+                  aria-valuetext={`${goalProgress}% complete`}
+                  style={{ '--goal-progress': `${goalProgress}%` }}
                 />
-                <strong>{goal.progress}%</strong>
-              </label>
+                <small>Slide the bar to set your own estimate. A locked-in day adds 1%.</small>
+              </div>
               <div className="goal-linked-standards">
                 <strong>Daily activity helping this goal</strong>
                 {goalStandards.length === 0 ? (

@@ -1606,14 +1606,91 @@ p {
 }
 
 .goal-progress {
-  grid-template-columns: 72px 1fr 44px;
-  align-items: center;
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
 }
 
-.goal-progress input {
-  min-height: auto;
+.goal-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.goal-progress-heading label {
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.goal-progress-heading strong {
+  color: #2f6df6;
+  font-size: 1rem;
+}
+
+.goal-progress input[type='range'] {
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
   padding: 0;
-  accent-color: var(--gold);
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #2f6df6 0,
+    #2f6df6 var(--goal-progress),
+    #dce5f3 var(--goal-progress),
+    #dce5f3 100%
+  );
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.goal-progress input[type='range']::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.goal-progress input[type='range']::-webkit-slider-thumb {
+  width: 28px;
+  height: 28px;
+  margin-top: -9px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #2f6df6;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.28);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.goal-progress input[type='range']::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.goal-progress input[type='range']::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #2f6df6;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.28);
+}
+
+.goal-progress small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.4;
 }
 
 .goal-actions {
@@ -9102,6 +9179,12 @@ select {
 .native-shell .goal-textarea,
 .native-shell .goal-card textarea {
   overflow-y: auto;
+}
+
+.native-shell .goal-progress input[type='range'] {
+  min-height: 30px;
+  padding: 0;
+  -webkit-text-fill-color: initial;
 }
 
 .native-shell .progress-scoreboard {
