@@ -9344,6 +9344,77 @@ select {
   box-shadow: 0 16px 36px rgba(47, 109, 246, 0.28);
 }
 
+.onboarding-photo-field {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid rgba(47, 109, 246, 0.16);
+  border-radius: 12px;
+  background: rgba(239, 245, 255, 0.72);
+}
+
+.onboarding-photo-preview {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  color: #2f6df6;
+  background: #dce8ff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+}
+
+.onboarding-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.onboarding-photo-copy {
+  display: grid;
+  gap: 5px;
+}
+
+.onboarding-photo-copy > strong {
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.onboarding-photo-copy > span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.onboarding-photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.onboarding-photo-actions .photo-upload {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+}
+
+.onboarding-photo-remove {
+  min-height: 36px;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: #b42318;
+  background: rgba(180, 35, 24, 0.08);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
 .challenge-choice-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -9673,6 +9744,15 @@ select {
 
   .native-shell .onboarding-panel .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .onboarding-photo-field {
+    grid-template-columns: 62px minmax(0, 1fr);
+  }
+
+  .onboarding-photo-preview {
+    width: 62px;
+    height: 62px;
   }
 }
 

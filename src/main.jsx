@@ -4681,6 +4681,7 @@ function App() {
       name: accountName,
       sport: setup.sport,
       age: setup.age,
+      photo: setup.photo || athleteProfile.photo || '',
       location: setup.location,
       parentContact: setup.parentContact,
       currentChallenge: selectedChallenge.id,
@@ -4718,6 +4719,7 @@ function App() {
       challengeCount: selectedChallenges.length,
       sportProvided: Boolean(setup.sport),
       ageProvided: Boolean(setup.age),
+      photoProvided: Boolean(setup.photo),
       locationProvided: Boolean(setup.location),
       parentContactProvided: Boolean(setup.parentContact),
       goalsCount: nextGoals.length,
@@ -5213,7 +5215,7 @@ function App() {
         setParentAccessDraft={setParentAccessDraft} parentLinkFeedback={parentLinkFeedback}
         setParentLinkFeedback={setParentLinkFeedback} linkedAthleteId={linkedAthleteId} />;
     }
-    return <OnboardingScreen completeOnboarding={completeOnboarding} />;
+    return <OnboardingScreen authSession={effectiveSession} completeOnboarding={completeOnboarding} />;
   }
 
   if (!effectiveSubscription.loading && !premiumAccessAllowed && (!trialPromptDismissed || trialGatePreview)) {
@@ -5508,10 +5510,11 @@ function ParentOnboardingScreen({ completeOnboarding, linkParentAccessCode, pare
   );
 }
 
-function OnboardingScreen({ completeOnboarding }) {
+function OnboardingScreen({ authSession, completeOnboarding }) {
   const [setup, setSetup] = useState({
     sport: '',
     age: '',
+    photo: '',
     location: '',
     parentContact: '',
     currentChallenge: '',
@@ -5520,6 +5523,8 @@ function OnboardingScreen({ completeOnboarding }) {
     standards: []
   });
   const [message, setMessage] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   function updateField(field, value) {
     setSetup((current) => ({ ...current, [field]: value }));
@@ -5541,7 +5546,55 @@ function OnboardingScreen({ completeOnboarding }) {
     setMessage('');
   }
 
-  function startOnboarding(event) {
+  function choosePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setMessage('Choose a photo from your image library.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage('Choose a photo smaller than 10 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoFile(file);
+      setSetup((current) => ({ ...current, photo: String(reader.result || '') }));
+      setMessage('');
+    };
+    reader.onerror = () => setMessage('That photo could not be opened. Choose a different image.');
+    reader.readAsDataURL(file);
+  }
+
+  function removePhoto() {
+    setPhotoFile(null);
+    setSetup((current) => ({ ...current, photo: '' }));
+    setMessage('');
+  }
+
+  async function saveOnboardingPhoto() {
+    if (!photoFile || !isSupabaseConfigured || !authSession?.id) return setup.photo;
+
+    const extensionByType = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp'
+    };
+    const extension = extensionByType[photoFile.type] || 'jpg';
+    const path = `${authSession.id}/profile.${extension}`;
+    const { error } = await supabase.storage
+      .from('athlete-profile-photos')
+      .upload(path, photoFile, { cacheControl: '3600', upsert: true });
+
+    if (error) return setup.photo;
+    const { data } = supabase.storage.from('athlete-profile-photos').getPublicUrl(path);
+    return data.publicUrl || setup.photo;
+  }
+
+  async function startOnboarding(event) {
     event.preventDefault();
     const cleanSetup = {
       ...setup,
@@ -5560,7 +5613,16 @@ function OnboardingScreen({ completeOnboarding }) {
       return;
     }
 
-    completeOnboarding(cleanSetup);
+    setSubmitting(true);
+    setMessage(photoFile ? 'Adding your profile photo...' : '');
+    try {
+      const photo = await saveOnboardingPhoto();
+      completeOnboarding({ ...cleanSetup, photo });
+    } catch {
+      completeOnboarding(cleanSetup);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -5574,6 +5636,27 @@ function OnboardingScreen({ completeOnboarding }) {
       <form className="onboarding-form" onSubmit={startOnboarding}>
         <section className="panel onboarding-panel">
           <PanelTitle icon={<UserRound size={18} />} title="Athlete" action="Step 1" />
+          <div className="onboarding-photo-field">
+            <div className={setup.photo ? 'onboarding-photo-preview has-photo' : 'onboarding-photo-preview'}>
+              {setup.photo ? <img src={setup.photo} alt="Selected athlete profile" /> : <UserRound size={28} />}
+            </div>
+            <div className="onboarding-photo-copy">
+              <strong>Profile photo</strong>
+              <span>Optional. Add one now or later in Settings.</span>
+              <div className="onboarding-photo-actions">
+                <label className="photo-upload">
+                  <Camera size={17} />
+                  {setup.photo ? 'Change Photo' : 'Add Photo'}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={choosePhoto} />
+                </label>
+                {setup.photo && (
+                  <button className="onboarding-photo-remove" type="button" onClick={removePhoto}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="form-grid">
             <label>
               <span>Sport</span>
@@ -5633,9 +5716,9 @@ function OnboardingScreen({ completeOnboarding }) {
         </section>
 
         {message && <p className="inline-warning">{message}</p>}
-        <button className="primary-action full onboarding-start" type="submit">
+        <button className="primary-action full onboarding-start" type="submit" disabled={submitting}>
           <Check size={18} />
-          Start Today
+          {submitting ? 'Setting Up Account...' : 'Start Today'}
         </button>
       </form>
     </main>
