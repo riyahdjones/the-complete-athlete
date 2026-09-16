@@ -8072,7 +8072,7 @@ function CoachScreen({
       return `I'm here${namePhrase}. What's going on today?`;
     }
     if (words.length < 12) {
-      return "I'm with you. Help me understand the moment a little more. What happened most recently?";
+      return "I'm with you. What happened in the most recent moment?";
     }
     const hasExcuse =
       lower.includes('not my fault') ||
@@ -8097,10 +8097,10 @@ function CoachScreen({
                   ? 'identity'
                   : 'pressure';
     if (hasExcuse) {
-      return `I get why that feels frustrating. I am still going to challenge you: even if part of this is unfair, the useful question is what you can own next. Tell me the exact ${topic} moment and what you did right after it, then we can choose the response you want to train.`;
+      return `I get why that feels frustrating. What happened in the exact ${topic} moment, and what did you do right after it?`;
     }
 
-    return `That sounds like a real ${topic} moment, but I do not want to guess at the whole story. What happened right before you felt this, and what do you wish you had done differently? Once I know that, we can turn it into one clear action for today.`;
+    return `I do not want to guess at the whole story. What happened right before that ${topic} moment, and what do you wish you had done differently?`;
   }
 
   function saveCoachSession(sessionId, sessionTitle, nextMessages) {

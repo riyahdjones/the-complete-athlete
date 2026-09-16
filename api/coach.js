@@ -92,12 +92,15 @@ Response style:
 - Sound like a real coach in a private conversation, not a worksheet, script, or motivational poster.
 - If the athlete sends a casual check-in like "you there," "hey," "what's up," or "can you help," answer naturally first. Do not treat it as a performance problem.
 - Use the athlete's first name sometimes when it feels natural, especially to greet, reassure, or bring them back to the point. Do not use their name in every message.
-- Listen first. If the athlete's message is vague, broad, or emotional without details, do not give steps yet. Ask 1-2 warm clarifying questions and wait for the athlete to explain.
-- Do not assume the problem. Reflect what the athlete actually said, then find out what happened, when it happens, and what they want help changing.
-- If the problem is clear, give a short human response: one honest observation, one or two practical moves, and one question or small action for today.
+- Default to discovery before advice. When the situation is vague, broad, or missing a specific moment, ask one warm, focused question and wait. Do not attach advice to the question.
+- It is okay to spend the first two coach turns understanding the situation. Ask about the most recent moment, what the athlete thought or felt, what they did next, or what they want to change. Ask only the single question that will reveal the most useful context.
+- Do not assume the problem or deliver a speech from one short message. Reflect only what the athlete actually said.
+- Once the problem is clear, give one honest observation, one practical move, and one question or small action for today.
+- Default to 2-4 short sentences and no more than 90 words. A simple check-in or clarification should usually be 1-2 sentences and under 45 words.
+- Only exceed 90 words when safety support or a factual sports answer truly requires it.
 - Never start with "One clear truth" or use labels like "Reflection," "Action step," "Cue ideas," or "Do this right now."
 - Do not use markdown formatting, asterisks, bold marks, headings, rigid formats, numbered lists, repeated slogans, hashtags, or clinical language.
-- Keep it concise, but let it feel natural.
+- End after the useful point. Do not repeat the same idea in different words.
 
 Examples of the right style:
 Athlete: "you there"
@@ -169,8 +172,8 @@ function needsClarifyingQuestion(message, history) {
   const words = message.split(/\s+/).filter(Boolean);
   const lower = message.toLowerCase();
   const recentAthleteTurns = cleanMessages(history).filter((entry) => entry.role === 'athlete').length;
-  if (recentAthleteTurns > 1) return false;
   if (isCasualCheckIn(message)) return false;
+  if (recentAthleteTurns >= 2) return false;
 
   const vaguePhrases = [
     'challenge',
@@ -185,10 +188,13 @@ function needsClarifyingQuestion(message, history) {
     'feel off',
     'bad day'
   ];
-  const specificClues =
-    /\b(free throw|shot|shooting|miss|turnover|strike|pitch|hit|serve|race|meet|sprint|jump|lap|hole|putt|swing|practice|game|match|coach said|teammate|playing time|bench|injury|hurt)\b/i;
+  const eventClues =
+    /\b(today|yesterday|last|during|after|before|when|practice|game|match|meet|race|tryout|coach said|teammate said|first quarter|second quarter|third quarter|fourth quarter|inning|set|lap|hole|at-bat|free throw|playing time|bench)\b/i;
+  const responseClues =
+    /\b(i thought|i told myself|i felt|i started|i stopped|i did|i said|my body|my mind|i want to|i wish|next time)\b/i;
+  const hasEnoughContext = words.length >= 16 && eventClues.test(message) && responseClues.test(message);
 
-  return (words.length <= 8 || vaguePhrases.some((phrase) => lower.includes(phrase))) && !specificClues.test(message);
+  return !hasEnoughContext && (words.length <= 18 || vaguePhrases.some((phrase) => lower.includes(phrase)));
 }
 
 function isCurriculumQuestion(message) {
@@ -501,20 +507,32 @@ function isCasualCheckIn(message) {
   return /^(yo+|hey+|hi+|hello+|sup|what'?s up|you there|are you there|u there|can you help|help me|coach|mindset coach)[\s?.!]*$/i.test(message);
 }
 
-function clarifyingResponse(message, athlete) {
+function clarifyingResponse(message, athlete, history = []) {
   if (isCasualCheckIn(message)) {
     const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
     const namePhrase = firstName && firstName !== 'Athlete' && firstName !== 'Unknown' ? `, ${firstName}` : '';
     return `I'm here${namePhrase}. What's going on today?`;
   }
 
+  const lower = message.toLowerCase();
+  const priorAthleteTurns = cleanMessages(history).filter((entry) => entry.role === 'athlete').length;
   const sport = cleanMessage(athlete?.sport, 40);
   const sportPhrase = sport && sport !== 'Unknown' ? ` in ${sport}` : '';
-  return [
-    "I'm with you. Help me understand the moment a little more.",
-    `Is it about confidence, pressure, a coach, teammates, playing time, focus${sportPhrase ? `, or something in ${sport}` : ', or something outside the sport'}?`,
-    'What happened most recently?'
-  ].join(' ');
+
+  if (/\bcoach|feedback|correction\b/.test(lower)) {
+    return "I'm with you. What did your coach say or do most recently, and how did you respond in that moment?";
+  }
+  if (/\bplaying time|bench|starter|starting\b/.test(lower)) {
+    return "I hear you. What has your coach told you about your role, and what part of that is hardest for you right now?";
+  }
+  if (/\bteammate|team|locker room\b/.test(lower)) {
+    return "I'm with you. What happened with your teammate or team most recently, and what do you want to handle differently?";
+  }
+  if (/\bconfidence|pressure|overthink|nervous|fear|mistake|messing up|slump\b/.test(lower) || priorAthleteTurns > 0) {
+    return "Help me see the exact moment. What happened most recently, and what did you tell yourself right after?";
+  }
+
+  return `I'm with you. Is this mainly about confidence, pressure, a coach, teammates, playing time, focus${sportPhrase ? `, or something happening in ${sport}` : ', or something outside your sport'}?`;
 }
 
 function asArray(value) {
@@ -1132,7 +1150,7 @@ export default async function handler(req, res) {
   const sportsKnowledgeQuestion = hasSportsKnowledgeIntent(message);
 
   if (!sportsKnowledgeQuestion && !isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
-    const reply = clarifyingResponse(message, athleteContext);
+    const reply = clarifyingResponse(message, athleteContext, body.history);
     await saveCoachSession({
       userId: user.id,
       token,
@@ -1168,7 +1186,7 @@ export default async function handler(req, res) {
         curriculum: curriculumContext,
         sportsContext
       }),
-      max_output_tokens: 450
+      max_output_tokens: 220
     })
   });
 
