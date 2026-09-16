@@ -103,6 +103,7 @@ create table if not exists public.performance_plans (
   release_date date not null,
   challenge_day text not null default '',
   challenge_length integer not null default 7,
+  notification_sent_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -244,6 +245,10 @@ on public.daily_deposits (release_date desc, status);
 
 create index if not exists performance_plans_release_idx
 on public.performance_plans (release_date);
+
+create index if not exists performance_plans_pending_notification_idx
+on public.performance_plans (created_at)
+where notification_sent_at is null;
 
 create index if not exists parent_guides_release_status_idx
 on public.parent_guides (release_date, status);

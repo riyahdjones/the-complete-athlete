@@ -641,6 +641,13 @@ on public.daily_deposits (release_date desc, status);
 create index if not exists performance_plans_release_idx
 on public.performance_plans (release_date);
 
+alter table public.performance_plans
+add column if not exists notification_sent_at timestamptz;
+
+create index if not exists performance_plans_pending_notification_idx
+on public.performance_plans (created_at)
+where notification_sent_at is null;
+
 create index if not exists parent_messages_status_send_idx
 on public.parent_messages (status, send_date desc);
 

@@ -3699,7 +3699,7 @@ function App() {
         if (releasedToday) {
           notifyUser('New performance plan available', `${planSeriesTitle(releasedToday)} is ready in Performance Plans.`, 'info', {
             type: 'performancePlans',
-            id: `plan-release-${dailyDate}-${planSeriesTitle(releasedToday)}`
+            id: `performance-plan-added-${releasedToday.id}-${authSession.id}`
           });
         }
       }

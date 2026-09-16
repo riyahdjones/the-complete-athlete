@@ -35,11 +35,26 @@ async function latestDailyDeposit(date) {
   return result.error ? null : result.data?.[0] ?? null;
 }
 
-async function todaysPlan(date) {
+async function pendingPlanNotifications() {
   const result = await supabaseServiceRequest(
-    `performance_plans?select=id,title,subject,release_date&release_date=eq.${date}&order=title.asc&limit=1`
+    'performance_plans?select=id,title,subject,release_date,created_at&notification_sent_at=is.null&order=created_at.asc'
   );
-  return result.error ? null : result.data?.[0] ?? null;
+  return result.error ? [] : result.data ?? [];
+}
+
+async function markPlanNotificationSent(planId) {
+  await supabaseServiceRequest(`performance_plans?id=eq.${encodeURIComponent(planId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ notification_sent_at: new Date().toISOString() })
+  });
+}
+
+async function notificationRecipients() {
+  const result = await supabaseServiceRequest(
+    'profiles?select=id,role&role=in.(athlete,parent)'
+  );
+  return result.error ? [] : result.data ?? [];
 }
 
 async function pushDevices() {
@@ -223,6 +238,14 @@ async function sendToDevice(device, notification) {
   }
 }
 
+async function saveForUserWithoutPush(userId, notification) {
+  if (await notificationExists(userId, notification.id)) {
+    return { pushed: false, stored: true, duplicate: true };
+  }
+  const stored = await saveNotification(userId, notification);
+  return { pushed: false, stored };
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res, 'GET, POST, OPTIONS');
 
@@ -245,18 +268,61 @@ export default async function handler(req, res) {
   const isMorningWindow = hour >= 6 && hour <= 8;
   const isReengagementWindow = isMorningWindow || (hour >= 9 && hour <= 11);
   const isEveningWindow = hour >= 19 && hour <= 21;
-  const [deposit, plan, devices, inactiveUsers, unlockUsers, rescueUsers, milestoneUsers] = await Promise.all([
+  const [deposit, addedPlans, devices, recipients, inactiveUsers, unlockUsers, rescueUsers, milestoneUsers] = await Promise.all([
     latestDailyDeposit(date),
-    todaysPlan(date),
+    pendingPlanNotifications(),
     pushDevices(),
+    notificationRecipients(),
     inactiveProfiles(),
     isMorningWindow ? planUnlockUsers(yesterday) : Promise.resolve(new Set()),
     isEveningWindow ? streakRescueUsers(date, yesterday) : Promise.resolve(new Set()),
     isEveningWindow ? streakMilestoneUsers(date) : Promise.resolve(new Set())
   ]);
-  const uniqueUserIds = [...new Set(devices.map((device) => device.user_id))];
+  const uniqueUserIds = [...new Set(recipients.map((recipient) => recipient.id))];
   const preferences = await preferencesForUsers(uniqueUserIds);
   const sent = [];
+  const newestDeviceByUser = new Map();
+
+  devices.forEach((device) => {
+    if (!newestDeviceByUser.has(device.user_id)) {
+      newestDeviceByUser.set(device.user_id, device);
+    }
+  });
+
+  for (const plan of addedPlans) {
+    const planDeliveries = [];
+    for (const recipient of recipients) {
+      const prefs = preferences.get(recipient.id) ?? {};
+      if (prefs.performance_plans === false) continue;
+
+      const availableNow = !plan.release_date || plan.release_date <= date;
+      const notification = {
+        id: `performance-plan-added-${plan.id}-${recipient.id}`,
+        type: 'performancePlans',
+        title: availableNow ? 'New performance plan available' : 'New performance plan added',
+        body: availableNow
+          ? `${plan.title || 'A new plan'} is ready in Performance Plans.`
+          : `${plan.title || 'A new plan'} has been added and will open on ${plan.release_date}.`,
+        tone: 'info'
+      };
+      const device = newestDeviceByUser.get(recipient.id);
+      planDeliveries.push(device
+        ? sendToDevice(device, notification)
+        : saveForUserWithoutPush(recipient.id, notification));
+    }
+    const deliveryResults = await Promise.allSettled(planDeliveries);
+    const planStored = deliveryResults.every((result) =>
+      result.status === 'fulfilled' && (result.value.stored || result.value.duplicate)
+    );
+    if (planStored || planDeliveries.length === 0) {
+      await markPlanNotificationSent(plan.id);
+    }
+    deliveryResults.forEach((result) => {
+      sent.push(result.status === 'fulfilled'
+        ? Promise.resolve(result.value)
+        : Promise.reject(result.reason));
+    });
+  }
 
   for (const device of devices) {
     const prefs = preferences.get(device.user_id) ?? {};
@@ -268,16 +334,6 @@ export default async function handler(req, res) {
         type: 'dailyDeposits',
         title: 'Daily Deposit',
         body,
-        tone: 'info'
-      }));
-    }
-
-    if (isMorningWindow && plan && prefs.performance_plans !== false) {
-      sent.push(sendToDevice(device, {
-        id: `push-performance-plan-${date}-${device.user_id}-${plan.id}`,
-        type: 'performancePlans',
-        title: 'New performance plan available',
-        body: `${plan.title || 'A new plan'} is ready in Performance Plans.`,
         tone: 'info'
       }));
     }
@@ -395,6 +451,8 @@ export default async function handler(req, res) {
   await recordNotificationEvent('notification_job_completed', failures.length || rejected.length ? 'warning' : 'info', {
     date,
     devices: devices.length,
+    planAdditions: addedPlans.length,
+    notificationRecipients: recipients.length,
     stored,
     pushed,
     failed: failures.length + rejected.length,
@@ -411,6 +469,8 @@ export default async function handler(req, res) {
     ok: true,
     date,
     devices: devices.length,
+    planAdditions: addedPlans.length,
+    notificationRecipients: recipients.length,
     stored,
     pushed,
     failed: failures.length + rejected.length,
