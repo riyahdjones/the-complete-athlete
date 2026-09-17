@@ -6598,7 +6598,7 @@ function GoalsScreen({
     });
     trackAnalyticsEvent?.('goal_completed', {
       alreadyComplete: wasComplete,
-      linkedStandards: standards.filter((standard) => standard.goalId === id).length
+      linkedStandards: standards.filter((standard) => String(standard.goalId) === String(id)).length
     }, { area: 'goals' });
     celebrate(awarded ? `Goal complete. +${pointValues.goalCompleted} points.` : 'Goal complete. Achievement unlocked.');
   }
@@ -6640,7 +6640,7 @@ function GoalsScreen({
       <div className="stack goal-stack">
         {filteredGoals.length === 0 && <p className="empty-note goal-empty-state">No {goalFilter} goals yet.</p>}
         {filteredGoals.map((goal) => {
-          const goalStandards = standards.filter((standard) => standard.goalId === goal.id);
+          const goalStandards = standards.filter((standard) => String(standard.goalId) === String(goal.id));
           const completedGoalStandards = goalStandards.filter((standard) => standard.done);
           const goalProgress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
           const progressInputId = `goal-progress-${goal.id}`;
@@ -6697,7 +6697,7 @@ function GoalsScreen({
               <div className="goal-linked-standards">
                 <strong>Daily activity helping this goal</strong>
                 {goalStandards.length === 0 ? (
-                  <p>No items linked yet. Add something on Home and connect it to this goal.</p>
+                  <p>No activities linked yet. Add an activity on Today and connect it to this goal.</p>
                 ) : (
                   goalStandards.map((standard) => (
                       <span className={standard.done ? 'linked-standard done' : 'linked-standard'} key={standard.id}>

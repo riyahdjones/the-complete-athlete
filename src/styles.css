@@ -10420,8 +10420,39 @@ select {
 .complete-athlete-refresh .goal-progress { margin-top: 3px; padding: 6px 8px; border-radius: 9px; }
 .complete-athlete-refresh .goal-progress-heading { margin-bottom: 2px; font-size: .6rem; }
 .complete-athlete-refresh .goal-progress input[type='range'] { height: 18px; }
-.complete-athlete-refresh .goal-progress small,
-.complete-athlete-refresh .goal-linked-standards { display: none; }
+.complete-athlete-refresh .goal-progress small { display: none; }
+.complete-athlete-refresh .goal-linked-standards {
+  display: grid;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--ca-line);
+  border-radius: 9px;
+  background: linear-gradient(145deg, #f3f8ff, #ffffff);
+}
+.complete-athlete-refresh .goal-linked-standards > strong {
+  color: var(--ca-navy);
+  font-size: .58rem;
+  letter-spacing: .02em;
+  text-transform: none;
+}
+.complete-athlete-refresh .goal-linked-standards p {
+  color: var(--ca-muted);
+  font-size: .58rem;
+  line-height: 1.35;
+}
+.complete-athlete-refresh .goal-linked-standards .linked-standard {
+  padding: 5px 7px;
+  border-color: #d9e8fb;
+  background: #ffffff;
+  color: var(--ca-navy);
+  font-size: .58rem;
+}
+.complete-athlete-refresh .goal-linked-standards .linked-standard.done {
+  border-color: rgba(21, 174, 112, .24);
+  background: #eefbf5;
+  color: #08734a;
+}
 .complete-athlete-refresh .goal-actions { display: flex; gap: 5px; margin-top: 6px; }
 .complete-athlete-refresh .goal-actions button { min-height: 27px; padding: 4px 7px; font-size: .54rem; border-radius: 7px; }
 .complete-athlete-refresh .goal-card-meta { justify-content: flex-end; font-size: .56rem; }
