@@ -3024,6 +3024,7 @@ function App() {
       : 'athlete'
   ));
   const [tab, setTab] = useState('home');
+  const [profileView, setProfileView] = useState('overview');
   const [requestedPlanSeriesId, setRequestedPlanSeriesId] = useState('');
   const [parentTab, setParentTab] = useState('overview');
   const [standards, setStandards] = useState(initialDailyState.standards);
@@ -4969,6 +4970,12 @@ function App() {
       trackAnalyticsEvent('tab_opened', { from: tab, to: nextTab }, { area: 'navigation' });
     }
     setTab(nextTab);
+    if (nextTab === 'profile') setProfileView('overview');
+  }
+
+  function openAthleteProfileView(nextView) {
+    setProfileView(nextView);
+    setTab('profile');
   }
 
   function changeParentTab(nextTab) {
@@ -5049,6 +5056,7 @@ function App() {
           setJournal={setJournal}
           setJournalType={setJournalType}
           setTab={setTab}
+          openJournal={() => openAthleteProfileView('journal')}
           setRequestedPlanSeriesId={setRequestedPlanSeriesId}
           notifyUser={notifyUser}
           celebrate={celebrate}
@@ -5079,17 +5087,9 @@ function App() {
         />
       ),
       journal: (
-        <JournalScreen
+        <GoalsScreen
           awardPoints={awardPoints}
           celebrate={celebrate}
-          journal={journal}
-          journalEntries={journalEntries}
-          journalGoalId={journalGoalId}
-          journalType={journalType}
-          setJournal={setJournal}
-          setJournalEntries={setJournalEntries}
-          setJournalGoalId={setJournalGoalId}
-          setJournalType={setJournalType}
           goalDraft={goalDraft}
           goals={goals}
           setGoalDraft={setGoalDraft}
@@ -5120,7 +5120,23 @@ function App() {
         />
       ),
       profile: (
-        <ProfileScreen
+        profileView === 'journal' ? (
+          <JournalScreen
+            awardPoints={awardPoints}
+            celebrate={celebrate}
+            journal={journal}
+            journalEntries={journalEntries}
+            journalGoalId={journalGoalId}
+            journalType={journalType}
+            setJournal={setJournal}
+            setJournalEntries={setJournalEntries}
+            setJournalGoalId={setJournalGoalId}
+            setJournalType={setJournalType}
+            goals={goals}
+            trackAnalyticsEvent={trackAnalyticsEvent}
+          />
+        ) : profileView === 'settings' ? (
+        <AthleteSettingsScreen
           authSession={authSession}
           athleteProfile={athleteProfile}
           athleteParentAccessDraft={athleteParentAccessDraft}
@@ -5141,6 +5157,37 @@ function App() {
           subscription={effectiveSubscription}
           updateNotificationPreference={updateNotificationPreference}
         />
+        ) : profileView === 'achievements' ? (
+          <AchievementsScreen
+            goals={goals}
+            journalEntries={journalEntries}
+            plans={plans}
+            planProgress={planProgress}
+            standards={standards}
+            standardsHistory={standardsHistory}
+            streakCount={streakCount}
+          />
+        ) : profileView === 'stats' ? (
+          <AthleteStatsScreen
+            athleteScore={athleteScore}
+            goals={goals}
+            plans={plans}
+            planProgress={planProgress}
+            standardsHistory={standardsHistory}
+            streakCount={streakCount}
+          />
+        ) : (
+          <ProfileScreen
+            athleteProfile={athleteProfile}
+            athleteScore={athleteScore}
+            authSession={authSession}
+            goals={goals}
+            plans={plans}
+            planProgress={planProgress}
+            setProfileView={setProfileView}
+            streakCount={streakCount}
+          />
+        )
       )
     };
     return screens[tab];
@@ -5177,6 +5224,7 @@ function App() {
     trialPlanMode,
     planProgress,
     plans,
+    profileView,
     recentPointEvents,
     privacySettings,
     readinessHistory,
@@ -5247,7 +5295,7 @@ function App() {
 
   return (
     <div
-      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'}${coachTypingMode ? ' coach-typing-mode' : ''}`}
+      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} complete-athlete-refresh ${view}-experience${coachTypingMode ? ' coach-typing-mode' : ''}`}
       data-viewport-revision={viewportRevision}
     >
       {!useMobileAppShell && (
@@ -5279,13 +5327,17 @@ function App() {
         aria-label="The Complete Athlete app prototype"
       >
         <header className="topbar">
+          <div className="app-logo" aria-label="The Complete Athlete">
+            <img src="/app-icon.png" alt="" />
+          </div>
           <div>
-            <p className={isAthleteHome ? 'top-greeting athlete-home-greeting' : 'top-greeting'}>
-              {view === 'athlete' ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
-            </p>
-            {!isAthleteHome && (
-              <h1>{view === 'athlete' ? screenTitles[tab] : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
-            )}
+            {isAthleteHome ? <>
+              <p className="top-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}</p>
+              <h1 className="athlete-home-greeting">{firstNameGreeting(effectiveSession.name)}</h1>
+            </> : <>
+              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'Profile', journal: 'Journal', achievements: 'Achievements', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Overview', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
+              <p className="screen-kicker">{view === 'parent' ? 'Support the athlete. Strengthen the person.' : (tab === 'profile' ? ({ overview: 'Progress builds identity.', journal: 'A private place to reflect and grow.', achievements: 'Your work becomes visible here.', stats: 'See the proof behind your progress.', settings: 'Manage your account and preferences.' }[profileView]) : ({ journal: 'Turn the dream into daily work.', plans: 'Train the mind. Improve every day.', coach: 'Ask anything. Get real guidance.' }[tab] || ''))}</p>
+            </>}
           </div>
           <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
             <Bell size={19} />
@@ -5758,6 +5810,7 @@ function HomeScreen({
   setReadinessHistory,
   setStandardsHistory,
   setTab,
+  openJournal,
   setRequestedPlanSeriesId,
   notifyUser,
   lastSubmittedDate,
@@ -5776,6 +5829,7 @@ function HomeScreen({
   const [scoreInfoOpen, setScoreInfoOpen] = useState(false);
   const [editingStandardId, setEditingStandardId] = useState(null);
   const [editingStandardDraft, setEditingStandardDraft] = useState('');
+  const [dayCompletion, setDayCompletion] = useState(null);
   const completedStandards = standards.filter((standard) => standard.done);
   const allStandardsCompleted = standards.length > 0 && completedStandards.length === standards.length;
   const recentStandardsHistory = [...standardsHistory].reverse().slice(0, 7);
@@ -5895,6 +5949,15 @@ function HomeScreen({
       uniqueKey: `standards-completed-${submissionDate}`,
       metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus }
     });
+    setDayCompletion({
+      points: awarded ? standardsPoints : 0,
+      scoreBefore: athleteScore,
+      scoreAfter: athleteScore + (awarded ? standardsPoints : 0),
+      streakBefore: streakCount,
+      streakAfter: nextStreak,
+      completed: completedStandards.length,
+      total: standards.length
+    });
     setStandardsFeedback('');
     trackAnalyticsEvent?.('daily_productivity_submitted', {
       completed: completedStandards.length,
@@ -5941,7 +6004,8 @@ function HomeScreen({
       completed: completedStandards.length,
       total: standards.length
     }, { area: 'daily' });
-    setTab('journal');
+    if (openJournal) openJournal();
+    else setTab('profile');
   }
 
   if (!athleteStartComplete) {
@@ -5965,6 +6029,21 @@ function HomeScreen({
 
   return (
     <>
+      {dayCompletion && (
+        <div className="day-complete-overlay" role="dialog" aria-modal="true" aria-label="Day complete">
+          <div className="day-complete-check"><Check size={46}/></div>
+          <h2>Day Complete</h2>
+          <strong className="day-complete-points">+{dayCompletion.points} Points</strong>
+          <p>Discipline today. A stronger tomorrow.</p>
+          <div className="day-complete-results">
+            <span><em>Score</em><strong>{dayCompletion.scoreBefore} → {dayCompletion.scoreAfter}</strong></span>
+            <span><em>Productivity</em><strong>{dayCompletion.completed}/{dayCompletion.total}</strong></span>
+            <span><em>Streak</em><strong>{dayCompletion.streakBefore} → {dayCompletion.streakAfter}</strong></span>
+          </div>
+          <blockquote>“You showed up. That’s who you are becoming.”</blockquote>
+          <button className="primary-action full" onClick={() => setDayCompletion(null)} type="button">Keep Going <ArrowRight size={18}/></button>
+        </div>
+      )}
       <section className="panel daily-deposit-panel today-page-hero">
         <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
         <div className="today-hero-copy">
@@ -6457,9 +6536,28 @@ function GoalsScreen({
   standards,
   trackAnalyticsEvent
 }) {
+  const [goalFilter, setGoalFilter] = useState('active');
+  const [archivedGoalIds, setArchivedGoalIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('the-complete-athlete-archived-goals') || '[]'); }
+    catch { return []; }
+  });
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100);
   const linkedStandards = standards.filter((standard) => standard.goalId);
   const completedLinkedStandards = linkedStandards.filter((standard) => standard.done);
+  const filteredGoals = goals.filter((goal) => {
+    const archived = archivedGoalIds.includes(goal.id);
+    if (goalFilter === 'archived') return archived;
+    if (goalFilter === 'completed') return !archived && Number(goal.progress) >= 100;
+    return !archived && Number(goal.progress) < 100;
+  });
+
+  function toggleGoalArchive(id) {
+    setArchivedGoalIds((current) => {
+      const next = current.includes(id) ? current.filter((goalId) => goalId !== id) : [...current, id];
+      localStorage.setItem('the-complete-athlete-archived-goals', JSON.stringify(next));
+      return next;
+    });
+  }
 
   function updateGoal(id, field, value) {
     setGoals((current) =>
@@ -6524,28 +6622,11 @@ function GoalsScreen({
 
   return (
     <>
-      <section className="panel goal-lead">
-        <PanelTitle icon={<Target size={18} />} title="Goal System" action={`${goals.length} goals`} />
-        <p>Goals give your effort a direction, but it’s discipline to constantly pursue them that gives you momentum.</p>
-        <div className="goal-reminder">
-          <strong>How it works</strong>
-          <span>Link daily activity to goals. Each locked-in day adds 1% to goals connected to completed activity. You can also slide a goal’s progress bar to set your own estimate.</span>
+      <section className="goals-toolbar">
+        <div className="segmented-control" aria-label="Filter goals">
+          {['active', 'completed', 'archived'].map((filter) => <button className={goalFilter === filter ? 'active' : ''} key={filter} onClick={() => setGoalFilter(filter)} type="button">{filter}</button>)}
         </div>
-      </section>
-
-      <section className="panel goal-proof-panel">
-        <PanelTitle icon={<BadgeCheck size={18} />} title="Productivity Builds Goals" action="Daily proof" />
-        <div className="goal-proof-grid">
-          <span>
-            <strong>{linkedStandards.length}</strong>
-            Items linked to goals
-          </span>
-          <span>
-            <strong>{completedLinkedStandards.length}</strong>
-            Completed today
-          </span>
-        </div>
-        <p>Keep the goal big, then make today small enough to execute. The work is the proof.</p>
+        <div className="goal-proof-compact"><span><strong>{linkedStandards.length}</strong> linked items</span><span><strong>{completedLinkedStandards.length}</strong> done today</span></div>
       </section>
 
       <section className="panel">
@@ -6570,8 +6651,9 @@ function GoalsScreen({
         </form>
       </section>
 
-      <div className="stack">
-        {goals.map((goal) => {
+      <div className="stack goal-stack">
+        {filteredGoals.length === 0 && <p className="empty-note goal-empty-state">No {goalFilter} goals yet.</p>}
+        {filteredGoals.map((goal) => {
           const goalStandards = standards.filter((standard) => standard.goalId === goal.id);
           const completedGoalStandards = goalStandards.filter((standard) => standard.done);
           const goalProgress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
@@ -6625,6 +6707,7 @@ function GoalsScreen({
                 />
                 <small>Slide the bar to set your own estimate. A locked-in day adds 1%.</small>
               </div>
+              <div className="goal-card-meta"><CalendarDays size={15}/><span>No completion date</span></div>
               <div className="goal-linked-standards">
                 <strong>Daily activity helping this goal</strong>
                 {goalStandards.length === 0 ? (
@@ -6651,26 +6734,14 @@ function GoalsScreen({
                   <Trash2 size={16} />
                   Remove Goal
                 </button>
+                <button className="remove-goal archive-goal" type="button" onClick={() => toggleGoalArchive(goal.id)}>
+                  {archivedGoalIds.includes(goal.id) ? 'Restore' : 'Archive'}
+                </button>
               </div>
             </section>
           );
         })}
       </div>
-      <section className="panel">
-        <PanelTitle icon={<Star size={18} />} title="Achievements" action={`${completedGoals.length} earned`} />
-        {completedGoals.length === 0 ? (
-          <p className="empty-note">Completed goals will appear here when they reach 100%.</p>
-        ) : (
-          <div className="badge-grid">
-            {completedGoals.map((goal) => (
-              <span className="badge" key={goal.id}>
-                <Sparkles size={14} />
-                {goal.label} Complete
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
     </>
   );
 }
@@ -6684,12 +6755,17 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   const planLibrary = buildPlanLibrary(sequencedPlans);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [planSearch, setPlanSearch] = useState('');
   const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
   const continueSeries = planLibrary.find((series) => series.openCount > 0 && series.completedCount < series.plans.length) ?? planLibrary[0];
   const categories = ['All', ...Array.from(new Set(planLibrary.map((series) => series.category)))];
-  const filteredLibrary = activeCategory === 'All'
+  const categoryLibrary = activeCategory === 'All'
     ? planLibrary
     : planLibrary.filter((series) => series.category === activeCategory);
+  const filteredLibrary = categoryLibrary.filter((series) => {
+    const query = planSearch.trim().toLowerCase();
+    return !query || `${series.title} ${series.tagline} ${series.category}`.toLowerCase().includes(query);
+  });
   const visiblePlans = selectedSeries?.plans ?? [];
   const openCount = visiblePlans.filter((plan) => plan.unlocked).length;
   const completedCount = visiblePlans.filter((plan) => plan.completedAt).length;
@@ -6872,6 +6948,10 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
           <p className="empty-note">No performance plans are open yet. Check back on the next release day.</p>
         ) : (
           <>
+            <label className="plan-search">
+              <span aria-hidden="true">⌕</span>
+              <input aria-label="Search performance plans" placeholder="Search plans..." value={planSearch} onChange={(event) => setPlanSearch(event.target.value)} />
+            </label>
             <div className="plan-category-strip" aria-label="Plan categories">
               {categories.map((category) => (
                 <button
@@ -8066,7 +8146,7 @@ function JournalScreen({
         <PanelTitle icon={<PenLine size={18} />} title="Journal" action="Private" />
         <div className="journal-intro">
           <strong>Write what you need to remember.</strong>
-          <span>Use this space for reflection. Your goals and daily activity tracker live below.</span>
+          <span>Use this private space to reflect, reset, and remember what matters.</span>
         </div>
         <label className="journal-label" htmlFor="journal-type">
           Entry type
@@ -8139,16 +8219,6 @@ function JournalScreen({
           </section>
         </div>
       )}
-      <GoalsScreen
-        awardPoints={awardPoints}
-        celebrate={celebrate}
-        goalDraft={goalDraft}
-        goals={goals}
-        setGoalDraft={setGoalDraft}
-        setGoals={setGoals}
-        standards={standards}
-        trackAnalyticsEvent={trackAnalyticsEvent}
-      />
     </>
   );
 }
@@ -8745,7 +8815,144 @@ function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
   );
 }
 
-function ProfileScreen({
+function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans, planProgress, setProfileView, streakCount }) {
+  const planStats = planSeriesCompletion(plans, planProgress);
+  const averageGoalProgress = goals.length
+    ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress || 0), 0) / goals.length)
+    : 0;
+  const navigation = [
+    ['goals', 'My Goals', Target, 'Track the work behind your goals'],
+    ['journal', 'My Journal', PenLine, 'Private reflections and game notes'],
+    ['stats', 'My Stats', BarChart3, 'See your score and consistency'],
+    ['achievements', 'Achievements & Badges', Trophy, 'See what your work has unlocked'],
+    ['settings', 'Settings', Shield, 'Account, notifications and privacy'],
+    ['support', 'Help & Support', CircleHelp, 'Get help with your account']
+  ];
+
+  function openDestination(destination) {
+    if (destination === 'goals') {
+      document.querySelector('.bottom-nav .nav-item:nth-child(2)')?.click();
+      return;
+    }
+    if (destination === 'support') {
+      window.open(LEGAL_URLS.support, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    setProfileView(destination);
+  }
+
+  return (
+    <>
+      <section className="profile-head refreshed-profile-head">
+        <div className="profile-avatar">
+          {athleteProfile.photo ? <img src={athleteProfile.photo} alt="Athlete profile" /> : <span>{String(athleteProfile.name || authSession?.name || 'A').charAt(0)}</span>}
+        </div>
+        <div>
+          <h2>{athleteProfile.name || authSession?.name || 'Athlete'}</h2>
+          <span>{athleteProfile.sport || 'Student Athlete'}{athleteProfile.age ? ` · Age ${athleteProfile.age}` : ''}</span>
+        </div>
+      </section>
+      <section className="profile-score-card">
+        <div><Trophy size={28} /><strong>{athleteScore}</strong><span>Complete Athlete Score</span></div>
+        <div className="profile-score-meta">
+          <span><strong>{streakCount}</strong>Day streak</span>
+          <span><strong>{averageGoalProgress}%</strong>Goal progress</span>
+          <span><strong>{planStats.completed}/{planStats.total}</strong>Plans complete</span>
+        </div>
+      </section>
+      <section className="profile-menu" aria-label="Profile navigation">
+        {navigation.map(([destination, label, Icon, description]) => (
+          <button key={destination} onClick={() => openDestination(destination)} type="button">
+            <span className="profile-menu-icon"><Icon size={20} /></span>
+            <span><strong>{label}</strong><em>{description}</em></span>
+            <ArrowRight size={18} />
+          </button>
+        ))}
+      </section>
+    </>
+  );
+}
+
+function AthleteStatsScreen({ athleteScore, goals, plans, planProgress, standardsHistory, streakCount }) {
+  const planStats = planSeriesCompletion(plans, planProgress);
+  const completedActivities = standardsHistory.reduce((total, day) => total + Number(day.completed || 0), 0);
+  const averageGoalProgress = goals.length ? Math.round(goals.reduce((sum, goal) => sum + Number(goal.progress || 0), 0) / goals.length) : 0;
+  return (
+    <section className="stats-dashboard">
+      <div className="stats-hero"><span>Complete Athlete Score</span><strong>{athleteScore}</strong><p>Built through daily activity, goals, plans, and reflection.</p></div>
+      <div className="stats-grid">
+        <article><BadgeCheck size={22}/><strong>{completedActivities}</strong><span>Activities completed</span></article>
+        <article><Target size={22}/><strong>{averageGoalProgress}%</strong><span>Average goal progress</span></article>
+        <article><BookOpen size={22}/><strong>{planStats.completed}</strong><span>Plans completed</span></article>
+        <article><Sparkles size={22}/><strong>{streakCount}</strong><span>Current day streak</span></article>
+      </div>
+    </section>
+  );
+}
+
+function AchievementsScreen({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount }) {
+  const completedActivities = standardsHistory.reduce((total, day) => total + Number(day.completed || 0), 0);
+  const completedLessons = Object.values(planProgress).filter(Boolean).length;
+  const completedPlans = planSeriesCompletion(plans, planProgress).completed;
+  const linkedGoal = goals.some((goal) => standards.some((standard) => String(standard.goalId) === String(goal.id)));
+  const completedGoals = goals.filter((goal) => Number(goal.progress || 0) >= 100).length;
+  const perfectDays = standardsHistory.filter((day) => day.total > 0 && day.completed >= day.total).length;
+  const badgeGroups = [
+    ['Consistency', [
+      ['Locked In', 'Complete your first day', standardsHistory.length >= 1, Math.min(1, standardsHistory.length), 1],
+      ['First Week', 'Lock in 7 days', standardsHistory.length >= 7, Math.min(7, standardsHistory.length), 7],
+      ['No Days Off', 'Build a 30-day streak', streakCount >= 30, Math.min(30, streakCount), 30],
+      ['Consistent', 'Build a 60-day streak', streakCount >= 60, Math.min(60, streakCount), 60],
+      ['Different', 'Build a 180-day streak', streakCount >= 180, Math.min(180, streakCount), 180],
+      ['Year Built', 'Lock in 365 days', standardsHistory.length >= 365, Math.min(365, standardsHistory.length), 365]
+    ]],
+    ['Discipline', [
+      ['Daily Standard', 'Complete 10 activities', completedActivities >= 10, Math.min(10, completedActivities), 10],
+      ['Extra Work', 'Complete 100 activities', completedActivities >= 100, Math.min(100, completedActivities), 100],
+      ['Finisher', 'Complete 5 performance plans', completedPlans >= 5, Math.min(5, completedPlans), 5],
+      ['Closer', 'Finish every item in one day', standardsHistory.some((day) => day.total > 0 && day.completed >= day.total), standardsHistory.some((day) => day.total > 0 && day.completed >= day.total) ? 1 : 0, 1],
+      ['Goal Getter', 'Link daily work to a goal', linkedGoal, linkedGoal ? 1 : 0, 1],
+      ['Perfect Ten', 'Complete every item on 10 days', perfectDays >= 10, Math.min(10, perfectDays), 10]
+    ]],
+    ['Mindset', [
+      ['Open Book', 'Save your first reflection', journalEntries.length >= 1, Math.min(1, journalEntries.length), 1],
+      ['Mental Edge', 'Complete 10 plan lessons', completedLessons >= 10, Math.min(10, completedLessons), 10],
+      ['Self Aware', 'Save 10 reflections', journalEntries.length >= 10, Math.min(10, journalEntries.length), 10],
+      ['The 90%', 'Complete a full performance plan', completedPlans >= 1, Math.min(1, completedPlans), 1],
+      ['Film Student', 'Complete 25 plan lessons', completedLessons >= 25, Math.min(25, completedLessons), 25],
+      ['Complete Athlete', 'Earn across every area', streakCount >= 7 && completedPlans >= 1 && journalEntries.length >= 1 && linkedGoal, [streakCount >= 7, completedPlans >= 1, journalEntries.length >= 1, linkedGoal].filter(Boolean).length, 4]
+    ]],
+    ['Performance', [
+      ['Plan Starter', 'Complete your first lesson', completedLessons >= 1, Math.min(1, completedLessons), 1],
+      ['Plan Builder', 'Complete 3 performance plans', completedPlans >= 3, Math.min(3, completedPlans), 3],
+      ['Plan Master', 'Complete 10 performance plans', completedPlans >= 10, Math.min(10, completedPlans), 10],
+      ['Dream Chaser', 'Create 3 goals', goals.length >= 3, Math.min(3, goals.length), 3],
+      ['Goal Complete', 'Complete a personal goal', completedGoals >= 1, Math.min(1, completedGoals), 1],
+      ['Leader', 'Help another athlete grow', false, 0, 1]
+    ]]
+  ];
+  const earned = badgeGroups.flatMap(([, badges]) => badges).filter((badge) => badge[2]).length;
+  return (
+    <>
+      <section className="achievement-summary"><Trophy size={28}/><div><strong>{earned}</strong><span>badges earned</span></div><p>Your work becomes visible here.</p></section>
+      {badgeGroups.map(([group, badges]) => (
+        <section className="achievement-group" key={group}>
+          <h2>{group}</h2>
+          <div className="achievement-grid">
+            {badges.map(([name, description, unlocked, value, target]) => (
+              <article className={unlocked ? 'achievement-card unlocked' : 'achievement-card'} key={name}>
+                <span className="achievement-shield">{unlocked ? <Trophy size={24}/> : <LockKeyhole size={20}/>}</span>
+                <strong>{name}</strong><p>{description}</p><Progress value={Math.round((value / target) * 100)} /><em>{value}/{target}</em>
+              </article>
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+function AthleteSettingsScreen({
   authSession,
   athleteProfile,
   athleteParentAccessDraft,
