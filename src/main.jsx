@@ -5326,23 +5326,27 @@ function App() {
         className={`${useMobileAppShell ? 'mobile-native-frame' : 'phone-frame'}${coachTypingMode ? ' coach-typing-mode' : ''}`}
         aria-label="The Complete Athlete app prototype"
       >
-        <header className="topbar">
+        <header className={isAthleteHome ? 'topbar today-topbar' : 'topbar'}>
           <div className="app-logo" aria-label="The Complete Athlete">
-            <img src="/app-icon.png" alt="" />
+            <span className="ca-monogram">CA</span>
           </div>
-          <div>
+          <div className="topbar-copy">
             {isAthleteHome ? <>
               <p className="top-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}</p>
               <h1 className="athlete-home-greeting">{firstNameGreeting(effectiveSession.name)}</h1>
+              <p className="today-subtitle">A clearer you. A bigger tomorrow.</p>
             </> : <>
               <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'Profile', journal: 'Journal', achievements: 'Achievements', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Overview', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
               <p className="screen-kicker">{view === 'parent' ? 'Support the athlete. Strengthen the person.' : (tab === 'profile' ? ({ overview: 'Progress builds identity.', journal: 'A private place to reflect and grow.', achievements: 'Your work becomes visible here.', stats: 'See the proof behind your progress.', settings: 'Manage your account and preferences.' }[profileView]) : ({ journal: 'Turn the dream into daily work.', plans: 'Train the mind. Improve every day.', coach: 'Ask anything. Get real guidance.' }[tab] || ''))}</p>
             </>}
           </div>
-          <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
-            <Bell size={19} />
-            {unreadNotifications.length > 0 && <span>{unreadNotifications.length}</span>}
-          </button>
+          <div className="topbar-actions">
+            <span className="top-motto">{view === 'parent' ? 'RAISE THE PERSON.\nSUPPORT THE ATHLETE.' : ({ home: 'REAL QUESTIONS.\nREAL GROWTH.', journal: 'DISCIPLINE.\nBUILDS FREEDOM.', plans: 'TRAIN THE MIND.\nIMPROVE EVERY DAY.', coach: 'HERE TO HELP YOU\nGO FURTHER.', profile: 'PROGRESS BUILDS IDENTITY.' }[tab])}</span>
+            <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
+              <Bell size={18} />
+              {unreadNotifications.length > 0 && <span>{unreadNotifications.length}</span>}
+            </button>
+          </div>
         </header>
 
         {notificationsOpen && (
@@ -6537,6 +6541,7 @@ function GoalsScreen({
   trackAnalyticsEvent
 }) {
   const [goalFilter, setGoalFilter] = useState('active');
+  const [goalComposerOpen, setGoalComposerOpen] = useState(false);
   const [archivedGoalIds, setArchivedGoalIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('the-complete-athlete-archived-goals') || '[]'); }
     catch { return []; }
@@ -6582,6 +6587,7 @@ function GoalsScreen({
     const id = Date.now();
     setGoals((current) => [...current, { id, label, value, progress: 0 }]);
     setGoalDraft({ label: '', value: '' });
+    setGoalComposerOpen(false);
     const awarded = awardPoints({
       type: 'goal_added',
       points: pointValues.goalAdded,
@@ -6629,7 +6635,10 @@ function GoalsScreen({
         <div className="goal-proof-compact"><span><strong>{linkedStandards.length}</strong> linked items</span><span><strong>{completedLinkedStandards.length}</strong> done today</span></div>
       </section>
 
-      <section className="panel">
+      <button className="primary-action full add-goal-trigger" type="button" onClick={() => setGoalComposerOpen((open) => !open)}>
+        <Plus size={18} /> {goalComposerOpen ? 'Close Goal Form' : 'Add Goal'}
+      </button>
+      {goalComposerOpen && <section className="panel goal-composer-panel">
         <PanelTitle icon={<Plus size={18} />} title="Add Goal" action="Athlete controlled" />
         <form className="goal-form" onSubmit={addGoal}>
           <input
@@ -6649,7 +6658,7 @@ function GoalsScreen({
             Add Goal
           </button>
         </form>
-      </section>
+      </section>}
 
       <div className="stack goal-stack">
         {filteredGoals.length === 0 && <p className="empty-note goal-empty-state">No {goalFilter} goals yet.</p>}
@@ -6756,6 +6765,8 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [planSearch, setPlanSearch] = useState('');
+  const [planDetailTab, setPlanDetailTab] = useState('overview');
+  const [selectedPlanId, setSelectedPlanId] = useState('');
   const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
   const continueSeries = planLibrary.find((series) => series.openCount > 0 && series.completedCount < series.plans.length) ?? planLibrary[0];
   const categories = ['All', ...Array.from(new Set(planLibrary.map((series) => series.category)))];
@@ -6770,6 +6781,10 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   const openCount = visiblePlans.filter((plan) => plan.unlocked).length;
   const completedCount = visiblePlans.filter((plan) => plan.completedAt).length;
   const lockedCount = visiblePlans.length - openCount;
+  const defaultVisiblePlan = visiblePlans.find((plan) => plan.unlocked && !plan.completedAt)
+    ?? [...visiblePlans].reverse().find((plan) => plan.unlocked)
+    ?? visiblePlans[0];
+  const selectedVisiblePlan = visiblePlans.find((plan) => String(plan.id) === String(selectedPlanId)) ?? defaultVisiblePlan;
 
   useEffect(() => {
     if (selectedSeriesId && !planLibrary.some((series) => series.id === selectedSeriesId)) {
@@ -6787,6 +6802,8 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
 
   function openSeries(series, source) {
     setSelectedSeriesId(series.id);
+    setPlanDetailTab('overview');
+    setSelectedPlanId('');
     trackAnalyticsEvent?.('plan_series_opened', {
       source,
       seriesTitle: series.title,
@@ -6857,62 +6874,77 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
 
   if (selectedSeries) {
     return (
-      <>
-        <section className="panel series-overview has-cover" style={{ '--plan-cover': `url(${selectedSeries.coverImage})`, '--plan-cover-position': selectedSeries.coverPosition }}>
+      <div className="cinematic-plan-detail">
+        <section className="series-overview has-cover" style={{ '--plan-cover': `url(${selectedSeries.coverImage})`, '--plan-cover-position': selectedSeries.coverPosition }}>
           <div className="series-cover" aria-hidden="true" />
-          <button className="plan-back-button" onClick={() => setSelectedSeriesId('')} type="button">
-            Back to Library
+          <button className="plan-back-button cinematic-back" onClick={() => setSelectedSeriesId('')} type="button" aria-label="Back to plan library">
+            ←
           </button>
-          <PanelTitle icon={<CalendarDays size={18} />} title={selectedSeries.title} action={trialPlanMode ? 'Trial: Day 1 open' : `${completedCount}/${visiblePlans.length} done`} />
-          <p>{selectedSeries.tagline}</p>
-          {trialPlanMode
-            ? <span>Your trial opens Day 1 of every plan. The remaining days unlock with membership.</span>
-            : lockedCount > 0 && <span>{lockedCount} lessons are waiting behind the completion flow.</span>}
         </section>
-
-        <div className="plan-reader-stack">
-          {visiblePlans.map((plan) => (
-            <section className={plan.unlocked ? 'goal-card plan-card readonly-plan' : 'goal-card plan-card readonly-plan locked-plan'} key={plan.id}>
+        <section className="cinematic-plan-copy">
+          <span className="plan-category-badge">{selectedSeries.category}</span>
+          <h2>{selectedSeries.title}</h2>
+          <strong>{visiblePlans.length} Days</strong>
+          <p>{selectedSeries.tagline}</p>
+          <button className="primary-action full" type="button" onClick={() => setPlanDetailTab('lessons')}>Continue Plan <ArrowRight size={18}/></button>
+          <div className="plan-detail-tabs" role="tablist">
+            {['overview', 'lessons', 'resources'].map((detailTab) => <button className={planDetailTab === detailTab ? 'active' : ''} key={detailTab} onClick={() => setPlanDetailTab(detailTab)} type="button">{detailTab}</button>)}
+          </div>
+        </section>
+        {planDetailTab === 'overview' && <section className="plan-overview-content">
+          <h3>What You’ll Learn</h3>
+          <ul>
+            {visiblePlans.slice(0, 5).map((plan) => <li key={plan.id}><Check size={14}/><span>{plan.title}</span></li>)}
+          </ul>
+          {trialPlanMode ? <p>Day 1 is open during your trial. Membership unlocks the complete plan.</p> : lockedCount > 0 && <p>Complete each day to unlock the next lesson.</p>}
+        </section>}
+        {planDetailTab === 'lessons' && <div className="plan-reader-stack single-plan-reader">
+          <div className="plan-day-strip" aria-label="Plan days">
+            {visiblePlans.map((plan, index) => <button className={String(plan.id) === String(selectedVisiblePlan?.id) ? 'active' : ''} disabled={!plan.unlocked} key={plan.id} onClick={() => setSelectedPlanId(String(plan.id))} type="button">{plan.completedAt ? <Check size={13}/> : plan.unlocked ? index + 1 : <LockKeyhole size={12}/>}</button>)}
+          </div>
+          {selectedVisiblePlan && (
+            <section className={selectedVisiblePlan.unlocked ? 'goal-card plan-card readonly-plan' : 'goal-card plan-card readonly-plan locked-plan'} key={selectedVisiblePlan.id}>
               <div className="plan-read-header">
-                <span>{plan.completedAt ? 'Completed' : plan.unlocked ? (plan.challengeDay || `Day ${planDayNumber(plan) || planCurrentDay(plan)}`) : 'Locked'}</span>
-                <strong>{plan.title}</strong>
+                <span>{selectedVisiblePlan.completedAt ? 'Completed' : selectedVisiblePlan.unlocked ? (selectedVisiblePlan.challengeDay || `Day ${planDayNumber(selectedVisiblePlan) || planCurrentDay(selectedVisiblePlan)}`) : 'Locked'}</span>
+                <strong>{selectedVisiblePlan.title}</strong>
                 <em>
-                  {plan.completedAt
-                    ? `Completed ${plan.completedAt}`
-                    : plan.unlocked
-                      ? `${plan.challengeDay || `Day ${planDayNumber(plan) || planCurrentDay(plan)}`} of ${plan.challengeLength || 7}`
+                  {selectedVisiblePlan.completedAt
+                    ? `Completed ${selectedVisiblePlan.completedAt}`
+                    : selectedVisiblePlan.unlocked
+                      ? `${selectedVisiblePlan.challengeDay || `Day ${planDayNumber(selectedVisiblePlan) || planCurrentDay(selectedVisiblePlan)}`} of ${selectedVisiblePlan.challengeLength || 7}`
                       : trialPlanMode
                         ? 'Unlocks with membership'
-                      : plan.unlockDate && plan.unlockDate > today
-                        ? `Unlocks ${plan.unlockDate}`
+                      : selectedVisiblePlan.unlockDate && selectedVisiblePlan.unlockDate > today
+                        ? `Unlocks ${selectedVisiblePlan.unlockDate}`
                         : 'Complete the previous plan first'}
                 </em>
-                <p>{planDisplaySubject(plan)}</p>
+                <p>{planDisplaySubject(selectedVisiblePlan)}</p>
               </div>
-              {plan.unlocked && plan.steps.length > 0 && (
-                <PlanEpisode steps={plan.steps} planId={plan.id} preserveHeadings={shouldPreservePlanHeadings(plan.id)} />
+              {selectedVisiblePlan.unlocked && selectedVisiblePlan.steps.length > 0 && (
+                <PlanEpisode steps={selectedVisiblePlan.steps} planId={selectedVisiblePlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedVisiblePlan.id)} />
               )}
-              {!plan.unlocked && (
+              {!selectedVisiblePlan.unlocked && (
                 <div className="locked-message">
                   <LockKeyhole size={18} />
                   <p>{trialPlanMode ? 'Day 1 is open during the trial. Membership unlocks the rest of this plan.' : 'Finish the previous lesson, then come back the next day to unlock this one.'}</p>
                 </div>
               )}
-              {plan.unlocked && !readOnly && (
+              {selectedVisiblePlan.unlocked && !readOnly && (
                 <button
-                  className={plan.completedAt ? 'secondary-action submitted' : 'secondary-action'}
-                  disabled={Boolean(plan.completedAt)}
-                  onClick={() => completePlan(plan.id)}
+                  className={selectedVisiblePlan.completedAt ? 'secondary-action submitted' : 'secondary-action'}
+                  disabled={Boolean(selectedVisiblePlan.completedAt)}
+                  onClick={() => completePlan(selectedVisiblePlan.id)}
                   type="button"
                 >
                   <Check size={16} />
-                  {plan.completedAt ? 'Lesson Completed' : 'Mark Lesson Complete'}
+                  {selectedVisiblePlan.completedAt ? 'Lesson Completed' : 'Mark Lesson Complete'}
                 </button>
               )}
             </section>
-          ))}
-        </div>
-      </>
+          )}
+        </div>}
+        {planDetailTab === 'resources' && <section className="plan-resources"><BookOpen size={24}/><h3>Plan Resources</h3><p>Exercises, reflection prompts, and practice installs are included inside each unlocked lesson.</p><button className="secondary-action" type="button" onClick={() => setPlanDetailTab('lessons')}>Open Lessons</button></section>}
+      </div>
     );
   }
 
@@ -8891,6 +8923,7 @@ function AthleteStatsScreen({ athleteScore, goals, plans, planProgress, standard
 }
 
 function AchievementsScreen({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount }) {
+  const [achievementFilter, setAchievementFilter] = useState('All');
   const completedActivities = standardsHistory.reduce((total, day) => total + Number(day.completed || 0), 0);
   const completedLessons = Object.values(planProgress).filter(Boolean).length;
   const completedPlans = planSeriesCompletion(plans, planProgress).completed;
@@ -8935,7 +8968,10 @@ function AchievementsScreen({ goals, journalEntries, plans, planProgress, standa
   return (
     <>
       <section className="achievement-summary"><Trophy size={28}/><div><strong>{earned}</strong><span>badges earned</span></div><p>Your work becomes visible here.</p></section>
-      {badgeGroups.map(([group, badges]) => (
+      <div className="achievement-filters" aria-label="Filter achievements">
+        {['All', ...badgeGroups.map(([group]) => group)].map((filter) => <button className={achievementFilter === filter ? 'active' : ''} key={filter} onClick={() => setAchievementFilter(filter)} type="button">{filter}</button>)}
+      </div>
+      {badgeGroups.filter(([group]) => achievementFilter === 'All' || group === achievementFilter).map(([group, badges]) => (
         <section className="achievement-group" key={group}>
           <h2>{group}</h2>
           <div className="achievement-grid">
