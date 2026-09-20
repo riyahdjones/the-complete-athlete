@@ -6939,7 +6939,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   return (
     <>
       <section className="panel plan-hero">
-        <PanelTitle icon={<BookOpen size={18} />} title="Plan Library" action={`${planLibrary.length} series`} />
+        <PanelTitle icon={<BookOpen size={18} />} title="Plan Library" action="10 focused mins a day" />
         <h2>Choose a plan. Work the next lesson. Carry it into the day.</h2>
       </section>
 
