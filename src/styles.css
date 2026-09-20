@@ -10896,6 +10896,12 @@ select {
   background: #2f6df6;
 }
 
+.previous-design .daily-standards-panel .standard-form .icon-button.dark {
+  color: #fff;
+  background: linear-gradient(135deg, #2f6df6 0%, #0f172a 88%);
+  box-shadow: 0 5px 12px rgba(15, 23, 42, .24);
+}
+
 .previous-design .goal-today-toggle {
   display: flex;
   align-items: center;

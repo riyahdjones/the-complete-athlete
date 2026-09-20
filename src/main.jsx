@@ -6045,7 +6045,6 @@ function HomeScreen({
       <section className="panel daily-deposit-panel today-page-hero">
         <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
         <div className="today-hero-copy">
-          {lesson.title && <h2>{lesson.title}</h2>}
           <p>{lesson.body}</p>
         </div>
         <div className="today-focus-callout">
