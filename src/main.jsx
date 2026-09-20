@@ -3017,7 +3017,7 @@ function App() {
   const [journalGoalId, setJournalGoalId] = useState('');
   const [journalEntries, setJournalEntries] = useState(loadJournalEntries);
   const [goals, setGoals] = useState(loadGoals);
-  const [goalDraft, setGoalDraft] = useState({ label: '', value: '' });
+  const [goalDraft, setGoalDraft] = useState({ label: '', value: '', targetDate: '' });
   const [plans, setPlans] = useState(loadPlans);
   const [planProgress, setPlanProgress] = useState(loadPlanProgress);
   const [pointsLedger, setPointsLedger] = useState(loadPointsLedger);
@@ -5304,9 +5304,9 @@ function App() {
       >
         <header className="topbar">
           <div>
-            <p className={isAthleteHome ? 'top-greeting athlete-home-greeting' : 'top-greeting'}>
-              {view === 'athlete' ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
-            </p>
+            {isAthleteHome && (
+              <p className="top-greeting athlete-home-greeting">{firstNameGreeting(effectiveSession.name)}</p>
+            )}
             {!isAthleteHome && (
               <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'Achievements', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
             )}
@@ -6554,8 +6554,8 @@ function GoalsScreen({
     const value = goalDraft.value.trim();
     if (!label || !value) return;
     const id = Date.now();
-    setGoals((current) => [...current, { id, label, value, progress: 0 }]);
-    setGoalDraft({ label: '', value: '' });
+    setGoals((current) => [...current, { id, label, value, progress: 0, targetDate: goalDraft.targetDate || '' }]);
+    setGoalDraft({ label: '', value: '', targetDate: '' });
     setGoalComposerOpen(false);
     const awarded = awardPoints({
       type: 'goal_added',
@@ -6597,6 +6597,9 @@ function GoalsScreen({
 
   return (
     <>
+      <blockquote className="goals-discipline-quote">
+        “Goals are the GPS for where you want to go, but it’s your daily discipline that gets you there.”
+      </blockquote>
       <section className="goals-toolbar">
         <div className="segmented-control" aria-label="Filter goals">
           {['active', 'completed', 'archived'].map((filter) => <button className={goalFilter === filter ? 'active' : ''} key={filter} onClick={() => setGoalFilter(filter)} type="button">{filter}</button>)}
@@ -6622,6 +6625,14 @@ function GoalsScreen({
             value={goalDraft.value}
             onChange={(event) => setGoalDraft((current) => ({ ...current, value: event.target.value }))}
           />
+          <label className="goal-date-field">
+            <span>Completion date <em>Optional</em></span>
+            <input
+              type="date"
+              value={goalDraft.targetDate || ''}
+              onChange={(event) => setGoalDraft((current) => ({ ...current, targetDate: event.target.value }))}
+            />
+          </label>
           <button className="primary-action full" type="submit">
             <Plus size={18} />
             Add Goal
@@ -6685,7 +6696,15 @@ function GoalsScreen({
                 />
                 <small>Slide the bar to set your own estimate. A locked-in day adds 1%.</small>
               </div>
-              <div className="goal-card-meta"><CalendarDays size={15}/><span>No completion date</span></div>
+              <label className="goal-date-field goal-card-date">
+                <span><CalendarDays size={15}/> Completion date <em>Optional</em></span>
+                <input
+                  type="date"
+                  value={goal.targetDate || ''}
+                  onChange={(event) => updateGoal(goal.id, 'targetDate', event.target.value)}
+                  aria-label={`Completion date for ${goal.label || 'goal'}`}
+                />
+              </label>
               <div className="goal-linked-standards">
                 <strong>Daily activity helping this goal</strong>
                 {goalStandards.length === 0 ? (
