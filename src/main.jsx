@@ -4497,6 +4497,34 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (authSession?.role !== 'athlete') return;
+    const groups = athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount });
+    const earnedBadges = groups.flatMap(([family, badges]) => badges
+      .filter((badge) => badge[2])
+      .map((badge) => ({ key: `${family}:${badge[0]}`, family, name: badge[0], description: badge[1] }))
+    );
+    if (!earnedBadges.length) return;
+
+    const storageKey = `the-complete-athlete-notified-badges-${authSession.id || 'local'}`;
+    let notified = [];
+    try { notified = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { notified = []; }
+    const newlyEarned = earnedBadges.filter((badge) => !notified.includes(badge.key));
+    if (!newlyEarned.length) return;
+
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(new Set([
+      ...notified,
+      ...earnedBadges.map((badge) => badge.key)
+    ]))));
+    newlyEarned.forEach((badge) => {
+      const notificationId = `badge-unlocked-${badge.key.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      notifyUser(`Badge unlocked: ${badge.name}`, badge.description, 'success', {
+        id: notificationId,
+        type: 'general'
+      });
+    });
+  }, [authSession?.id, authSession?.role, goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount]);
+
   async function requestBrowserNotifications() {
     trackAnalyticsEvent('notification_permission_requested', {
       nativeRuntime: isNativePushRuntime()
@@ -5329,7 +5357,7 @@ function App() {
               <p className="top-greeting athlete-home-greeting">{firstNameGreeting(effectiveSession.name)}</p>
             )}
             {!isAthleteHome && (
-              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'Achievements', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
+              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'My Badges', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
             )}
           </div>
           <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
@@ -8910,6 +8938,7 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
   const navigation = [
     ['goals', 'My Goals', Target, 'Track the work behind your goals'],
     ['journal', 'My Journal', PenLine, 'Private reflections and game notes'],
+    ['achievements', 'My Badges', Trophy, 'See the rewards your progress has unlocked'],
     ['stats', 'My Stats', BarChart3, 'See your score and consistency'],
     ['settings', 'Settings', Shield, 'Account, notifications and privacy'],
     ['support', 'Help & Support', CircleHelp, 'Get help with your account']
@@ -8976,9 +9005,7 @@ function AthleteStatsScreen({ athleteScore, goals, plans, planProgress, standard
   );
 }
 
-function AchievementsScreen({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount, setProfileView }) {
-  const [achievementFilter, setAchievementFilter] = useState('All');
-  const [unlockedBadge, setUnlockedBadge] = useState(null);
+function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount }) {
   const completedActivities = standardsHistory.reduce((total, day) => total + Number(day.completed || 0), 0);
   const completedLessons = Object.values(planProgress).filter(Boolean).length;
   const planSeries = buildPlanLibrary(plans);
@@ -8995,6 +9022,9 @@ function AchievementsScreen({ goals, journalEntries, plans, planProgress, standa
     && latestLabels.some((label) => /recover|stretch|sleep|rest/.test(label))
     && latestLabels.some((label) => /school|study|homework|class/.test(label))
     && journalEntries.some((entry) => latestSevenDates.has(entry.date));
+  const leadershipEarned = standardsHistory.some((day) => (day.standards || []).some((item) => (
+    item.done && /lead|captain|accountab|encourag|help.*team|team.*help/i.test(item.label || '')
+  )));
   const seriesComplete = (...needles) => completedSeriesNames.some((title) => needles.some((needle) => title.includes(needle)));
   const badgeGroups = [
     ['Discipline', [
@@ -9020,38 +9050,31 @@ function AchievementsScreen({ goals, journalEntries, plans, planProgress, standa
       ['Focused', 'You trained your ability to put your attention where it matters.', seriesComplete('focus', 'lock in'), seriesComplete('focus', 'lock in') ? 1 : 0, 1, 'Plan'],
       ['Coachable', 'You learned how to receive coaching, criticism, and correction without losing yourself.', seriesComplete('coachable athlete'), seriesComplete('coachable athlete') ? 1 : 0, 1, 'Plan']
     ]],
-    ['Milestones', [
+    ['Milestone', [
       ['Goal Getter', 'You turned a dream into something you can work toward today.', goals.length > 0 && linkedGoal, goals.length > 0 && linkedGoal ? 1 : 0, 1, 'Goal + Link'],
       ['Closer', 'You finished what you said you were going to do.', closerEarned, closerEarned ? 1 : 0, 1, 'Perfect Day'],
       ['Finisher', 'Starting matters. Finishing separates you.', completedPlans >= 5, Math.min(completedPlans, 5), 5, 'Plans'],
       ['The 90%', 'You trained the part of performance most athletes leave untouched.', seriesComplete('90%', 'ninety percent', 'athletic operating system'), seriesComplete('90%', 'ninety percent', 'athletic operating system') ? 1 : 0, 1, 'Plan'],
       ['All Around', 'Complete athletes develop more than one part of themselves.', allAroundEarned, allAroundEarned ? 1 : 0, 1, '7-Day Mix'],
-      ['Leader', 'Leadership begins with the standard you live by.', false, null, null, 'Future leadership behavior']
+      ['Leader', 'Leadership begins with the standard you live by.', leadershipEarned, leadershipEarned ? 1 : 0, 1, 'Leadership Action']
     ]]
   ];
   const familyEarned = Object.fromEntries(badgeGroups.map(([family, badges]) => [family, badges.some((badge) => badge[2])]));
-  const completeAthleteProgress = [familyEarned.Discipline, familyEarned['Work Ethic'], familyEarned.Mindset, familyEarned.Milestones, streakCount >= 30, completedActivities >= 100, completedPlans >= 5, journalEntries.length >= 20].filter(Boolean).length;
-  badgeGroups[3][1].push(['Complete Athlete', "You're building the habits, mindset, and standards of a complete athlete.", completeAthleteProgress === 8, completeAthleteProgress, 8, 'Prestige Requirements']);
-  const earned = badgeGroups.flatMap(([, badges]) => badges).filter((badge) => badge[2]).length;
-  const earnedSignature = badgeGroups.flatMap(([family, badges]) => badges.filter((badge) => badge[2]).map((badge) => `${family}:${badge[0]}`)).join('|');
+  const completeAthleteProgress = [familyEarned.Discipline, familyEarned['Work Ethic'], familyEarned.Mindset, familyEarned.Milestone, streakCount >= 30, completedActivities >= 100, completedPlans >= 5, journalEntries.length >= 20].filter(Boolean).length;
+  badgeGroups.push(['Prestige', [
+    ['Complete Athlete', "You're building the habits, mindset, and standards of a complete athlete.", completeAthleteProgress === 8, completeAthleteProgress, 8, 'Prestige Requirements']
+  ]]);
+  return badgeGroups;
+}
 
-  useEffect(() => {
-    if (!earnedSignature) return;
-    const storageKey = 'the-complete-athlete-seen-badges';
-    let seen = [];
-    try { seen = JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch { seen = []; }
-    const earnedBadges = earnedSignature.split('|');
-    const newlyEarned = earnedBadges.find((badge) => !seen.includes(badge));
-    localStorage.setItem(storageKey, JSON.stringify(Array.from(new Set([...seen, ...earnedBadges]))));
-    if (!newlyEarned) return;
-    const [family, name] = newlyEarned.split(':');
-    const badge = badgeGroups.find(([group]) => group === family)?.[1].find((item) => item[0] === name);
-    if (badge) setUnlockedBadge({ family, name, criteria: badge[5] });
-  }, [earnedSignature]);
+function AchievementsScreen({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount, setProfileView }) {
+  const [achievementFilter, setAchievementFilter] = useState('All');
+  const badgeGroups = athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount });
+  const earned = badgeGroups.flatMap(([, badges]) => badges).filter((badge) => badge[2]).length;
 
   return (
     <>
-      <button className="profile-subview-back" type="button" onClick={() => setProfileView?.('settings')}>← Settings</button>
+      <button className="profile-subview-back" type="button" onClick={() => setProfileView?.('overview')}>← My Profile</button>
       <section className="achievement-summary"><Trophy size={28}/><div><strong>{earned}</strong><span>badges earned</span></div><p>Your work becomes visible here.</p></section>
       <div className="achievement-filters" aria-label="Filter achievements">
         {['All', ...badgeGroups.map(([group]) => group)].map((filter) => <button className={achievementFilter === filter ? 'active' : ''} key={filter} onClick={() => setAchievementFilter(filter)} type="button">{filter}</button>)}
@@ -9070,14 +9093,6 @@ function AchievementsScreen({ goals, journalEntries, plans, planProgress, standa
           </div>
         </section>
       ))}
-      {unlockedBadge && <div className="badge-unlock-overlay" role="dialog" aria-modal="true" aria-label={`${unlockedBadge.name} badge unlocked`}>
-        <section className="badge-unlock-modal">
-          <span>Badge Unlocked</span><div className={`achievement-shield family-${unlockedBadge.family.toLowerCase().replace(/\s+/g, '-')}`}><Trophy size={30}/></div>
-          <h2>{unlockedBadge.name}</h2><p>{unlockedBadge.criteria}</p><blockquote>“You’re becoming the kind of athlete who shows up.”</blockquote>
-          <button className="primary-action full" type="button" onClick={() => { setAchievementFilter(unlockedBadge.family); setUnlockedBadge(null); }}>View Badge</button>
-          <button className="ghost-action full" type="button" onClick={() => setUnlockedBadge(null)}>Keep Going</button>
-        </section>
-      </div>}
     </>
   );
 }
@@ -9185,13 +9200,6 @@ function AthleteSettingsScreen({
 
   return (
     <>
-      <section className="settings-navigation-card">
-        <button type="button" onClick={() => setProfileView?.('achievements')}>
-          <span className="profile-menu-icon"><Trophy size={20}/></span>
-          <span><strong>Achievements &amp; Badges</strong><em>See what your actions have proven</em></span>
-          <ArrowRight size={18}/>
-        </button>
-      </section>
       <section className="profile-head">
         <div className="profile-avatar">
           {athleteProfile.photo ? (
