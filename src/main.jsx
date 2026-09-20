@@ -6657,7 +6657,7 @@ function GoalsScreen({
                 />
               </label>
               <label>
-                <span>Write it down</span>
+                <span>Type it in. Be specific</span>
                 <textarea
                   value={goal.value}
                   onChange={(event) => updateGoal(goal.id, 'value', event.target.value)}
