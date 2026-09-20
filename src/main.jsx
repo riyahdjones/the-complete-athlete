@@ -6941,9 +6941,25 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
       <section className="panel plan-hero">
         <PanelTitle icon={<BookOpen size={18} />} title="Plan Library" action={`${planLibrary.length} series`} />
         <h2>Choose a plan. Work the next lesson. Carry it into the day.</h2>
-        <div className="goal-reminder">
-          <strong>How to use this</strong>
-          <span>Start with Continue Training, or browse by category when you need a new focus.</span>
+        <div className="plan-how-guide">
+          <div className="plan-how-heading">
+            <strong>How performance plans work</strong>
+            <span>10 focused minutes a day</span>
+          </div>
+          <div className="plan-how-steps">
+            <article>
+              <b>1</b>
+              <span><strong>Choose your focus</strong><small>Pick the challenge you want to work through.</small></span>
+            </article>
+            <article>
+              <b>2</b>
+              <span><strong>Give it 10 minutes</strong><small>Each plan day requires one focused 10-minute session.</small></span>
+            </article>
+            <article>
+              <b>3</b>
+              <span><strong>Apply it today</strong><small>Carry the daily challenge into practice, school, or competition.</small></span>
+            </article>
+          </div>
         </div>
       </section>
 
