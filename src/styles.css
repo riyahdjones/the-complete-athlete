@@ -10888,6 +10888,14 @@ select {
   margin: 0;
 }
 
+.previous-design .today-current-goals .progress-track {
+  background: #d5deed;
+}
+
+.previous-design .today-current-goals .progress-track span {
+  background: #2f6df6;
+}
+
 .previous-design .goal-today-toggle {
   display: flex;
   align-items: center;
