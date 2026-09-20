@@ -10872,6 +10872,58 @@ select {
   background: rgba(255, 255, 255, .72);
 }
 
+.previous-design .today-current-goals {
+  border-color: rgba(47, 109, 246, .2);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(47, 109, 246, .14), transparent 34%),
+    linear-gradient(145deg, #fff, #f1f6ff);
+}
+
+.previous-design .today-goal-list {
+  display: grid;
+  gap: 9px;
+}
+
+.previous-design .today-current-goals .goal-progress-callout {
+  margin: 0;
+}
+
+.previous-design .goal-today-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+  border: 1px solid rgba(47, 109, 246, .16);
+  border-radius: 11px;
+  background: rgba(237, 243, 255, .86);
+}
+
+.previous-design .goal-today-toggle > span,
+.previous-design .goal-today-toggle strong,
+.previous-design .goal-today-toggle small {
+  display: block;
+}
+
+.previous-design .goal-today-toggle strong {
+  color: #0f172a;
+  font-size: .76rem;
+}
+
+.previous-design .goal-today-toggle small {
+  margin-top: 2px;
+  color: #667085;
+  font-size: .65rem;
+  line-height: 1.3;
+}
+
+.previous-design .goal-today-toggle input[type='checkbox'] {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  accent-color: #2f6df6;
+}
+
 
 .previous-design .refreshed-profile-head {
   display: flex;

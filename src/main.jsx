@@ -194,6 +194,7 @@ const coachStorageKey = 'the-ninety-percent-coach-sessions';
 const lessonStorageKey = 'the-ninety-percent-lessons';
 const athleteProfileStorageKey = 'the-ninety-percent-athlete-profile';
 const goalsStorageKey = 'the-ninety-percent-goals';
+const todayGoalSelectionStorageKey = 'the-complete-athlete-today-goal-selection';
 const plansStorageKey = 'the-ninety-percent-performance-plans';
 const planProgressStorageKey = 'the-ninety-percent-performance-plan-progress';
 const parentGuideProgressStorageKey = 'the-ninety-percent-parent-guide-progress';
@@ -993,6 +994,17 @@ function loadGoals() {
     return Array.isArray(saved) && saved.length ? saved : goalsSeed;
   } catch {
     return goalsSeed;
+  }
+}
+
+function loadTodayGoalSelection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(todayGoalSelectionStorageKey) || 'null');
+    return saved && Array.isArray(saved.ids)
+      ? { configured: Boolean(saved.configured), ids: saved.ids.map(String) }
+      : { configured: false, ids: [] };
+  } catch {
+    return { configured: false, ids: [] };
   }
 }
 
@@ -3017,6 +3029,7 @@ function App() {
   const [journalGoalId, setJournalGoalId] = useState('');
   const [journalEntries, setJournalEntries] = useState(loadJournalEntries);
   const [goals, setGoals] = useState(loadGoals);
+  const [todayGoalSelection, setTodayGoalSelection] = useState(loadTodayGoalSelection);
   const [goalDraft, setGoalDraft] = useState({ label: '', value: '', targetDate: '' });
   const [plans, setPlans] = useState(loadPlans);
   const [planProgress, setPlanProgress] = useState(loadPlanProgress);
@@ -3240,6 +3253,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(goalsStorageKey, JSON.stringify(goals));
   }, [goals]);
+
+  useEffect(() => {
+    localStorage.setItem(todayGoalSelectionStorageKey, JSON.stringify(todayGoalSelection));
+  }, [todayGoalSelection]);
 
   useEffect(() => {
     localStorage.setItem(plansStorageKey, JSON.stringify(plans));
@@ -5014,6 +5031,7 @@ function App() {
           confidenceAverage={confidenceAverage}
           scores={scores}
           goals={goals}
+          todayGoalSelection={todayGoalSelection}
           standards={standards}
           standardDraft={standardDraft}
           standardGoalId={standardGoalId}
@@ -5066,6 +5084,8 @@ function App() {
           celebrate={celebrate}
           goalDraft={goalDraft}
           goals={goals}
+          todayGoalSelection={todayGoalSelection}
+          setTodayGoalSelection={setTodayGoalSelection}
           setGoalDraft={setGoalDraft}
           setGoals={setGoals}
           standards={standards}
@@ -5175,6 +5195,7 @@ function App() {
     confidenceAverage,
     goalDraft,
     goals,
+    todayGoalSelection,
     journal,
     journalEntries,
     journalGoalId,
@@ -5765,6 +5786,7 @@ function HomeScreen({
   completion,
   confidenceAverage,
   goals,
+  todayGoalSelection,
   scores,
   standards,
   standardDraft,
@@ -5809,7 +5831,10 @@ function HomeScreen({
     ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress), 0) / goals.length)
     : 0;
   const planSeriesStats = planSeriesCompletion(plans, planProgress);
-  const focusGoal = goals.find((goal) => Number(goal.progress) < 100) ?? goals[0];
+  const activeGoals = goals.filter((goal) => Number(goal.progress) < 100);
+  const selectedTodayGoals = todayGoalSelection?.configured
+    ? activeGoals.filter((goal) => todayGoalSelection.ids.includes(String(goal.id)))
+    : activeGoals.slice(0, 1);
   const todaysFocus = lessonFocusQuestion(lesson);
 
   function addStandard(event) {
@@ -6043,6 +6068,27 @@ function HomeScreen({
         </div>
       </section>
 
+      <section className="panel today-current-goals">
+        <PanelTitle
+          icon={<Target size={18} />}
+          title={selectedTodayGoals.length === 1 ? 'Current Goal' : 'Current Goals'}
+          action={selectedTodayGoals.length ? `${selectedTodayGoals.length} shown` : 'Choose in Goals'}
+        />
+        {selectedTodayGoals.length ? (
+          <div className="today-goal-list">
+            {selectedTodayGoals.map((goal) => (
+              <div className="goal-progress-callout" key={goal.id}>
+                <span>{goal.label}</span>
+                <strong>{goal.value}</strong>
+                <Progress value={goal.progress} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-note">Choose which goals appear here from the Goals tab.</p>
+        )}
+      </section>
+
       <section className="panel daily-standards-panel">
         <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Activity Tracker" action={`${completedStandards.length}/${standards.length} done`} />
         <div className="daily-standards-card">
@@ -6234,13 +6280,6 @@ function HomeScreen({
             Plans completed
           </span>
         </div>
-        {focusGoal && (
-          <div className="goal-progress-callout">
-            <span>Current goal</span>
-            <strong>{focusGoal.value}</strong>
-            <Progress value={focusGoal.progress} />
-          </div>
-        )}
       </section>
 
       {scoreInfoOpen && (
@@ -6504,6 +6543,8 @@ function GoalsScreen({
   celebrate,
   goalDraft,
   goals,
+  todayGoalSelection,
+  setTodayGoalSelection,
   setGoalDraft,
   setGoals,
   standards,
@@ -6518,6 +6559,7 @@ function GoalsScreen({
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100);
   const linkedStandards = standards.filter((standard) => standard.goalId);
   const completedLinkedStandards = linkedStandards.filter((standard) => standard.done);
+  const defaultTodayGoalId = goals.find((goal) => Number(goal.progress) < 100)?.id;
   const filteredGoals = goals.filter((goal) => {
     const archived = archivedGoalIds.includes(goal.id);
     if (goalFilter === 'archived') return archived;
@@ -6530,6 +6572,21 @@ function GoalsScreen({
       const next = current.includes(id) ? current.filter((goalId) => goalId !== id) : [...current, id];
       localStorage.setItem('the-complete-athlete-archived-goals', JSON.stringify(next));
       return next;
+    });
+  }
+
+  function toggleGoalOnToday(id) {
+    setTodayGoalSelection((current) => {
+      const baselineIds = current.configured
+        ? current.ids
+        : defaultTodayGoalId == null ? [] : [String(defaultTodayGoalId)];
+      const goalId = String(id);
+      return {
+        configured: true,
+        ids: baselineIds.includes(goalId)
+          ? baselineIds.filter((item) => item !== goalId)
+          : [...baselineIds, goalId]
+      };
     });
   }
 
@@ -6647,6 +6704,9 @@ function GoalsScreen({
           const completedGoalStandards = goalStandards.filter((standard) => standard.done);
           const goalProgress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
           const progressInputId = `goal-progress-${goal.id}`;
+          const shownOnToday = todayGoalSelection.configured
+            ? todayGoalSelection.ids.includes(String(goal.id))
+            : String(goal.id) === String(defaultTodayGoalId);
           return (
             <section className="goal-card editable" key={goal.id}>
               <label>
@@ -6703,6 +6763,18 @@ function GoalsScreen({
                   value={goal.targetDate || ''}
                   onChange={(event) => updateGoal(goal.id, 'targetDate', event.target.value)}
                   aria-label={`Completion date for ${goal.label || 'goal'}`}
+                />
+              </label>
+              <label className="goal-today-toggle">
+                <span>
+                  <strong>Show on Today</strong>
+                  <small>Keep this goal visible above your Daily Activity Tracker.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={shownOnToday}
+                  onChange={() => toggleGoalOnToday(goal.id)}
+                  aria-label={`Show ${goal.label || 'goal'} on Today`}
                 />
               </label>
               <div className="goal-linked-standards">
