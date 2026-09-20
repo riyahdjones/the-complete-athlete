@@ -10722,3 +10722,163 @@ select {
 }
 .complete-athlete-refresh .bottom-nav .nav-item.active svg,
 .complete-athlete-refresh .parent-bottom-nav .nav-item.active svg { color: #ffffff; }
+
+/* Preserve the newer Profile and Goals structure inside the previous app design. */
+.previous-design .goals-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.previous-design .segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid rgba(47, 109, 246, .18);
+  border-radius: 12px;
+  background: rgba(235, 242, 255, .94);
+}
+
+.previous-design .segmented-control button {
+  min-height: 36px;
+  padding: 7px 5px;
+  border-radius: 8px;
+  color: #334b78;
+  background: transparent;
+  font-size: .74rem;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.previous-design .segmented-control button.active {
+  color: #fff;
+  background: linear-gradient(135deg, #2f6df6, #0f172a);
+  box-shadow: 0 5px 12px rgba(15, 23, 42, .22);
+}
+
+.previous-design .goal-proof-compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.previous-design .goal-proof-compact span {
+  padding: 10px 12px;
+  border: 1px solid rgba(47, 109, 246, .15);
+  border-radius: 10px;
+  color: #53617b;
+  background: rgba(255, 255, 255, .92);
+  font-size: .7rem;
+  font-weight: 850;
+}
+
+.previous-design .goal-proof-compact strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.previous-design .refreshed-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(47, 109, 246, .18);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(47, 109, 246, .16), transparent 36%),
+    linear-gradient(145deg, #fff, #f1f6ff);
+  box-shadow: 0 9px 22px rgba(15, 23, 42, .10);
+}
+
+.previous-design .refreshed-profile-head h2 {
+  margin: 0 0 4px;
+  color: #0f172a;
+}
+
+.previous-design .profile-score-card {
+  padding: 16px;
+  color: #fff;
+  border: 1px solid rgba(93, 146, 255, .38);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(47, 109, 246, .46), transparent 40%),
+    linear-gradient(135deg, #172b57, #0f172a 72%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .22);
+}
+
+.previous-design .profile-score-card > div:first-child {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.previous-design .profile-score-card > div:first-child strong { font-size: 2.15rem; }
+.previous-design .profile-score-card span,
+.previous-design .profile-score-card strong { color: #fff; }
+
+.previous-design .profile-score-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 13px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .14);
+}
+
+.previous-design .profile-score-meta span {
+  padding: 10px 5px;
+  text-align: center;
+  background: rgba(255, 255, 255, .06);
+  font-size: .64rem;
+}
+
+.previous-design .profile-score-meta strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.previous-design .profile-menu {
+  overflow: hidden;
+  border: 1px solid rgba(47, 109, 246, .17);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 9px 22px rgba(15, 23, 42, .09);
+}
+
+.previous-design .profile-menu button {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  color: #0f172a;
+  text-align: left;
+  border-bottom: 1px solid rgba(47, 109, 246, .11);
+  background: #fff;
+}
+
+.previous-design .profile-menu button:last-child { border-bottom: 0; }
+
+.previous-design .profile-menu-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: #2f6df6;
+  border-radius: 10px;
+  background: #edf3ff;
+}
+
+.previous-design .profile-menu strong,
+.previous-design .profile-menu em { display: block; }
+.previous-design .profile-menu em {
+  margin-top: 2px;
+  color: #667085;
+  font-size: .68rem;
+  font-style: normal;
+}

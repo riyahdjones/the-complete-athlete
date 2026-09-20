@@ -5271,7 +5271,7 @@ function App() {
 
   return (
     <div
-      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} complete-athlete-refresh ${view}-experience${coachTypingMode ? ' coach-typing-mode' : ''}`}
+      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} previous-design ${view}-experience${coachTypingMode ? ' coach-typing-mode' : ''}`}
       data-viewport-revision={viewportRevision}
     >
       {!useMobileAppShell && (
@@ -5302,27 +5302,19 @@ function App() {
         className={`${useMobileAppShell ? 'mobile-native-frame' : 'phone-frame'}${coachTypingMode ? ' coach-typing-mode' : ''}`}
         aria-label="The Complete Athlete app prototype"
       >
-        <header className={isAthleteHome ? 'topbar today-topbar' : 'topbar'}>
-          <div className="app-logo" aria-label="The Complete Athlete">
-            <img src="/app-icon.png" alt="" />
+        <header className="topbar">
+          <div>
+            <p className={isAthleteHome ? 'top-greeting athlete-home-greeting' : 'top-greeting'}>
+              {view === 'athlete' ? firstNameGreeting(effectiveSession.name) : timeBasedGreeting(effectiveSession.name)}
+            </p>
+            {!isAthleteHome && (
+              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'Achievements', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
+            )}
           </div>
-          <div className="topbar-copy">
-            {isAthleteHome ? <>
-              <p className="top-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}</p>
-              <h1 className="athlete-home-greeting">{firstNameGreeting(effectiveSession.name)}</h1>
-              <p className="today-subtitle">A clearer you. A bigger tomorrow.</p>
-            </> : <>
-              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'Profile', journal: 'Journal', achievements: 'Achievements', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Overview', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
-              <p className="screen-kicker">{view === 'parent' ? 'Support the athlete. Strengthen the person.' : (tab === 'profile' ? ({ overview: 'Progress builds identity.', journal: 'A private place to reflect and grow.', achievements: 'Progress builds identity.', stats: 'See the proof behind your progress.', settings: 'Manage your account and preferences.' }[profileView]) : ({ journal: 'Turn the dream into daily work.', plans: 'Real tools. Real growth.', coach: 'Ask anything. Get real guidance.' }[tab] || ''))}</p>
-            </>}
-          </div>
-          <div className="topbar-actions">
-            <span className="top-motto">{view === 'parent' ? 'RAISE THE PERSON.\nSUPPORT THE ATHLETE.' : ({ home: 'REAL QUESTIONS.\nREAL GROWTH.', journal: 'DISCIPLINE.\nBUILDS FREEDOM.', plans: 'TRAIN THE MIND.\nIMPROVE EVERY DAY.', coach: 'HERE TO HELP YOU\nGO FURTHER.', profile: 'PROGRESS BUILDS IDENTITY.' }[tab])}</span>
-            <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
-              <Bell size={18} />
-              {unreadNotifications.length > 0 && <span>{unreadNotifications.length}</span>}
-            </button>
-          </div>
+          <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
+            <Bell size={19} />
+            {unreadNotifications.length > 0 && <span>{unreadNotifications.length}</span>}
+          </button>
         </header>
 
         {notificationsOpen && (
