@@ -6072,7 +6072,6 @@ function HomeScreen({
         <PanelTitle
           icon={<Target size={18} />}
           title={selectedTodayGoals.length === 1 ? 'Current Goal' : 'Current Goals'}
-          action={selectedTodayGoals.length ? `${selectedTodayGoals.length} shown` : 'Choose in Goals'}
         />
         {selectedTodayGoals.length ? (
           <div className="today-goal-list">
@@ -6090,7 +6089,7 @@ function HomeScreen({
       </section>
 
       <section className="panel daily-standards-panel">
-        <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Activity Tracker" action={`${completedStandards.length}/${standards.length} done`} />
+        <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Activity Tracker" />
         <div className="daily-standards-card">
           <p className="info-note">Add what you need to handle today. Update it as you go, then lock in the day once everything is complete.</p>
           <div className="productivity-summary" aria-label="Daily activity tracker summary">
