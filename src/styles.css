@@ -10964,6 +10964,7 @@ select {
   display: flex;
   gap: 6px;
   overflow-x: auto;
+  margin-top: 14px;
   padding: 2px 0;
   scrollbar-width: none;
 }
