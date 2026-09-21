@@ -11158,3 +11158,63 @@ select {
   font-size: .68rem;
   font-style: normal;
 }
+
+.previous-design .topbar {
+  align-items: center;
+  overflow: visible;
+}
+
+.previous-design .topbar > div {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.previous-design .topbar > .notification-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #0f172a;
+  border: 1px solid rgba(47, 109, 246, .2);
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, .1);
+}
+
+.previous-design .notification-button span {
+  min-width: 18px;
+  height: 18px;
+  color: #fff;
+  border-color: #fff;
+  background: #2f6df6;
+}
+
+.previous-design .notification-tray {
+  z-index: 40;
+  border: 1px solid rgba(47, 109, 246, .22);
+  background: #fff;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, .22);
+}
+
+.previous-design .tray-title strong,
+.previous-design .tray-title span {
+  display: block;
+}
+
+.previous-design .tray-title strong {
+  color: #0f172a;
+  font-size: .9rem;
+}
+
+.previous-design .tray-title span {
+  margin-top: 2px;
+  color: #667085;
+  font-size: .62rem;
+  font-weight: 750;
+}
+
+.previous-design .tray-actions button {
+  color: #fff;
+  background: linear-gradient(135deg, #2f6df6, #0f172a);
+}

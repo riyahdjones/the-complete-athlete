@@ -588,6 +588,14 @@ function normalizeNotifications(value) {
     : [];
 }
 
+function notificationsFromLast24Hours(notifications, now = Date.now()) {
+  const cutoff = now - (24 * 60 * 60 * 1000);
+  return notifications.filter((notification) => {
+    const createdAt = new Date(notification.createdAt).getTime();
+    return Number.isFinite(createdAt) && createdAt >= cutoff && createdAt <= now;
+  });
+}
+
 function loadNotificationPreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem(notificationPrefsStorageKey) ?? '{}');
@@ -3176,7 +3184,8 @@ function App() {
   const athleteScore = pointsTotal(pointsLedger);
   const todayPoints = pointsToday(pointsLedger, dailyDate);
   const recentPointEvents = latestPointEvents(pointsLedger);
-  const unreadNotifications = notifications.filter((notification) => !notification.read);
+  const recentNotifications = notificationsFromLast24Hours(notifications);
+  const unreadNotifications = recentNotifications.filter((notification) => !notification.read);
 
   useEffect(() => {
     localStorage.setItem(
@@ -5369,7 +5378,7 @@ function App() {
         {notificationsOpen && (
           <NotificationTray
             clearNotifications={clearNotifications}
-            notifications={notifications}
+            notifications={recentNotifications}
             onMarkAllRead={markNotificationsRead}
             requestBrowserNotifications={requestBrowserNotifications}
           />
@@ -6540,7 +6549,7 @@ function NotificationTray({ clearNotifications, notifications, onMarkAllRead, re
   return (
     <section className="notification-tray" aria-label="Notifications">
       <div className="tray-head">
-        <strong>Notifications</strong>
+        <div className="tray-title"><strong>Notifications</strong><span>Last 24 hours</span></div>
         <div className="tray-actions">
           <button onClick={requestBrowserNotifications}>Enable</button>
           {notifications.length > 0 && <button onClick={onMarkAllRead}>Read</button>}
@@ -6548,7 +6557,7 @@ function NotificationTray({ clearNotifications, notifications, onMarkAllRead, re
         </div>
       </div>
       {notifications.length === 0 ? (
-        <p>No notifications yet.</p>
+        <p>No notifications in the last 24 hours.</p>
       ) : (
         <div className="notification-list">
           {notifications.map((notification) => (
