@@ -566,24 +566,6 @@ p {
   font-size: 0.9rem;
 }
 
-.tray-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.tray-head button,
-.tray-actions button {
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 10px;
-  color: var(--ink);
-  background: var(--gold);
-  font-size: 0.74rem;
-  font-weight: 850;
-}
-
 .notification-tray > p {
   margin: 0;
   color: var(--muted);
@@ -11212,9 +11194,4 @@ select {
   color: #667085;
   font-size: .62rem;
   font-weight: 750;
-}
-
-.previous-design .tray-actions button {
-  color: #fff;
-  background: linear-gradient(135deg, #2f6df6, #0f172a);
 }

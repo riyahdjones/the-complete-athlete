@@ -4599,13 +4599,6 @@ function App() {
     setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
   }
 
-  async function clearNotifications() {
-    setNotifications([]);
-    if (isSupabaseConfigured && authSession?.id) {
-      await supabase.from('app_notifications').delete().eq('user_id', authSession.id);
-    }
-  }
-
   function toggleNotifications() {
     setNotificationsOpen((open) => {
       const nextOpen = !open;
@@ -5376,12 +5369,7 @@ function App() {
         </header>
 
         {notificationsOpen && (
-          <NotificationTray
-            clearNotifications={clearNotifications}
-            notifications={recentNotifications}
-            onMarkAllRead={markNotificationsRead}
-            requestBrowserNotifications={requestBrowserNotifications}
-          />
+          <NotificationTray notifications={recentNotifications} />
         )}
 
         {celebration && <div className="celebration-banner">{celebration}</div>}
@@ -6545,16 +6533,11 @@ function AthleteStartToday({
   );
 }
 
-function NotificationTray({ clearNotifications, notifications, onMarkAllRead, requestBrowserNotifications }) {
+function NotificationTray({ notifications }) {
   return (
     <section className="notification-tray" aria-label="Notifications">
       <div className="tray-head">
         <div className="tray-title"><strong>Notifications</strong><span>Last 24 hours</span></div>
-        <div className="tray-actions">
-          <button onClick={requestBrowserNotifications}>Enable</button>
-          {notifications.length > 0 && <button onClick={onMarkAllRead}>Read</button>}
-          {notifications.length > 0 && <button onClick={clearNotifications}>Clear</button>}
-        </div>
       </div>
       {notifications.length === 0 ? (
         <p>No notifications in the last 24 hours.</p>
