@@ -981,10 +981,35 @@ function shouldPreferSeedPlan(planId) {
   return id.startsWith('imagination-station-day-') || id.startsWith('compete-differently-day-');
 }
 
+function planMergeKey(plan) {
+  const series = planSeriesTitle(plan)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const day = String(plan?.challengeDay ?? '')
+    .toLowerCase()
+    .match(/\d+/)?.[0];
+
+  if (series && series !== 'performance-plans' && day) {
+    return `series:${series}:day:${day}`;
+  }
+  return `id:${String(plan?.id ?? '')}`;
+}
+
 function mergeWithSeedPlans(sourcePlans) {
-  const nextPlans = Array.isArray(sourcePlans) ? sourcePlans.map(normalizePlan) : [];
+  const nextPlans = [];
+  (Array.isArray(sourcePlans) ? sourcePlans : []).map(normalizePlan).forEach((plan) => {
+    const mergeKey = planMergeKey(plan);
+    const existingIndex = nextPlans.findIndex((sourcePlan) => planMergeKey(sourcePlan) === mergeKey);
+    if (existingIndex >= 0) {
+      nextPlans[existingIndex] = plan;
+    } else {
+      nextPlans.push(plan);
+    }
+  });
+
   plansSeed.map(normalizePlan).forEach((plan) => {
-    const existingIndex = nextPlans.findIndex((sourcePlan) => String(sourcePlan.id) === String(plan.id));
+    const mergeKey = planMergeKey(plan);
+    const existingIndex = nextPlans.findIndex((sourcePlan) => planMergeKey(sourcePlan) === mergeKey);
     if (existingIndex >= 0 && shouldPreferSeedPlan(plan.id)) {
       nextPlans[existingIndex] = plan;
       return;
