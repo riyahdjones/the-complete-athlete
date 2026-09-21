@@ -8927,6 +8927,7 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
   const averageGoalProgress = goals.length
     ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress || 0), 0) / goals.length)
     : 0;
+  const ageAndState = [athleteProfile.age, athleteProfile.location].filter(Boolean).join(' | ') || 'Age | State';
   const navigation = [
     ['journal', 'My Journal', PenLine, 'Private reflections and game notes'],
     ['achievements', 'My Badges', Trophy, 'See the rewards your progress has unlocked'],
@@ -8950,7 +8951,7 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
         </div>
         <div>
           <h2>{athleteProfile.name || authSession?.name || 'Athlete'}</h2>
-          <span>{athleteProfile.sport || 'Student Athlete'}{athleteProfile.age ? ` · Age ${athleteProfile.age}` : ''}</span>
+          <span>{ageAndState}</span>
         </div>
       </section>
       <section className="profile-score-card">
