@@ -10740,6 +10740,37 @@ select {
   background: rgba(255, 255, 255, .98);
   border-color: rgba(159, 205, 255, .45);
 }
+.complete-athlete-refresh .coach-history-panel,
+.previous-design .coach-history-panel {
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(8, 119, 249, .34), transparent 38%),
+    linear-gradient(145deg, #0b2b63 0%, #071747 60%, #061333 100%);
+  border: 1px solid rgba(83, 166, 255, .34);
+  box-shadow:
+    0 14px 32px rgba(7, 23, 71, .24),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.complete-athlete-refresh .coach-history-panel .panel-title,
+.previous-design .coach-history-panel .panel-title { color: #ffffff; }
+.complete-athlete-refresh .coach-history-panel .panel-title span,
+.previous-design .coach-history-panel .panel-title span { color: #ffffff; }
+.complete-athlete-refresh .coach-history-panel .panel-title svg,
+.previous-design .coach-history-panel .panel-title svg { color: #a9cfff; }
+.complete-athlete-refresh .coach-history-panel .panel-title em,
+.previous-design .coach-history-panel .panel-title em {
+  color: #ffffff;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(162, 207, 255, .28);
+}
+.complete-athlete-refresh .coach-history-panel .empty-note,
+.previous-design .coach-history-panel .empty-note,
+.complete-athlete-refresh .coach-history-panel .coach-session,
+.previous-design .coach-history-panel .coach-session {
+  color: #071747;
+  background: rgba(255, 255, 255, .96);
+  border-color: rgba(159, 205, 255, .45);
+}
 
 /* Preserve the newer Profile and Goals structure inside the previous app design. */
 .previous-design .goals-toolbar {
