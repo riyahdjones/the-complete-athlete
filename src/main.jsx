@@ -8928,19 +8928,13 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
     ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress || 0), 0) / goals.length)
     : 0;
   const navigation = [
-    ['goals', 'My Goals', Target, 'Track the work behind your goals'],
     ['journal', 'My Journal', PenLine, 'Private reflections and game notes'],
     ['achievements', 'My Badges', Trophy, 'See the rewards your progress has unlocked'],
-    ['stats', 'My Stats', BarChart3, 'See your score and consistency'],
     ['settings', 'Settings', Shield, 'Account, notifications and privacy'],
     ['support', 'Help & Support', CircleHelp, 'Get help with your account']
   ];
 
   function openDestination(destination) {
-    if (destination === 'goals') {
-      document.querySelector('.bottom-nav .nav-item:nth-child(2)')?.click();
-      return;
-    }
     if (destination === 'support') {
       window.open(LEGAL_URLS.support, '_blank', 'noopener,noreferrer');
       return;
