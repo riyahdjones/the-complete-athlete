@@ -8730,10 +8730,7 @@ function CoachScreen({
     <div className="coach-screen">
       <section className="coach-conversation">
         <div className="coach-conversation-head">
-          <div className="coach-mark">
-            <img src="/app-icon.png" alt="" />
-          </div>
-          <div>
+          <div className="coach-conversation-title">
             <span>Mindset Coach</span>
             <strong>{activeCoachSessionId ? 'Conversation open' : 'New conversation'}</strong>
           </div>

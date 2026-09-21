@@ -4839,7 +4839,7 @@ textarea,
 
 .coach-conversation-head {
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
 }
@@ -4854,7 +4854,7 @@ textarea,
   background: #050505;
 }
 
-.coach-conversation-head div:nth-child(2) {
+.coach-conversation-title {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -5980,7 +5980,7 @@ textarea {
 }
 
 .coach-conversation-head {
-  grid-template-columns: 38px 1fr auto;
+  grid-template-columns: 1fr auto;
 }
 
 .coach-conversation .coach-topics {
