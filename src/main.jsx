@@ -5418,6 +5418,7 @@ function App() {
     );
   const coachTypingMode = useMobileAppShell && view === 'athlete' && tab === 'coach' && coachComposerFocused;
   const isAthleteHome = view === 'athlete' && tab === 'home';
+  const isParentOverview = view === 'parent' && parentTab === 'overview';
 
   return (
     <div
@@ -5454,10 +5455,10 @@ function App() {
       >
         <header className="topbar">
           <div>
-            {isAthleteHome && (
-              <p className="top-greeting athlete-home-greeting">{firstNameGreeting(effectiveSession.name)}</p>
+            {(isAthleteHome || isParentOverview) && (
+              <p className={`top-greeting${isAthleteHome ? ' athlete-home-greeting' : ' parent-home-greeting'}`}>{firstNameGreeting(effectiveSession.name)}</p>
             )}
-            {!isAthleteHome && (
+            {!isAthleteHome && !isParentOverview && (
               <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'My Badges', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
             )}
           </div>
