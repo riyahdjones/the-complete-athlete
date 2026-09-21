@@ -10705,6 +10705,42 @@ select {
 .complete-athlete-refresh .bottom-nav .nav-item.active svg,
 .complete-athlete-refresh .parent-bottom-nav .nav-item.active svg { color: #ffffff; }
 
+.complete-athlete-refresh .coach-conversation,
+.previous-design .coach-conversation {
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(8, 119, 249, .34), transparent 38%),
+    linear-gradient(145deg, #0b2b63 0%, #071747 60%, #061333 100%);
+  border: 1px solid rgba(83, 166, 255, .34);
+  box-shadow:
+    0 14px 32px rgba(7, 23, 71, .24),
+    inset 0 1px 0 rgba(255, 255, 255, .1);
+}
+.complete-athlete-refresh .coach-conversation-head span,
+.previous-design .coach-conversation-head span { color: #a9cfff; }
+.complete-athlete-refresh .coach-conversation-head strong,
+.previous-design .coach-conversation-head strong { color: #ffffff; }
+.complete-athlete-refresh .coach-conversation-head .ghost-action,
+.previous-design .coach-conversation-head .ghost-action {
+  color: #ffffff;
+  background: rgba(255, 255, 255, .1);
+  border-color: rgba(162, 207, 255, .34);
+}
+.complete-athlete-refresh .coach-conversation .coach-topics button,
+.previous-design .coach-conversation .coach-topics button {
+  color: #16396d;
+  background: rgba(255, 255, 255, .96);
+  border-color: rgba(152, 204, 255, .42);
+}
+.complete-athlete-refresh .coach-conversation .chat-panel,
+.complete-athlete-refresh .coach-conversation .composer,
+.previous-design .coach-conversation .chat-panel,
+.previous-design .coach-conversation .composer {
+  color: var(--ca-navy);
+  background: rgba(255, 255, 255, .98);
+  border-color: rgba(159, 205, 255, .45);
+}
+
 /* Preserve the newer Profile and Goals structure inside the previous app design. */
 .previous-design .goals-toolbar {
   display: grid;
