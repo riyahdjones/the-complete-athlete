@@ -8750,10 +8750,6 @@ function CoachScreen({
             </button>
           ))}
         </div>
-        <p className="privacy-note">
-          My Mindset Coach is for performance mindset support, not therapy or medical care. If safety, injury, abuse, or self-harm is involved, tell a trusted adult immediately.
-        </p>
-
         <section className="chat-panel" ref={chatPanelRef}>
           {messages.length === 0 && (
             <div className="coach-empty-state">
