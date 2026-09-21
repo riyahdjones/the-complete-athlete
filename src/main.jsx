@@ -9962,7 +9962,7 @@ function ParentDashboard({
 
   return (
     <>
-      {linkedAthletes.length > 0 && (
+      {parentTab === 'settings' && linkedAthletes.length > 0 && (
         <ParentAthleteSwitcher
           athletes={linkedAthletes}
           selectedAthleteId={linkedAthleteId}
