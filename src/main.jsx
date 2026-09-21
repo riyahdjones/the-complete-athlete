@@ -9014,7 +9014,6 @@ function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standa
   const completedSeriesNames = completedSeries.map((series) => series.title.toLowerCase());
   const linkedGoal = goals.some((goal) => standards.some((standard) => String(standard.goalId) === String(goal.id)));
   const closerEarned = standardsHistory.some((day) => day.total > 0 && day.completed >= day.total);
-  const extraReps = standardsHistory.reduce((total, day) => total + (day.standards || []).filter((item) => item.done && /extra|bonus/i.test(item.label || '')).length, 0);
   const latestSevenDays = [...standardsHistory].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 7);
   const latestSevenDates = new Set(latestSevenDays.map((day) => day.date));
   const latestLabels = latestSevenDays.flatMap((day) => day.standards || []).filter((item) => item.done).map((item) => String(item.label || '').toLowerCase());
@@ -9032,10 +9031,11 @@ function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standa
       ['No Days Off', 'Thirty straight days of intentional action.', streakCount >= 30, Math.min(streakCount, 30), 30, '30-Day Streak'],
       ['Relentless', 'You kept showing up long after the excitement wore off.', streakCount >= 60, Math.min(streakCount, 60), 60, '60-Day Streak'],
       ['Built Different', 'One hundred days of consistency. Your habits are separating you.', streakCount >= 100, Math.min(streakCount, 100), 100, '100-Day Streak'],
-      ['Unshakeable', 'Discipline has become part of your identity.', streakCount >= 180, Math.min(streakCount, 180), 180, '180-Day Streak']
+      ['Unshakeable', 'Discipline has become part of your identity.', streakCount >= 180, Math.min(streakCount, 180), 180, '180-Day Streak'],
+      ['365 Strong', 'You showed up for an entire year. Consistency is now part of who you are.', streakCount >= 365, Math.min(streakCount, 365), 365, '365-Day Streak']
     ]],
     ['Work Ethic', [
-      ['Extra Work', 'You did more than what was required.', extraReps >= 25, Math.min(extraReps, 25), 25, 'Extra Reps'],
+      ['Extra Work', 'You did more than what was required.', completedActivities >= 25, Math.min(completedActivities, 25), 25, 'Activities'],
       ['Blue Collar', 'Quiet work. Repeated effort. Real progress.', completedActivities >= 100, Math.min(completedActivities, 100), 100, 'Activities'],
       ['Workhorse', "You've built a serious body of work.", completedActivities >= 250, Math.min(completedActivities, 250), 250, 'Activities'],
       ['Obsessed', 'Your actions prove how serious you are about getting better.', completedActivities >= 500, Math.min(completedActivities, 500), 500, 'Activities']
