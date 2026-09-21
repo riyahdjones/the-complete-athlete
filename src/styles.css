@@ -11195,3 +11195,136 @@ select {
   font-size: .62rem;
   font-weight: 750;
 }
+
+.previous-design .parent-athlete-switcher {
+  margin-bottom: 12px;
+  padding: 14px;
+  color: #fff;
+  border: 1px solid rgba(93, 146, 255, .38);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(47, 109, 246, .5), transparent 42%),
+    linear-gradient(135deg, #172b57, #0f172a 72%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .2);
+}
+
+.previous-design .parent-athlete-switcher-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.previous-design .parent-athlete-switcher-head span,
+.previous-design .parent-athlete-switcher-head strong {
+  display: block;
+  color: #fff;
+}
+
+.previous-design .parent-athlete-switcher-head span {
+  margin-bottom: 2px;
+  font-size: .61rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .72;
+}
+
+.previous-design .parent-athlete-switcher-head strong { font-size: .96rem; }
+
+.previous-design .parent-athlete-switcher-head small {
+  padding: 5px 8px;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 999px;
+  font-size: .58rem;
+  font-weight: 850;
+  background: rgba(255, 255, 255, .1);
+}
+
+.previous-design .parent-athlete-options {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.previous-design .parent-athlete-options button {
+  display: grid;
+  grid-template-columns: 34px minmax(92px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 154px;
+  padding: 9px;
+  color: #dce8ff;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, .15);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .08);
+}
+
+.previous-design .parent-athlete-options button.active {
+  color: #0f172a;
+  border-color: #fff;
+  background: #fff;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, .18);
+}
+
+.previous-design .parent-athlete-initial {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  border-radius: 50%;
+  background: #2f6df6;
+  font-weight: 900;
+}
+
+.previous-design .parent-athlete-options button > span:nth-child(2),
+.previous-design .parent-athlete-options strong,
+.previous-design .parent-athlete-options em { display: block; }
+.previous-design .parent-athlete-options strong { color: inherit; font-size: .7rem; }
+.previous-design .parent-athlete-options em { margin-top: 2px; color: inherit; font-size: .58rem; font-style: normal; opacity: .72; }
+
+.previous-design .parent-linked-athlete-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(47, 109, 246, .14);
+}
+
+.previous-design .parent-linked-athlete-list > span {
+  color: #667085;
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.previous-design .parent-linked-athlete-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid rgba(47, 109, 246, .13);
+  border-radius: 10px;
+  background: #f7f9fd;
+}
+
+.previous-design .parent-linked-athlete-list strong {
+  color: #0f172a;
+  font-size: .7rem;
+}
+
+.previous-design .parent-linked-athlete-list .ghost-action {
+  min-height: 30px;
+  padding: 0 9px;
+  color: #b42318;
+  border-color: rgba(180, 35, 24, .22);
+  font-size: .58rem;
+}

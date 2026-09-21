@@ -1448,6 +1448,19 @@ function parentProgressTone(snapshot, streakCount) {
   return 'Start simple. One calm check-in can help them rebuild rhythm.';
 }
 
+function streakFromStandardsHistory(history, endDate = todayKey()) {
+  const dates = new Set(normalizeStandardsHistory(history).map((entry) => entry.date));
+  const latestDate = [...dates].sort((a, b) => b.localeCompare(a))[0];
+  if (!latestDate || daysBetween(latestDate, endDate) > 1) return 0;
+  let streak = 0;
+  let cursor = latestDate;
+  while (dates.has(cursor)) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
 function linkedAthleteName(summary, athleteProfile) {
   return summary?.full_name || athleteProfile?.name || 'Linked athlete';
 }
@@ -3054,6 +3067,7 @@ function App() {
   const [athleteParentAccessDraft, setAthleteParentAccessDraft] = useState('');
   const [athleteParentLinkFeedback, setAthleteParentLinkFeedback] = useState('');
   const [parentLinkChecked, setParentLinkChecked] = useState(false);
+  const [linkedAthletes, setLinkedAthletes] = useState([]);
   const [linkedAthleteId, setLinkedAthleteId] = useState(null);
   const [linkedAthleteSummary, setLinkedAthleteSummary] = useState(null);
   const [parentLinkRefreshKey, setParentLinkRefreshKey] = useState(0);
@@ -3726,15 +3740,18 @@ function App() {
   }, [dailyDate, lessonLibrary]);
 
   useEffect(() => {
-    if (localParentInviteSession) {
+    if (localParentInviteSession || String(authSession?.id || '').startsWith('app-review-parent')) {
+      const localAthletes = [{ athlete_user_id: 'local-athlete-review', full_name: 'App Review Athlete', sport: athleteProfile.sport, age: athleteProfile.age, location: athleteProfile.location }];
       setParentLinkChecked(true);
+      setLinkedAthletes(localAthletes);
       setLinkedAthleteId('local-athlete-review');
-      setLinkedAthleteSummary({ full_name: 'App Review Athlete' });
+      setLinkedAthleteSummary(localAthletes[0]);
       return;
     }
 
     if (!isSupabaseConfigured || authSession?.role !== 'parent') {
       setParentLinkChecked(false);
+      setLinkedAthletes([]);
       setLinkedAthleteId(null);
       setLinkedAthleteSummary(null);
       return;
@@ -3743,23 +3760,42 @@ function App() {
     setParentLinkChecked(false);
 
     async function loadLinkedAthleteData() {
-      const { data: links, error: linksError } = await supabase
-        .from('parent_links')
-        .select('athlete_user_id')
-        .eq('parent_user_id', authSession.id)
-        .limit(1);
+      const linkedAthletesResult = await supabase.rpc('parent_linked_athletes');
+      const summaries = !linkedAthletesResult.error && Array.isArray(linkedAthletesResult.data)
+        ? linkedAthletesResult.data
+        : [];
+      if (cancelled) return;
+      setLinkedAthletes(summaries);
 
-      const athleteUserId = links?.[0]?.athlete_user_id;
-      if (linksError || !athleteUserId || cancelled) {
+      let savedAthleteId = '';
+      try {
+        savedAthleteId = localStorage.getItem(`the-complete-athlete-selected-parent-athlete-${authSession.id}`) || '';
+      } catch {
+        savedAthleteId = '';
+      }
+      const selectedSummary = summaries.find((item) => item.athlete_user_id === savedAthleteId) ?? summaries[0] ?? null;
+      const athleteUserId = selectedSummary?.athlete_user_id;
+      if (!athleteUserId) {
         setLinkedAthleteId(null);
         setLinkedAthleteSummary(null);
+        setGoals([]);
+        setStandardsHistory([]);
+        setReadinessHistory([]);
+        setJournalEntries([]);
+        setPlanProgress({});
+        setPointsLedger([]);
         setParentLinkChecked(true);
         return;
       }
       setLinkedAthleteId(athleteUserId);
+      setLinkedAthleteSummary(selectedSummary);
+      try {
+        localStorage.setItem(`the-complete-athlete-selected-parent-athlete-${authSession.id}`, athleteUserId);
+      } catch {
+        // The first linked athlete remains selected for this session.
+      }
 
-      const [linkedAthletesResult, profileResult, goalsResult, standardsHistoryResult, readinessResult, journalResult, privacyResult, planProgressResult, pointsLedgerResult] = await Promise.all([
-        supabase.rpc('parent_linked_athletes'),
+      const [profileResult, goalsResult, standardsHistoryResult, readinessResult, journalResult, privacyResult, planProgressResult, pointsLedgerResult] = await Promise.all([
         supabase
           .from('athlete_profiles')
           .select('sport, age, location, photo_url, parent_contact, parent_access_code')
@@ -3803,22 +3839,14 @@ function App() {
 
       if (cancelled) return;
 
-      if (!linkedAthletesResult.error && Array.isArray(linkedAthletesResult.data)) {
-        const linkedSummary = linkedAthletesResult.data.find((item) => item.athlete_user_id === athleteUserId) ?? linkedAthletesResult.data[0] ?? null;
-        setLinkedAthleteSummary(linkedSummary);
-      }
-
       if (!profileResult.error) {
         setAthleteProfile((current) => {
-          const linkedSummary = !linkedAthletesResult.error && Array.isArray(linkedAthletesResult.data)
-            ? linkedAthletesResult.data.find((item) => item.athlete_user_id === athleteUserId) ?? linkedAthletesResult.data[0]
-            : null;
           return {
             ...profileFromSupabase(profileResult.data, current, current),
-            name: linkedSummary?.full_name || current.name,
-            sport: linkedSummary?.sport ?? profileResult.data?.sport ?? current.sport,
-            age: linkedSummary?.age ?? profileResult.data?.age ?? current.age,
-            location: linkedSummary?.location ?? profileResult.data?.location ?? current.location
+            name: selectedSummary?.full_name || current.name,
+            sport: selectedSummary?.sport ?? profileResult.data?.sport ?? current.sport,
+            age: selectedSummary?.age ?? profileResult.data?.age ?? current.age,
+            location: selectedSummary?.location ?? profileResult.data?.location ?? current.location
           };
         });
       }
@@ -4399,8 +4427,52 @@ function App() {
     setParentAccessDraft('');
     setParentLinkFeedback('');
     setParentLinkChecked(false);
+    setLinkedAthletes([]);
     setLinkedAthleteId(null);
     setLinkedAthleteSummary(null);
+  }
+
+  function selectParentAthlete(athleteUserId) {
+    if (!athleteUserId || athleteUserId === linkedAthleteId) return;
+    try {
+      localStorage.setItem(`the-complete-athlete-selected-parent-athlete-${authSession?.id || 'local'}`, athleteUserId);
+    } catch {
+      // The current selection still works even when local storage is unavailable.
+    }
+    setLinkedAthleteId(athleteUserId);
+    setParentLinkFeedback('');
+    setParentLinkRefreshKey((value) => value + 1);
+  }
+
+  async function unlinkParentAthlete(athleteUserId, athleteName = 'this athlete') {
+    if (!athleteUserId || !window.confirm(`Remove ${athleteName} from your parent account?`)) return;
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (!accessToken) {
+      setParentLinkFeedback('Sign in again before removing athlete access.');
+      return;
+    }
+    const response = await fetch(appApiUrl('/api/unlink-parent-athlete'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ athleteUserId })
+    }).catch(() => null);
+    if (!response?.ok) {
+      setParentLinkFeedback('Athlete access could not be removed. Try again.');
+      return;
+    }
+    if (athleteUserId === linkedAthleteId) {
+      try {
+        localStorage.removeItem(`the-complete-athlete-selected-parent-athlete-${authSession.id}`);
+      } catch {
+        // The remaining athlete list will still reload correctly.
+      }
+    }
+    setParentLinkFeedback(`${athleteName} was removed from your parent account.`);
+    setParentLinkRefreshKey((value) => value + 1);
   }
 
   async function linkParentAccessCode(event) {
@@ -4425,7 +4497,14 @@ function App() {
     trackAnalyticsEvent('family_linked', { source: 'parent_settings' }, { area: 'family' });
     setParentAccessDraft('');
     setParentLinkFeedback('Athlete linked. Loading parent dashboard...');
-    if (athleteUserId) setLinkedAthleteId(athleteUserId);
+    if (athleteUserId) {
+      try {
+        localStorage.setItem(`the-complete-athlete-selected-parent-athlete-${authSession.id}`, athleteUserId);
+      } catch {
+        // The linked athlete will still be selected for the current session.
+      }
+      setLinkedAthleteId(athleteUserId);
+    }
     completeParentOnboarding();
     setParentLinkRefreshKey((value) => value + 1);
   }
@@ -4608,6 +4687,21 @@ function App() {
           totalCount: notifications.length
         }, { area: 'notifications' });
         markNotificationsRead();
+        if (isSupabaseConfigured && authSession?.id) {
+          const cutoff = new Date(Date.now() - (24 * 60 * 60 * 1000)).toISOString();
+          supabase
+            .from('app_notifications')
+            .select('id, notification_type, title, body, tone, read, created_at')
+            .eq('user_id', authSession.id)
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false })
+            .limit(40)
+            .then(({ data, error }) => {
+              if (!error && Array.isArray(data)) {
+                setNotifications(data.map(notificationFromSupabase).map((notification) => ({ ...notification, read: true })));
+              }
+            });
+        }
       }
       return nextOpen;
     });
@@ -5014,6 +5108,7 @@ function App() {
           athleteScore={athleteScore}
           standardsCompleted={standardsCompleted}
           standardsTotal={standards.length}
+          linkedAthletes={linkedAthletes}
           linkedAthleteId={linkedAthleteId}
           linkedAthleteSummary={linkedAthleteSummary}
           deleteAccount={deleteAccount}
@@ -5030,6 +5125,8 @@ function App() {
           readinessHistory={readinessHistory}
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
+          selectLinkedAthlete={selectParentAthlete}
+          unlinkParentAthlete={unlinkParentAthlete}
           setPlanProgress={setPlanProgress}
           privacySettings={privacySettings}
           goals={goals}
@@ -5046,7 +5143,6 @@ function App() {
           updateNotificationPreference={updateNotificationPreference}
           setProfileView={setProfileView}
           standardsHistory={standardsHistory}
-          streakCount={streakCount}
         />
       );
     }
@@ -5247,6 +5343,9 @@ function App() {
     parentGuides,
     parentTab,
     parentMessage,
+    linkedAthletes,
+    linkedAthleteId,
+    linkedAthleteSummary,
     premiumAccessAllowed,
     trialPlanMode,
     planProgress,
@@ -6002,6 +6101,26 @@ function HomeScreen({
         id: `productivity-${submissionDate}`
       }
     );
+
+    if (isSupabaseConfigured) {
+      supabase.auth.getSession().then(({ data }) => {
+        const accessToken = data.session?.access_token;
+        if (!accessToken) return;
+        fetch(appApiUrl('/api/notify-parents-day-locked'), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            entryDate: submissionDate,
+            completed: completedStandards.length,
+            total: standards.length,
+            streak: nextStreak
+          })
+        }).catch(() => {});
+      });
+    }
 
     if (nextStreak === 3 || nextStreak % 7 === 0) {
       notifyUser(
@@ -9452,10 +9571,37 @@ function AthleteSettingsScreen({
   );
 }
 
+function ParentAthleteSwitcher({ athletes, selectedAthleteId, onSelect }) {
+  if (!athletes.length) return null;
+  const selected = athletes.find((athlete) => athlete.athlete_user_id === selectedAthleteId) ?? athletes[0];
+  return (
+    <section className="parent-athlete-switcher" aria-label="Choose an athlete">
+      <div className="parent-athlete-switcher-head">
+        <div><span>Viewing athlete</span><strong>{selected?.full_name || 'Linked athlete'}</strong></div>
+        <small>{athletes.length} linked</small>
+      </div>
+      <div className="parent-athlete-options">
+        {athletes.map((athlete) => {
+          const active = athlete.athlete_user_id === selectedAthleteId;
+          const details = [athlete.age, athlete.location].filter(Boolean).join(' | ') || athlete.sport || 'Athlete';
+          return (
+            <button className={active ? 'active' : ''} key={athlete.athlete_user_id} onClick={() => onSelect(athlete.athlete_user_id)} type="button">
+              <span className="parent-athlete-initial">{String(athlete.full_name || 'A').charAt(0)}</span>
+              <span><strong>{athlete.full_name || 'Linked athlete'}</strong><em>{details}</em></span>
+              {active && <BadgeCheck size={18} />}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function ParentSettingsScreen({
   athleteName,
   authSession,
   deleteAccount,
+  linkedAthletes,
   linkedAthleteSummary,
   linkParentAccessCode,
   logoutUser,
@@ -9468,6 +9614,7 @@ function ParentSettingsScreen({
   setParentAccessDraft,
   setParentLinkFeedback,
   subscription,
+  unlinkParentAthlete,
   updateNotificationPreference
 }) {
   const [parentNotificationsOpen, setParentNotificationsOpen] = useState(true);
@@ -9483,8 +9630,6 @@ function ParentSettingsScreen({
       return '';
     }
   });
-  const sportLine = linkedAthleteSummary?.sport ? `${linkedAthleteSummary.sport} support` : 'Athlete support';
-
   useEffect(() => {
     try {
       if (parentPhoto) {
@@ -9537,7 +9682,7 @@ function ParentSettingsScreen({
         <div>
           <p className="eyebrow">Parent Profile</p>
           <h2>{parentName}</h2>
-          <span>{linkedAthleteSummary ? `Linked to ${athleteName} | ${sportLine}` : 'Not linked yet'}</span>
+          <span>{linkedAthleteSummary ? `${linkedAthletes.length} athlete${linkedAthletes.length === 1 ? '' : 's'} linked | Viewing ${athleteName}` : 'Not linked yet'}</span>
         </div>
       </section>
 
@@ -9580,7 +9725,7 @@ function ParentSettingsScreen({
               }}
             />
             <button className="primary-action" type="submit">
-              {linkedAthleteSummary ? 'Update Link' : 'Link Athlete'}
+              {linkedAthleteSummary ? 'Add Athlete' : 'Link Athlete'}
             </button>
           </form>
           <div className="family-access-divider" aria-hidden="true">
@@ -9598,11 +9743,26 @@ function ParentSettingsScreen({
             </button>
           </div>
           {(parentLinkFeedback || familyAccessFeedback) && <p className="inline-note">{parentLinkFeedback || familyAccessFeedback}</p>}
+          {linkedAthletes.some((athlete) => !String(athlete.athlete_user_id).startsWith('local-')) && (
+            <div className="parent-linked-athlete-list">
+              <span>Linked athletes</span>
+              {linkedAthletes.map((athlete) => (
+                <div key={athlete.athlete_user_id}>
+                  <strong>{athlete.full_name || 'Linked athlete'}</strong>
+                  {!String(athlete.athlete_user_id).startsWith('local-') && (
+                    <button className="ghost-action inline" onClick={() => unlinkParentAthlete(athlete.athlete_user_id, athlete.full_name || 'this athlete')} type="button">
+                      Remove access
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="parent-settings-stats">
           <span>
             <strong>{linkedAthleteSummary ? athleteName : '—'}</strong>
-            Linked athlete
+            Viewing athlete
           </span>
           <span>
             <strong>{parentGuides.length}</strong>
@@ -9715,6 +9875,7 @@ function ParentDashboard({
   goals,
   journalEntries,
   lesson,
+  linkedAthletes,
   linkedAthleteId,
   linkedAthleteSummary,
   linkParentAccessCode,
@@ -9737,18 +9898,20 @@ function ParentDashboard({
   setParentAccessDraft,
   setParentLinkFeedback,
   setPlanProgress,
+  selectLinkedAthlete,
   startPremiumSubscription,
   standardsCompleted,
   standardsHistory,
   standardsTotal,
   subscription,
-  streakCount,
+  unlinkParentAthlete,
   updateNotificationPreference
 }) {
   const planSeriesStats = planSeriesCompletion(plans, planProgress);
   const weeklySnapshot = weeklyParentSnapshot({ standardsHistory, readinessHistory, journalEntries, pointsLedger, planProgress });
   const currentPlan = parentCurrentPlanSummary(plans, planProgress);
   const athleteName = linkedAthleteName(linkedAthleteSummary, athleteProfile);
+  const selectedAthleteStreak = streakFromStandardsHistory(standardsHistory);
   const [actionFeedback, setActionFeedback] = useState('');
 
   async function sendParentEncouragement(type) {
@@ -9799,6 +9962,13 @@ function ParentDashboard({
 
   return (
     <>
+      {linkedAthletes.length > 0 && (
+        <ParentAthleteSwitcher
+          athletes={linkedAthletes}
+          selectedAthleteId={linkedAthleteId}
+          onSelect={selectLinkedAthlete}
+        />
+      )}
       {parentTab === 'overview' && !linkedAthleteId && (
         <section className="panel parent-access-panel">
           <PanelTitle icon={<Users size={18} />} title="Link Athlete" action="Access code" />
@@ -9836,11 +10006,11 @@ function ParentDashboard({
             <span>Complete Athlete Score</span>
             <strong>{linkedAthleteId ? athleteScore : '—'}</strong>
           </div>
-          <p>{linkedAthleteId ? parentProgressTone(weeklySnapshot, streakCount) : 'Link your athlete to see their progress.'}</p>
+          <p>{linkedAthleteId ? parentProgressTone(weeklySnapshot, selectedAthleteStreak) : 'Link your athlete to see their progress.'}</p>
         </div>
         <div className="parent-progress-grid">
           <span>
-            <strong>{linkedAthleteId ? streakCount : '—'}</strong>
+            <strong>{linkedAthleteId ? selectedAthleteStreak : '—'}</strong>
             Day streak
           </span>
           <span>
@@ -9898,6 +10068,7 @@ function ParentDashboard({
           authSession={authSession}
           deleteAccount={deleteAccount}
           linkParentAccessCode={linkParentAccessCode}
+          linkedAthletes={linkedAthletes}
           linkedAthleteSummary={linkedAthleteSummary}
           logoutUser={logoutUser}
           notificationPreferences={notificationPreferences}
@@ -9909,6 +10080,7 @@ function ParentDashboard({
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
           subscription={subscription}
+          unlinkParentAthlete={unlinkParentAthlete}
           updateNotificationPreference={updateNotificationPreference}
         />
       )}
