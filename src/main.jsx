@@ -8757,7 +8757,6 @@ function CoachScreen({
         <section className="chat-panel" ref={chatPanelRef}>
           {messages.length === 0 && (
             <div className="coach-empty-state">
-              <img src="/app-icon.png" alt="" />
               <strong>What’s on your mind today, {coachFirstName}?</strong>
               <span>Ask anything. Get real guidance. Built for your journey.</span>
             </div>
