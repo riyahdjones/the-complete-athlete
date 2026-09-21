@@ -5289,6 +5289,8 @@ function App() {
             streakCount={streakCount}
             setProfileView={setProfileView}
           />
+        ) : profileView === 'support' ? (
+          <AthleteSupportScreen setProfileView={setProfileView} />
         ) : profileView === 'stats' ? (
           <AthleteStatsScreen
             athleteScore={athleteScore}
@@ -5459,7 +5461,7 @@ function App() {
               <p className={`top-greeting${isAthleteHome ? ' athlete-home-greeting' : ' parent-home-greeting'}`}>{firstNameGreeting(effectiveSession.name)}</p>
             )}
             {!isAthleteHome && !isParentOverview && (
-              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'My Badges', stats: 'My Stats', settings: 'Settings' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
+              <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'My Badges', stats: 'My Stats', settings: 'Settings', support: 'Help & Support' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
             )}
           </div>
           <button className="icon-button notification-button" aria-label="Notifications" onClick={toggleNotifications}>
@@ -9048,10 +9050,6 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
   ];
 
   function openDestination(destination) {
-    if (destination === 'support') {
-      window.open(LEGAL_URLS.support, '_blank', 'noopener,noreferrer');
-      return;
-    }
     setProfileView(destination);
   }
 
@@ -9082,6 +9080,25 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
             <ArrowRight size={18} />
           </button>
         ))}
+      </section>
+    </>
+  );
+}
+
+function AthleteSupportScreen({ setProfileView }) {
+  return (
+    <>
+      <button className="profile-subview-back" type="button" onClick={() => setProfileView('overview')}>← Back to Profile</button>
+      <section className="panel athlete-support-screen">
+        <PanelTitle icon={<CircleHelp size={18} />} title="Help & Support" action="We’re here" />
+        <p>Need help with your account, parent access, notifications, subscriptions, or an app issue?</p>
+        <a className="support-email-link" href="mailto:help@completeathlete.io">help@completeathlete.io</a>
+        <div className="support-request-list">
+          <span><strong>Password reset</strong>Use Reset Password on the login screen.</span>
+          <span><strong>Parent access</strong>Find linking and access-code controls in Settings.</span>
+          <span><strong>Notifications</strong>Manage app notifications in Settings or your device settings.</span>
+          <span><strong>Subscriptions</strong>Manage billing through your Apple subscription settings.</span>
+        </div>
       </section>
     </>
   );
