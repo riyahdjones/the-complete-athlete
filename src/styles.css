@@ -11411,3 +11411,26 @@ select {
 .previous-design .plan-day-strip { gap: 8px; }
 .previous-design .plan-day-strip button { flex-basis: 44px; width: 44px; height: 44px; font-size: .85rem; }
 .previous-design .plan-day-strip button:disabled { opacity: 1; color: #77849a; background: #edf0f5; cursor: not-allowed; }
+
+/* Keep native keyboard/caret scrolling local to the journal editor. */
+.journal-panel #journal {
+  font-size: 16px;
+  line-height: 1.55;
+  height: 240px;
+  min-height: 240px;
+  max-height: 240px;
+  overflow-y: auto;
+  resize: none;
+  overflow-anchor: none;
+  touch-action: pan-y;
+}
+.reflection-history-sheet .journal-entry p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: block;
+  overflow: visible;
+  max-height: none;
+  -webkit-line-clamp: unset;
+}
+.notification-tray .tray-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.achievement-card .badge-requirement { color: #153b70; font-size: 12px; line-height: 1.5; opacity: 1; }

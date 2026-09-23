@@ -72,7 +72,7 @@ if (typeof window !== 'undefined') {
     return keyboardLikelyOpen;
   };
   const syncAppViewportHeight = () => {
-    if (updateKeyboardState()) return;
+    if (updateKeyboardState() || isTextEntryActive()) return;
     const viewportHeight = Math.floor(window.visualViewport?.height || window.innerHeight || 0);
     if (viewportHeight > 0) {
       document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
@@ -84,7 +84,8 @@ if (typeof window !== 'undefined') {
     let nativeTouchStartX = 0;
     let nativeTouchStartY = 0;
     const lockHorizontalScroll = () => {
-      window.scrollTo(0, window.scrollY);
+      if (isTextEntryActive()) return;
+      if (window.scrollX) window.scrollTo(0, window.scrollY);
       document.documentElement.scrollLeft = 0;
       if (document.body) document.body.scrollLeft = 0;
       document.querySelectorAll('*').forEach((element) => {
@@ -120,8 +121,7 @@ if (typeof window !== 'undefined') {
       lockHorizontalScroll();
     };
     const runNativeLayoutPass = () => {
-      if (updateKeyboardState()) {
-        lockHorizontalScroll();
+      if (updateKeyboardState() || isTextEntryActive()) {
         return;
       }
       syncAppViewportHeight();
@@ -136,7 +136,7 @@ if (typeof window !== 'undefined') {
     };
     const blockNativeHorizontalPan = (event) => {
       const target = event.target;
-      if (target instanceof HTMLInputElement && target.type === 'range') return;
+      if (isTextEntryActive() || target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && target.type === 'range')) return;
       const touch = event.touches?.[0];
       if (!touch) return;
       const dx = Math.abs(touch.clientX - nativeTouchStartX);
@@ -658,10 +658,19 @@ function notificationPreferencesToSupabase(preferences, userId) {
   };
 }
 
-function loadJournalEntries() {
+function loadJournalEntries(ownerId = loadAuthSession()?.id) {
   try {
-    const saved = JSON.parse(localStorage.getItem(journalStorageKey) ?? '[]');
-    return Array.isArray(saved) ? saved.map((entry) => ({ linkedGoalId: null, ...entry })) : [];
+    const key = `${journalStorageKey}:${ownerId || 'guest'}`;
+    const legacyOwnerKey = `${journalStorageKey}:legacy-owner`;
+    if (ownerId && ownerId === loadAuthSession()?.id && !localStorage.getItem(legacyOwnerKey)) {
+      const legacy = localStorage.getItem(journalStorageKey);
+      if (legacy && !localStorage.getItem(key)) localStorage.setItem(key, legacy);
+      localStorage.setItem(legacyOwnerKey, ownerId);
+    }
+    const saved = JSON.parse(localStorage.getItem(key) ?? '[]');
+    const entries = Array.isArray(saved) ? saved.map((entry) => ({ linkedGoalId: null, ...entry, ...(!isSupabaseId(entry.id) ? { id: crypto.randomUUID(), ownerId, pending: true } : {}) })) : [];
+    localStorage.setItem(key, JSON.stringify(entries));
+    return entries;
   } catch {
     return [];
   }
@@ -1133,6 +1142,7 @@ function journalFromSupabase(row) {
   const createdAt = row.created_at ? new Date(row.created_at) : new Date();
   return {
     id: row.id,
+    createdAt: row.created_at,
     body: row.body ?? '',
     type: row.entry_type ?? 'Daily Reflection',
     linkedGoalId: row.goal_id ?? null,
@@ -1150,7 +1160,18 @@ function journalToSupabase(entry, athleteUserId) {
   };
 
   if (isSupabaseId(entry.id)) payload.id = entry.id;
+  if (entry.createdAt) payload.created_at = entry.createdAt;
   return payload;
+}
+
+async function fetchJournalHistory(ownerId) {
+  const rows = [];
+  for (let offset = 0; ; offset += 500) {
+    const result = await supabase.from('journal_entries').select('id, goal_id, entry_type, body, created_at').eq('athlete_user_id', ownerId).order('created_at', { ascending: false }).order('id').range(offset, offset + 499);
+    if (result.error) return { data: null, error: result.error };
+    rows.push(...result.data);
+    if (result.data.length < 500) return { data: rows, error: null };
+  }
 }
 
 function pointEventFromSupabase(row) {
@@ -3073,7 +3094,14 @@ function App() {
   const [journal, setJournal] = useState('');
   const [journalType, setJournalType] = useState('Daily Reflection');
   const [journalGoalId, setJournalGoalId] = useState('');
-  const [journalEntries, setJournalEntries] = useState(loadJournalEntries);
+  const [journalEntries, setJournalEntries] = useState(() => loadJournalEntries(authSession?.id));
+  const [journalOwner, setJournalOwner] = useState(authSession?.id);
+  useEffect(() => {
+    if (journalOwner !== authSession?.id) {
+      setJournalOwner(authSession?.id);
+      setJournalEntries(loadJournalEntries(authSession?.id));
+    }
+  }, [authSession?.id]);
   const [goals, setGoals] = useState(loadGoals);
   const [todayGoalSelection, setTodayGoalSelection] = useState(loadTodayGoalSelection);
   const [goalDraft, setGoalDraft] = useState({ label: '', value: '', targetDate: '' });
@@ -3254,6 +3282,8 @@ function App() {
         document.activeElement instanceof HTMLTextAreaElement ||
         document.activeElement?.isContentEditable;
       const keyboardLikelyOpen = textEntryActive && viewportHeight > 0 && window.innerHeight - viewportHeight > 120;
+      document.documentElement.classList.toggle('keyboard-open', keyboardLikelyOpen);
+      if (textEntryActive) return;
       setIsPhoneViewport(phoneViewport);
       setViewportRevision((current) => current + 1);
       document.documentElement.classList.toggle('keyboard-open', keyboardLikelyOpen);
@@ -3283,7 +3313,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(journalStorageKey, JSON.stringify(journalEntries));
+    if (authSession?.role === 'athlete' && journalOwner === authSession.id) localStorage.setItem(`${journalStorageKey}:${authSession.id}`, JSON.stringify(journalEntries));
   }, [journalEntries]);
 
   useEffect(() => {
@@ -3560,11 +3590,7 @@ function App() {
           .select('entry_date, confidence, energy, mood, belief')
           .eq('athlete_user_id', authSession.id)
           .order('entry_date', { ascending: true }),
-        supabase
-          .from('journal_entries')
-          .select('id, goal_id, entry_type, body, created_at')
-          .eq('athlete_user_id', authSession.id)
-          .order('created_at', { ascending: false }),
+        fetchJournalHistory(authSession.id),
         supabase
           .from('performance_plan_progress')
           .select('plan_id, completed_at')
@@ -3623,7 +3649,7 @@ function App() {
       }
 
       if (!journalResult.error && Array.isArray(journalResult.data)) {
-        setJournalEntries(journalResult.data.map(journalFromSupabase));
+        setJournalEntries([...new Map([...loadJournalEntries(authSession.id), ...journalResult.data.map(journalFromSupabase)].map((entry) => [entry.id, entry])).values()]);
       }
 
       if (!planProgressResult.error && Array.isArray(planProgressResult.data)) {
@@ -4112,41 +4138,12 @@ function App() {
     let cancelled = false;
 
     async function persistJournal() {
-      const remoteEntries = journalEntries.filter((entry) => isSupabaseId(entry.id));
-      const localEntries = journalEntries.filter((entry) => !isSupabaseId(entry.id));
-
-      if (localEntries.length) {
-        const { data, error } = await supabase
-          .from('journal_entries')
-          .insert(localEntries.map((entry) => journalToSupabase(entry, authSession.id)))
-          .select('id, goal_id, entry_type, body, created_at');
-
-        if (!cancelled && !error && Array.isArray(data)) {
-          setJournalEntries([...data.map(journalFromSupabase), ...remoteEntries]);
-        }
-        return;
-      }
-
-      const { data: existingRows } = await supabase
-        .from('journal_entries')
-        .select('id')
-        .eq('athlete_user_id', authSession.id);
-
-      if (cancelled) return;
-
-      const currentIds = new Set(remoteEntries.map((entry) => entry.id));
-      const deletedIds = (existingRows ?? [])
-        .map((row) => row.id)
-        .filter((id) => !currentIds.has(id));
-
-      if (deletedIds.length) {
-        await supabase.from('journal_entries').delete().in('id', deletedIds);
-      }
-
-      if (remoteEntries.length) {
-        await supabase
-          .from('journal_entries')
-          .upsert(remoteEntries.map((entry) => journalToSupabase(entry, authSession.id)));
+      const pending = journalEntries.filter((entry) => entry.pending && entry.ownerId === authSession.id);
+      if (!pending.length) return;
+      const { error } = await supabase.from('journal_entries').upsert(pending.map((entry) => journalToSupabase(entry, authSession.id)), { onConflict: 'id' });
+      if (!cancelled && !error) {
+        const savedIds = new Set(pending.map((entry) => entry.id));
+        setJournalEntries((current) => current.map((entry) => savedIds.has(entry.id) ? { ...entry, pending: false } : entry));
       }
     }
 
@@ -5496,7 +5493,7 @@ function App() {
         </header>
 
         {notificationsOpen && (
-          <NotificationTray notifications={recentNotifications} />
+          <NotificationTray notifications={recentNotifications} onClose={() => setNotificationsOpen(false)} />
         )}
 
         {celebration && <div className="celebration-banner">{celebration}</div>}
@@ -6680,11 +6677,12 @@ function AthleteStartToday({
   );
 }
 
-function NotificationTray({ notifications }) {
+function NotificationTray({ notifications, onClose }) {
   return (
     <section className="notification-tray" aria-label="Notifications">
       <div className="tray-head">
         <div className="tray-title"><strong>Notifications</strong><span>Last 24 hours</span></div>
+        <button className="icon-button" type="button" aria-label="Close notifications" onClick={onClose}><X size={20} /></button>
       </div>
       {notifications.length === 0 ? (
         <p>No notifications in the last 24 hours.</p>
@@ -8321,19 +8319,27 @@ function JournalScreen({
   trackAnalyticsEvent
 }) {
   const [reflectionHistoryOpen, setReflectionHistoryOpen] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
 
   function saveJournalEntry() {
     const body = journal.trim();
     if (!body) return;
     const entry = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      pending: true,
+      ownerId: loadAuthSession()?.id,
       body,
       type: journalType,
       linkedGoalId: journalGoalId || null,
       date: todayKey(),
       time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
     };
-    setJournalEntries((current) => [entry, ...current]);
+    setJournalEntries((current) => {
+      const next = [entry, ...current];
+      localStorage.setItem(`${journalStorageKey}:${entry.ownerId || 'guest'}`, JSON.stringify(next));
+      return next;
+    });
     setJournal('');
     setJournalGoalId('');
     const awarded = awardPoints({
@@ -8357,15 +8363,12 @@ function JournalScreen({
     setJournalGoalId(entry.linkedGoalId ? String(entry.linkedGoalId) : '');
   }
 
-  function removeJournalEntry(id) {
-    setJournalEntries((current) => current.filter((entry) => entry.id !== id));
-  }
 
   const journalHistoryList = journalEntries.length === 0 ? (
     <p className="empty-note">Saved reflections will appear here so you can review your growth over time.</p>
   ) : (
     <div className="journal-history sheet-history-list">
-      {journalEntries.map((entry) => {
+      {journalEntries.filter((entry) => `${entry.body} ${entry.type} ${entry.date}`.toLowerCase().includes(historySearch.toLowerCase())).map((entry) => {
         const linkedGoal = entry.linkedGoalId
           ? goals.find((goal) => goal.id === entry.linkedGoalId)
           : null;
@@ -8384,9 +8387,7 @@ function JournalScreen({
               {linkedGoal && <em>Connected to {linkedGoal.label}</em>}
               <p>{entry.body}</p>
             </button>
-            <button className="remove-standard" onClick={() => removeJournalEntry(entry.id)} type="button" aria-label={`Remove journal entry from ${entry.date}`}>
-              <Trash2 size={16} />
-            </button>
+
           </article>
         );
       })}
@@ -8468,6 +8469,7 @@ function JournalScreen({
                 <X size={18} />
               </button>
             </div>
+            <input className="text-field" aria-label="Search reflections" placeholder="Search all reflections…" value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} />
             {journalHistoryList}
           </section>
         </div>
@@ -9200,11 +9202,35 @@ function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standa
       ['Leader', 'Leadership begins with the standard you live by.', leadershipEarned, leadershipEarned ? 1 : 0, 1, 'Leadership Action']
     ]]
   ];
-  const familyEarned = Object.fromEntries(badgeGroups.map(([family, badges]) => [family, badges.some((badge) => badge[2])]));
-  const completeAthleteProgress = [familyEarned.Discipline, familyEarned['Work Ethic'], familyEarned.Mindset, familyEarned.Milestone, streakCount >= 30, completedActivities >= 100, completedPlans >= 5, journalEntries.length >= 20].filter(Boolean).length;
+  const lockedDays = new Set(standardsHistory.map((day) => day.date)).size;
+  const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100).length;
+  const requirements = [
+    [lockedDays, 365, 'total days locked in'],
+    [completedPlans, 10, 'Performance Plans completed'],
+    [completedGoals, 20, 'goals accomplished']
+  ];
+  const completeAthleteProgress = requirements.filter(([value, target]) => value >= target).length;
   badgeGroups.push(['Prestige', [
-    ['Complete Athlete', "You're building the habits, mindset, and standards of a complete athlete.", completeAthleteProgress === 8, completeAthleteProgress, 8, 'Prestige Requirements']
+    ['Complete Athlete', "You're building the habits, mindset, and standards of a complete athlete.", completeAthleteProgress === 3, completeAthleteProgress, 3, 'requirements', requirements.map(([value, target, label]) => `${Math.min(value, target)} / ${target} ${label}`).join(' • ')]
   ]]);
+  const specific = {
+    'Reset Ready': 'Complete every day of Next Play or an emotional-control plan.',
+    'Uncommon Confidence': 'Complete every day of The Confidence Code.',
+    'Boring Wins': 'Complete every day of Boring Wins.',
+    Focused: 'Complete every day of a Focus or Lock In plan.',
+    Coachable: 'Complete every day of The Coachable Athlete.',
+    'Goal Getter': 'Create a goal and link a daily activity to it.',
+    Closer: 'Complete every planned activity, then lock in that day.',
+    'The 90%': 'Complete the entire 90% / Athletic Operating System series.',
+    'All Around': 'Within seven days, complete Training, Recovery, Schoolwork and save a journal reflection.',
+    Leader: 'Complete and lock in an activity about leadership, accountability or helping your team.'
+  };
+  badgeGroups.forEach(([family, badges]) => badges.forEach((badge) => {
+    if (badge[6]) return;
+    badge[6] = specific[badge[0]] || (family === 'Discipline' ? `Lock in your day ${badge[4]} days in a row.` : `Complete ${badge[4]} ${badge[5].toLowerCase()}${badge[5] === 'Plans' ? ' (all days in each plan)' : ''}.`);
+    if (badge[5] === 'Reflections') badge[6] = `Save ${badge[4]} journal reflections.`;
+    if (badge[5] === 'Activities') badge[6] = `Complete ${badge[4]} daily activities and lock in those days.`;
+  }));
   return badgeGroups;
 }
 
@@ -9224,10 +9250,10 @@ function AchievementsScreen({ goals, journalEntries, plans, planProgress, standa
         <section className="achievement-group" key={group}>
           <h2>{group}</h2>
           <div className="achievement-grid">
-            {badges.map(([name, description, unlocked, value, target, criteria]) => (
+            {badges.map(([name, description, unlocked, value, target, criteria, requirement]) => (
               <article className={`${unlocked ? 'achievement-card unlocked' : 'achievement-card'} family-${group.toLowerCase().replace(/\s+/g, '-')}${target == null ? ' undefined-progress' : ''}`} key={name}>
                 <span className="achievement-shield">{unlocked ? <Trophy size={24}/> : <LockKeyhole size={20}/>}</span>
-                <strong>{name}</strong><p>{description}</p>
+                <strong>{name}</strong><p>{description}</p><p className="badge-requirement"><b>How to earn</b><br />{requirement}</p>
                 {!unlocked && target != null && <><Progress value={Math.round((value / target) * 100)} /><em>{value} / {target} {criteria}</em></>}
               </article>
             ))}
