@@ -10541,32 +10541,32 @@ select {
 .complete-athlete-refresh .plan-list-row > p { display: none; }
 .complete-athlete-refresh .plan-list-row > em { grid-column: 2 / 4; margin-bottom: 7px; font-size: .58rem; }
 
-.complete-athlete-refresh .cinematic-plan-detail { margin: -4px -11px -86px; min-height: calc(100dvh - 105px); background: #fff; }
-.complete-athlete-refresh .cinematic-plan-detail .series-overview { position: relative; height: 255px; padding: 0; border-radius: 0; overflow: hidden; }
-.complete-athlete-refresh .cinematic-plan-detail .series-cover { position: absolute; inset: 0; width: 100%; height: 100%; background-image: linear-gradient(0deg, rgb(2 15 45 / 24%), transparent 48%), var(--plan-cover); background-position: center, var(--plan-cover-position, center); background-size: cover, cover; background-repeat: no-repeat; }
-.complete-athlete-refresh .cinematic-back { position: absolute; z-index: 2; top: 13px; left: 13px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; color: var(--ca-navy); background: rgb(255 255 255 / 90%); border: 0; border-radius: 50%; font-size: 1.15rem; }
-.complete-athlete-refresh .cinematic-plan-copy { padding: 12px 15px 0; }
-.complete-athlete-refresh .plan-category-badge { display: inline-block; padding: 4px 8px; color: #fff; background: var(--ca-blue); border-radius: 99px; font-size: .57rem; font-weight: 800; }
-.complete-athlete-refresh .cinematic-plan-copy h2 { margin: 5px 0 1px; color: var(--ca-navy); font-size: 1.55rem; line-height: 1; letter-spacing: -.04em; }
-.complete-athlete-refresh .cinematic-plan-copy > strong { color: #526b97; font-size: .75rem; }
-.complete-athlete-refresh .cinematic-plan-copy > p { margin: 7px 0 10px; color: var(--ca-copy); font-size: .7rem; line-height: 1.35; }
-.complete-athlete-refresh .cinematic-plan-copy .primary-action { min-height: 36px; }
-.complete-athlete-refresh .plan-detail-tabs { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 8px; padding: 3px; background: var(--ca-ice); border: 1px solid var(--ca-line); border-radius: 10px; }
-.complete-athlete-refresh .plan-detail-tabs button { padding: 7px 3px; color: #526b97; background: transparent; border: 0; border-radius: 7px; font-size: .62rem; text-transform: capitalize; }
-.complete-athlete-refresh .plan-detail-tabs button.active { color: var(--ca-blue); background: #fff; box-shadow: 0 2px 7px rgb(30 75 130 / 9%); font-weight: 800; }
-.complete-athlete-refresh .plan-overview-content,
-.complete-athlete-refresh .plan-resources { padding: 13px 15px 95px; }
-.complete-athlete-refresh .plan-overview-content h3,
-.complete-athlete-refresh .plan-resources h3 { margin: 0 0 9px; color: var(--ca-navy); font-size: .92rem; }
-.complete-athlete-refresh .plan-overview-content ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
-.complete-athlete-refresh .plan-overview-content li { display: flex; align-items: center; gap: 7px; color: #405c8d; font-size: .68rem; }
-.complete-athlete-refresh .plan-overview-content li svg { padding: 2px; color: #fff; background: var(--ca-blue); border-radius: 50%; }
-.complete-athlete-refresh .single-plan-reader { padding: 10px 12px 95px; }
-.complete-athlete-refresh .plan-day-strip { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 7px; }
-.complete-athlete-refresh .plan-day-strip button { flex: 0 0 30px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; color: #54709e; background: var(--ca-ice); border: 1px solid var(--ca-line); border-radius: 50%; font-size: .65rem; }
-.complete-athlete-refresh .plan-day-strip button.active { color: #fff; background: var(--ca-blue); border-color: var(--ca-blue); }
-.complete-athlete-refresh .plan-resources { text-align: center; color: var(--ca-copy); }
-.complete-athlete-refresh .plan-resources > svg { color: var(--ca-blue); }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-detail { margin: -4px -11px -86px; min-height: calc(100dvh - 105px); background: #fff; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-detail .series-overview { position: relative; height: 255px; padding: 0; border-radius: 0; overflow: hidden; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-detail .series-cover { position: absolute; inset: 0; width: 100%; height: 100%; background-image: linear-gradient(0deg, rgb(2 15 45 / 24%), transparent 48%), var(--plan-cover); background-position: center, var(--plan-cover-position, center); background-size: cover, cover; background-repeat: no-repeat; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-back { position: absolute; z-index: 2; top: 13px; left: 13px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; color: var(--ca-navy); background: rgb(255 255 255 / 90%); border: 0; border-radius: 50%; font-size: 1.15rem; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-copy { padding: 12px 15px 0; }
+:is(.complete-athlete-refresh, .previous-design) .plan-category-badge { display: inline-block; padding: 4px 8px; color: #fff; background: var(--ca-blue); border-radius: 99px; font-size: .57rem; font-weight: 800; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-copy h2 { margin: 5px 0 1px; color: var(--ca-navy); font-size: 1.55rem; line-height: 1; letter-spacing: -.04em; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-copy > strong { color: #526b97; font-size: .75rem; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-copy > p { margin: 7px 0 10px; color: var(--ca-copy); font-size: .7rem; line-height: 1.35; }
+:is(.complete-athlete-refresh, .previous-design) .cinematic-plan-copy .primary-action { min-height: 36px; }
+:is(.complete-athlete-refresh, .previous-design) .plan-detail-tabs { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 8px; padding: 3px; background: var(--ca-ice); border: 1px solid var(--ca-line); border-radius: 10px; }
+:is(.complete-athlete-refresh, .previous-design) .plan-detail-tabs button { padding: 7px 3px; color: #526b97; background: transparent; border: 0; border-radius: 7px; font-size: .62rem; text-transform: capitalize; }
+:is(.complete-athlete-refresh, .previous-design) .plan-detail-tabs button.active { color: var(--ca-blue); background: #fff; box-shadow: 0 2px 7px rgb(30 75 130 / 9%); font-weight: 800; }
+:is(.complete-athlete-refresh, .previous-design) .plan-overview-content,
+:is(.complete-athlete-refresh, .previous-design) .plan-resources { padding: 13px 15px 95px; }
+:is(.complete-athlete-refresh, .previous-design) .plan-overview-content h3,
+:is(.complete-athlete-refresh, .previous-design) .plan-resources h3 { margin: 0 0 9px; color: var(--ca-navy); font-size: .92rem; }
+:is(.complete-athlete-refresh, .previous-design) .plan-overview-content ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+:is(.complete-athlete-refresh, .previous-design) .plan-overview-content li { display: flex; align-items: center; gap: 7px; color: #405c8d; font-size: .68rem; }
+:is(.complete-athlete-refresh, .previous-design) .plan-overview-content li svg { padding: 2px; color: #fff; background: var(--ca-blue); border-radius: 50%; }
+:is(.complete-athlete-refresh, .previous-design) .single-plan-reader { padding: 10px 12px 95px; }
+:is(.complete-athlete-refresh, .previous-design) .plan-day-strip { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 7px; }
+:is(.complete-athlete-refresh, .previous-design) .plan-day-strip button { flex: 0 0 30px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; color: #54709e; background: var(--ca-ice); border: 1px solid var(--ca-line); border-radius: 50%; font-size: .65rem; }
+:is(.complete-athlete-refresh, .previous-design) .plan-day-strip button.active { color: #fff; background: var(--ca-blue); border-color: var(--ca-blue); }
+:is(.complete-athlete-refresh, .previous-design) .plan-resources { text-align: center; color: var(--ca-copy); }
+:is(.complete-athlete-refresh, .previous-design) .plan-resources > svg { color: var(--ca-blue); }
 
 .complete-athlete-refresh .profile-score-card { padding: 11px; border-radius: 12px; background: #fff; border: 1px solid var(--ca-line); box-shadow: 0 6px 16px rgb(42 96 158 / 7%); }
 .complete-athlete-refresh .profile-score-card > div:first-child { grid-template-columns: auto auto 1fr; }
@@ -11366,3 +11366,48 @@ select {
   border-color: rgba(180, 35, 24, .22);
   font-size: .58rem;
 }
+
+/* Plan details are shared by the restored navy theme and the refresh theme. */
+.previous-design .cinematic-plan-detail {
+  --ca-navy: #0f172a;
+  --ca-blue: #2f6df6;
+  --ca-copy: #52617a;
+  --ca-ice: #edf4ff;
+  --ca-line: #dbe6f5;
+  margin: 0;
+  min-height: 0;
+  border: 1px solid var(--ca-line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.previous-design .cinematic-plan-detail .series-overview {
+  height: clamp(180px, 52vw, 300px);
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+}
+.previous-design .cinematic-plan-detail .series-cover { border-radius: 0; }
+.previous-design .cinematic-back { width: 44px; height: 44px; }
+.previous-design .cinematic-plan-copy { padding: 18px 16px 0; }
+.previous-design .plan-category-badge { font-size: .72rem; }
+.previous-design .cinematic-plan-copy h2 { margin-top: 9px; line-height: 1.15; }
+.previous-design .cinematic-plan-copy > strong { font-size: .85rem; }
+.previous-design .cinematic-plan-copy > p { font-size: .9rem; line-height: 1.55; margin: 10px 0 16px; }
+.previous-design .plan-detail-tabs { margin-top: 14px; }
+.previous-design .plan-detail-tabs button { min-height: 44px; font-size: .8rem; }
+.previous-design .plan-detail-tabs button.active {
+  color: #fff;
+  background: linear-gradient(135deg, #2f6df6, #0f172a);
+}
+.previous-design .plan-overview-content,
+.previous-design .plan-resources { padding: 20px 16px 24px; }
+.previous-design .plan-overview-content h3,
+.previous-design .plan-resources h3 { font-size: 1rem; }
+.previous-design .plan-overview-content li { font-size: .85rem; line-height: 1.45; align-items: flex-start; }
+.previous-design .plan-overview-content li svg { flex: 0 0 20px; width: 20px; height: 20px; }
+.previous-design .plan-overview-content > p { font-size: .85rem; line-height: 1.5; color: var(--ca-copy); }
+.previous-design .single-plan-reader { padding: 16px 12px 24px; }
+.previous-design .plan-day-strip { gap: 8px; }
+.previous-design .plan-day-strip button { flex-basis: 44px; width: 44px; height: 44px; font-size: .85rem; }
+.previous-design .plan-day-strip button:disabled { opacity: 1; color: #77849a; background: #edf0f5; cursor: not-allowed; }
