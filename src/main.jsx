@@ -6427,28 +6427,6 @@ function HomeScreen({
         </div>
       </section>
 
-      <section className="panel progress-snapshot">
-        <PanelTitle icon={<BarChart3 size={18} />} title="Progress Snapshot" />
-        <div className="progress-scoreboard">
-          <span>
-            <strong>{completion}%</strong>
-            Activity today
-          </span>
-          <span>
-            <strong>{streakCount}</strong>
-            Day streak
-          </span>
-          <span>
-            <strong>{averageGoalProgress}%</strong>
-            Goal progress
-          </span>
-          <span>
-            <strong>{planSeriesStats.completed}/{planSeriesStats.total}</strong>
-            Plans completed
-          </span>
-        </div>
-      </section>
-
       {scoreInfoOpen && (
         <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
           <section
