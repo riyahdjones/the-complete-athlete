@@ -6477,7 +6477,7 @@ function HomeScreen({
               </span>
               <span>
                 <strong>+15</strong>
-                Game Day check-in completed
+                Game Day check-in completed · once daily
               </span>
               <span>
                 <strong>+10</strong>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Clock3, History, Pause, Play, RotateCcw, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { GAME_DAY_QUESTIONS, selectGameDayQuestions, toggleGameDayChoice } from './gameDayQuestions';
+import { gameDayCheckInPointKey } from './gameDayRewards';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 const STORAGE_PREFIX = 'tca-game-day-sessions';
@@ -279,7 +280,7 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
       type: 'game_day_check_in_completed',
       points: checkInPoints,
       label: 'Game Day check-in completed',
-      uniqueKey: `game-day-check-in-${finished.id}`,
+      uniqueKey: gameDayCheckInPointKey(userId),
       metadata: { gameDaySessionId: finished.id }
     });
     setSessions((current) => [finished, ...current.filter((session) => session.id !== finished.id)]);
