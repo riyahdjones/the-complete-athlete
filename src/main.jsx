@@ -5196,7 +5196,6 @@ function App() {
           setAthleteStartComplete={setAthleteStartComplete}
           setStandardsHistory={setStandardsHistory}
           setJournal={setJournal}
-          setJournalEntries={setJournalEntries}
           setJournalType={setJournalType}
           setTab={setTab}
           openJournal={() => openAthleteProfileView('journal')}
@@ -5949,7 +5948,6 @@ function HomeScreen({
   setStandardDraft,
   setGoals,
   setJournal,
-  setJournalEntries,
   setJournalType,
   setScores,
   setStandards,
@@ -6415,7 +6413,6 @@ function HomeScreen({
         checkInPoints={pointValues.gameDayCheckInCompleted}
         notifyUser={notifyUser}
         userId={userId}
-        setJournalEntries={setJournalEntries}
         trackAnalyticsEvent={trackAnalyticsEvent}
       />
 
@@ -9190,9 +9187,7 @@ function athleteBadgeGroups({ gameDaySessions = [], goals, journalEntries, plans
   const gameDayCounts = gameDayBadgeCounts(gameDaySessions);
   badgeGroups.push(['Game Day', [
     ['Game Ready', 'You prepared your mind before competition.', gameDayCounts.pregame >= 1, Math.min(gameDayCounts.pregame, 1), 1, 'Routine', 'Complete your first full Game Day pregame routine.'],
-    ['Game Day Veteran', 'Mental preparation has become part of how you compete.', gameDayCounts.pregame >= 5, Math.min(gameDayCounts.pregame, 5), 5, 'Routines', 'Complete 5 full Game Day pregame routines.'],
-    ['Film Study', 'You came back to learn from how you competed.', gameDayCounts.reflections >= 10, Math.min(gameDayCounts.reflections, 10), 10, 'Reflections', 'Complete 10 post-game reflections.'],
-    ['Competitor', 'You prepare, compete, and learn with intention.', gameDayCounts.full >= 25, Math.min(gameDayCounts.full, 25), 25, 'Sessions', 'Complete 25 Game Day sessions with both the pregame routine and post-game reflection.']
+    ['Game Day Veteran', 'Mental preparation has become part of how you compete.', gameDayCounts.pregame >= 5, Math.min(gameDayCounts.pregame, 5), 5, 'Routines', 'Complete 5 full Game Day pregame routines.']
   ]]);
   const lockedDays = new Set(standardsHistory.map((day) => day.date)).size;
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100).length;

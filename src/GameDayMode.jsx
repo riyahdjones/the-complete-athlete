@@ -73,9 +73,7 @@ export function loadGameDaySessions(userId) {
 
 export function gameDayBadgeCounts(sessions) {
   const pregame = sessions.filter((session) => session.pregameCompletedAt).length;
-  const reflections = sessions.filter((session) => session.reflectionCompletedAt).length;
-  const full = sessions.filter((session) => session.pregameCompletedAt && session.reflectionCompletedAt).length;
-  return { pregame, reflections, full };
+  return { pregame };
 }
 
 export function getRecentGameDayContext(userId, limit = 5) {
@@ -203,7 +201,7 @@ function Visualization({ onComplete, onExit, track }) {
   </div>;
 }
 
-export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints = 15, notifyUser, userId, setJournalEntries, trackAnalyticsEvent }) {
+export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints = 15, notifyUser, userId, trackAnalyticsEvent }) {
   const [sessions, setSessions] = useState(() => loadGameDaySessions(userId));
   const [cloudReady, setCloudReady] = useState(() => !isCloudUser(userId));
   const [draft, setDraft] = useState(() => {
@@ -214,8 +212,6 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
   const [detailId, setDetailId] = useState(null);
   const [visualizing, setVisualizing] = useState(false);
   const [readyFinish, setReadyFinish] = useState(false);
-  const [reflectingId, setReflectingId] = useState(null);
-  const [reflection, setReflection] = useState({ confidenceRating: 5, focusRating: 5, effortRating: 5, emotionalControlRating: 5, mistakeResponseRating: 5, didExecuteFocus: '', whatWentWell: '', whatLearned: '', nextGameTakeaway: '' });
 
   useEffect(() => localStorage.setItem(storageKey(STORAGE_PREFIX, userId), JSON.stringify(sessions)), [sessions, userId]);
   useEffect(() => {
@@ -294,22 +290,8 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
     window.setTimeout(() => setReadyFinish(false), 2000);
   }
   function closeFinished() { setOpen(false); setDraft(null); setReadyFinish(false); }
-  function saveReflection() {
-    const session = sessions.find((item) => item.id === reflectingId);
-    if (!session || !reflection.didExecuteFocus || !reflection.whatWentWell.trim() || !reflection.whatLearned.trim() || !reflection.nextGameTakeaway.trim()) return;
-    const completedAt = new Date().toISOString();
-    const next = sessions.map((item) => item.id === reflectingId ? { ...item, reflection: { ...reflection }, reflectionCompletedAt: completedAt, updatedAt: completedAt } : item);
-    setSessions(next);
-    const counts = gameDayBadgeCounts(next);
-    if (counts.reflections === 10) notifyUser?.('Badge unlocked: Film Study', 'You completed 10 post-game reflections.', 'success', { id: 'game-day-badge-film-study', type: 'badge' });
-    if (counts.full === 25) notifyUser?.('Badge unlocked: Competitor', 'You completed 25 full Game Day sessions.', 'success', { id: 'game-day-badge-competitor', type: 'badge' });
-    setJournalEntries((current) => [{ id: crypto.randomUUID(), createdAt: completedAt, pending: true, ownerId: userId, body: `Game Day: ${session.sport}${session.opponentName ? ` vs. ${session.opponentName}` : ''}\nWhat I did well: ${reflection.whatWentWell}\nWhat I learned: ${reflection.whatLearned}\nNext game: ${reflection.nextGameTakeaway}\nExecuted my focus: ${reflection.didExecuteFocus}`, type: 'Game Day Reflection', linkedGoalId: null, date: new Date().toLocaleDateString('en-CA'), time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }, ...current]);
-    track('game_day_reflection_completed', { sessionId: session.id });
-    setReflectingId(null);
-  }
   const summary = draft ? summarize(draft) : null;
   const detail = sessions.find((session) => session.id === detailId);
-  const reflectionSession = sessions.find((session) => session.id === reflectingId);
   return <>
     <section className="game-day-entry">
       <div className="game-day-entry-icon"><Sparkles /></div>
@@ -328,8 +310,7 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
     </div>}
     {visualizing && <Visualization onComplete={finishVisualization} onExit={() => setVisualizing(false)} track={track} />}
 
-    {historyOpen && <div className="game-day-modal game-day-history" role="dialog" aria-modal="true" aria-label="Game Day History"><header><button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history"><X /></button><div><span>Game Day</span><strong>History</strong></div></header><main className="game-day-step">{sessions.length === 0 ? <p className="game-day-empty">Your completed Game Day sessions will appear here.</p> : sessions.map((session) => <article className="game-day-history-card" key={session.id}><button type="button" onClick={() => setDetailId(session.id)}><span>{new Date(session.startedAt).toLocaleDateString()}</span><strong>{session.sport}{session.opponentName ? ` · ${session.opponentName}` : ''}</strong><em>Pregame complete · {session.reflectionCompletedAt ? 'Reflection complete' : 'Reflection pending'}</em></button>{!session.reflectionCompletedAt && <button type="button" onClick={() => { setReflectingId(session.id); setHistoryOpen(false); track('game_day_reflection_started'); }}>Reflect</button>}</article>)}</main></div>}
-    {detail && <div className="game-day-modal game-day-detail" role="dialog" aria-modal="true"><header><button type="button" onClick={() => setDetailId(null)} aria-label="Back"><ArrowLeft /></button><div><span>{new Date(detail.startedAt).toLocaleDateString()}</span><strong>{detail.sport}</strong></div></header><main className="game-day-step"><h2>{detail.opponentName || 'Game Day Session'}</h2>{detail.responses.map((response) => <div className="game-day-response" key={response.id}><span>{response.category}</span><strong>{response.questionTextSnapshot}</strong><p>{Array.isArray(response.answer) ? response.answer.join(' • ') : response.answer}</p></div>)}<p className="game-day-completion-line"><Check /> Visualization completed</p>{detail.reflection && <div className="game-day-response"><span>Post-game reflection</span><strong>What went well</strong><p>{detail.reflection.whatWentWell}</p><strong>What I learned</strong><p>{detail.reflection.whatLearned}</p><strong>Next game</strong><p>{detail.reflection.nextGameTakeaway}</p></div>}</main></div>}
-    {reflectionSession && <div className="game-day-modal game-day-reflection" role="dialog" aria-modal="true"><header><button type="button" onClick={() => setReflectingId(null)} aria-label="Close"><X /></button><div><span>Post-game</span><strong>Reflection</strong></div></header><main className="game-day-step"><h2>Learn from how you competed.</h2>{[['confidenceRating','Confidence'],['focusRating','Focus'],['effortRating','Effort'],['emotionalControlRating','Emotional Control'],['mistakeResponseRating','Response to Mistakes']].map(([key,label]) => <label className="reflection-rating" key={key}><span>{label}</span><strong>{reflection[key]}/10</strong><input min="1" max="10" type="range" value={reflection[key]} onChange={(event) => setReflection({ ...reflection, [key]: Number(event.target.value) })} /></label>)}<label>What did you do well today?<textarea value={reflection.whatWentWell} onChange={(event) => setReflection({ ...reflection, whatWentWell: event.target.value })} /></label><label>What did you learn?<textarea value={reflection.whatLearned} onChange={(event) => setReflection({ ...reflection, whatLearned: event.target.value })} /></label><label>What will you take into the next game?<textarea value={reflection.nextGameTakeaway} onChange={(event) => setReflection({ ...reflection, nextGameTakeaway: event.target.value })} /></label><span>Did you execute your Game Day focus?</span><div className="game-day-chips">{['Yes','Somewhat','No'].map((value) => <button className={reflection.didExecuteFocus === value.toLowerCase() ? 'active' : ''} key={value} type="button" onClick={() => setReflection({ ...reflection, didExecuteFocus: value.toLowerCase() })}>{value}</button>)}</div><button className="game-day-primary" type="button" onClick={saveReflection}>Save Reflection</button></main></div>}
+    {historyOpen && <div className="game-day-modal game-day-history" role="dialog" aria-modal="true" aria-label="Game Day History"><header><button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history"><X /></button><div><span>Game Day</span><strong>History</strong></div></header><main className="game-day-step">{sessions.length === 0 ? <p className="game-day-empty">Your completed Game Day sessions will appear here.</p> : sessions.map((session) => <article className="game-day-history-card" key={session.id}><button type="button" onClick={() => setDetailId(session.id)}><span>{new Date(session.startedAt).toLocaleDateString()}</span><strong>{session.sport}{session.opponentName ? ` · ${session.opponentName}` : ''}</strong><em>Pregame complete</em></button></article>)}</main></div>}
+    {detail && <div className="game-day-modal game-day-detail" role="dialog" aria-modal="true"><header><button type="button" onClick={() => setDetailId(null)} aria-label="Back"><ArrowLeft /></button><div><span>{new Date(detail.startedAt).toLocaleDateString()}</span><strong>{detail.sport}</strong></div></header><main className="game-day-step"><h2>{detail.opponentName || 'Game Day Session'}</h2>{detail.responses.map((response) => <div className="game-day-response" key={response.id}><span>{response.category}</span><strong>{response.questionTextSnapshot}</strong><p>{Array.isArray(response.answer) ? response.answer.join(' • ') : response.answer}</p></div>)}<p className="game-day-completion-line"><Check /> Visualization completed</p></main></div>}
   </>;
 }
