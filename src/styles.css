@@ -11434,3 +11434,99 @@ select {
 }
 .notification-tray .tray-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .achievement-card .badge-requirement { color: #153b70; font-size: 12px; line-height: 1.5; opacity: 1; }
+
+/* Game Day Mode */
+.game-day-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  margin: 16px 0 4px;
+  padding: 22px;
+  overflow: hidden;
+  color: #fff;
+  border: 1px solid rgba(108, 169, 255, .45);
+  border-radius: 20px;
+  background: radial-gradient(circle at 90% 0%, rgba(47, 146, 255, .65), transparent 42%), linear-gradient(135deg, #071a3c 0%, #0d3e91 58%, #0879ff 100%);
+  box-shadow: 0 16px 36px rgba(9, 51, 116, .24);
+}
+.game-day-entry::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(120deg, transparent 15%, rgba(255,255,255,.09) 48%, transparent 70%); }
+.game-day-entry > * { position: relative; z-index: 1; }
+.game-day-entry-icon { display: grid; place-items: center; width: 48px; height: 48px; color: #0d5fe8; border-radius: 15px; background: #fff; box-shadow: 0 8px 20px rgba(0,0,0,.16); }
+.game-day-entry span, .game-day-kicker { display: block; color: #80c0ff; font-size: .69rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.game-day-entry h2 { margin: 4px 0 5px; color: #fff; font-size: 1.16rem; line-height: 1.2; }
+.game-day-entry p { margin: 0; color: rgba(255,255,255,.76); font-size: .78rem; line-height: 1.45; }
+.game-day-start, .game-day-primary { display: flex; align-items: center; justify-content: center; gap: 9px; grid-column: 1 / -1; min-height: 48px; color: #0a2c64; border: 0; border-radius: 13px; background: #fff; font-weight: 900; }
+.game-day-history-link, .game-day-restart-link { display: flex; align-items: center; justify-content: center; gap: 7px; grid-column: 1 / -1; color: rgba(255,255,255,.84); border: 0; background: transparent; font-weight: 750; }
+.game-day-restart-link { color: rgba(255,255,255,.68); font-size: .72rem; }
+
+.game-day-modal { position: fixed; z-index: 10050; inset: 0; display: flex; flex-direction: column; width: min(100%, 540px); margin: auto; color: #0b1732; background: linear-gradient(180deg, #f9fcff, #edf5ff); overflow-y: auto; overscroll-behavior: contain; }
+.game-day-modal > header { position: sticky; z-index: 3; top: 0; display: flex; align-items: center; gap: 14px; min-height: 78px; padding: max(16px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid #dce8f7; background: rgba(249,252,255,.94); backdrop-filter: blur(16px); }
+.game-day-modal > header button { display: grid; place-items: center; width: 42px; height: 42px; color: #173459; border: 1px solid #d7e3f3; border-radius: 50%; background: #fff; }
+.game-day-modal > header span, .game-day-modal > header strong { display: block; }
+.game-day-modal > header span { color: #3771bd; font-size: .66rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.game-day-modal > header strong { margin-top: 3px; color: #0b1732; font-size: .98rem; }
+.game-day-step { display: flex; flex: 1; flex-direction: column; gap: 16px; padding: 30px 22px calc(34px + env(safe-area-inset-bottom)); }
+.game-day-step h2 { margin: 0; color: #071733; font-size: clamp(1.55rem, 6vw, 2.1rem); line-height: 1.13; }
+.game-day-step label { display: grid; gap: 7px; color: #20395e; font-size: .78rem; font-weight: 850; }
+.game-day-step label em { color: #7d8ca2; font-size: .68rem; font-style: normal; font-weight: 650; }
+.game-day-step input, .game-day-step select, .game-day-step textarea { width: 100%; min-height: 50px; padding: 12px 14px; color: #111c32; border: 1px solid #cfdced; border-radius: 13px; outline: none; background: #fff; font: inherit; font-size: 16px; box-sizing: border-box; }
+.game-day-step input:focus, .game-day-step select:focus, .game-day-step textarea:focus { border-color: #2f7df6; box-shadow: 0 0 0 3px rgba(47,125,246,.12); }
+.game-day-primary { margin-top: auto; color: #fff; background: linear-gradient(135deg, #087cff, #102956); box-shadow: 0 10px 24px rgba(17,79,174,.22); }
+.game-day-primary:disabled { opacity: .4; box-shadow: none; }
+.game-day-progress { height: 5px; overflow: hidden; border-radius: 999px; background: #dce8f7; }
+.game-day-progress i { display: block; height: 100%; border-radius: inherit; background: #087cff; transition: width .35s ease; }
+.game-day-answer { min-height: 150px !important; resize: none; line-height: 1.5; }
+.game-day-chips { display: flex; flex-wrap: wrap; gap: 9px; }
+.game-day-chips button { min-height: 42px; padding: 0 15px; color: #234469; border: 1px solid #cbdced; border-radius: 999px; background: #fff; font-weight: 800; }
+.game-day-chips button.active { color: #fff; border-color: #1475f1; background: #1475f1; box-shadow: 0 6px 14px rgba(20,117,241,.2); }
+.game-day-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.game-day-scale button { aspect-ratio: 1; color: #315270; border: 1px solid #ccdbea; border-radius: 12px; background: #fff; font-weight: 900; }
+.game-day-scale button.active { color: #fff; border-color: #1679f4; background: #1679f4; }
+.game-day-summary > div, .game-day-locked > div:not(.locked-check) { padding: 15px 16px; border: 1px solid #d7e4f4; border-radius: 14px; background: #fff; }
+.game-day-summary > div span, .game-day-locked > div span { display: block; color: #4072ac; font-size: .63rem; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.game-day-summary > div strong, .game-day-locked > div strong { display: block; margin-top: 6px; font-size: .94rem; line-height: 1.4; }
+.game-day-summary > section { padding: 25px 20px; color: #fff; text-align: center; border-radius: 18px; background: linear-gradient(145deg, #081b3f, #125bbd); }
+.game-day-summary > section svg { color: #78b9ff; }
+.game-day-summary > section h3 { margin: 10px 0 7px; font-size: 1.25rem; line-height: 1.1; }
+.game-day-summary > section p { margin: 0; color: rgba(255,255,255,.72); font-size: .77rem; line-height: 1.45; }
+
+.game-day-visualization { position: fixed; z-index: 10060; inset: 0; display: grid; place-items: center; overflow: hidden; color: #fff; background: radial-gradient(circle at 50% 45%, #124a9a, #061631 54%, #020814); }
+.visualization-orb { position: absolute; width: min(74vw, 420px); aspect-ratio: 1; border: 1px solid rgba(89,167,255,.22); border-radius: 50%; background: radial-gradient(circle, rgba(40,135,255,.24), rgba(20,80,180,.06) 60%, transparent 70%); box-shadow: 0 0 70px rgba(37,126,255,.2); animation: game-day-breathe 8s ease-in-out infinite; }
+.game-day-visualization.paused .visualization-orb { animation-play-state: paused; }
+@keyframes game-day-breathe { 0%,100% { transform: scale(.82); opacity: .58; } 50% { transform: scale(1.08); opacity: 1; } }
+.visualization-exit { position: absolute; top: max(18px, env(safe-area-inset-top)); right: 18px; display: grid; place-items: center; width: 44px; height: 44px; color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; background: rgba(255,255,255,.08); }
+.visualization-center { position: relative; z-index: 1; display: grid; justify-items: center; gap: 18px; padding: 24px; text-align: center; }
+.visualization-center > span { color: #79b7ff; font-size: .68rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
+.visualization-time { font-size: clamp(4rem, 22vw, 7rem); font-variant-numeric: tabular-nums; line-height: .9; }
+.visualization-center p { min-height: 74px; margin: 0; white-space: pre-line; font-size: clamp(1.1rem, 5vw, 1.5rem); font-weight: 750; line-height: 1.45; animation: game-day-thought 1s ease both; }
+@keyframes game-day-thought { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.visualization-controls { position: absolute; bottom: calc(30px + env(safe-area-inset-bottom)); display: flex; gap: 16px; }
+.visualization-controls button { display: grid; place-items: center; width: 52px; height: 52px; color: #fff; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; background: rgba(255,255,255,.09); }
+.locked-check { display: grid; place-items: center; width: 82px; height: 82px; margin: 15px auto 0; color: #fff; border-radius: 50%; background: #1479f5; box-shadow: 0 0 0 12px rgba(20,121,245,.1), 0 12px 28px rgba(20,121,245,.3); }
+.game-day-locked { text-align: center; }
+.game-day-locked blockquote { margin: 8px 0; color: #315477; font-size: 1rem; font-weight: 800; }
+.game-day-finish { align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle at 50% 34%, rgba(32,132,255,.16), transparent 35%); }
+.game-day-finish > svg { width: 62px; height: 62px; color: #087cff; }
+.game-day-finish p { color: #62728a; }
+.game-day-finish .game-day-primary { width: 100%; margin-top: 18px; }
+.game-day-history-card { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 14px; border: 1px solid #d7e3f1; border-radius: 15px; background: #fff; }
+.game-day-history-card > button:first-child { display: grid; gap: 3px; padding: 0; color: #17243a; text-align: left; border: 0; background: transparent; }
+.game-day-history-card span { color: #5077a5; font-size: .66rem; font-weight: 850; }
+.game-day-history-card strong { font-size: .92rem; }
+.game-day-history-card em { color: #738198; font-size: .69rem; font-style: normal; }
+.game-day-history-card > button:last-child { align-self: center; min-height: 36px; padding: 0 12px; color: #fff; border: 0; border-radius: 10px; background: #1479f5; font-weight: 850; }
+.game-day-response { display: grid; gap: 7px; padding: 16px; border: 1px solid #d7e3f1; border-radius: 14px; background: #fff; }
+.game-day-response span { color: #3873ba; font-size: .62rem; font-weight: 900; letter-spacing: .09em; }
+.game-day-response strong { font-size: .8rem; }
+.game-day-response p { margin: 0 0 4px; color: #50627c; font-size: .8rem; line-height: 1.5; white-space: pre-wrap; }
+.game-day-completion-line { display: flex; align-items: center; gap: 8px; color: #087850; font-weight: 850; }
+.reflection-rating { grid-template-columns: 1fr auto; align-items: center; padding: 12px 14px; border: 1px solid #d7e3f1; border-radius: 13px; background: #fff; }
+.reflection-rating input { grid-column: 1 / -1; min-height: 28px; padding: 0; border: 0; box-shadow: none; }
+.game-day-empty { color: #66768d; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .visualization-orb { animation: none; }
+  .visualization-center p { animation: game-day-opacity .5s ease both; }
+  @keyframes game-day-opacity { from { opacity: 0; } to { opacity: 1; } }
+}

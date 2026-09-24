@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { createCollegeRecruitingParentGuide } from './collegeRecruitingParentGuide';
 import { createPerformancePlanSeeds } from './performancePlans';
+import GameDayMode, { gameDayBadgeCounts, loadGameDaySessions } from './GameDayMode';
 import {
   canUseNativePurchases,
   loadRevenueCatSubscription,
@@ -5194,6 +5195,7 @@ function App() {
           setAthleteStartComplete={setAthleteStartComplete}
           setStandardsHistory={setStandardsHistory}
           setJournal={setJournal}
+          setJournalEntries={setJournalEntries}
           setJournalType={setJournalType}
           setTab={setTab}
           openJournal={() => openAthleteProfileView('journal')}
@@ -5210,6 +5212,7 @@ function App() {
           submittedToday={submittedToday}
           todayPoints={todayPoints}
           trackAnalyticsEvent={trackAnalyticsEvent}
+          userId={authSession?.id}
         />
       ),
       plans: (
@@ -5310,6 +5313,7 @@ function App() {
             standardsHistory={standardsHistory}
             streakCount={streakCount}
             setProfileView={setProfileView}
+            userId={authSession?.id}
           />
         ) : profileView === 'support' ? (
           <AthleteSupportScreen setProfileView={setProfileView} />
@@ -5944,6 +5948,7 @@ function HomeScreen({
   setStandardDraft,
   setGoals,
   setJournal,
+  setJournalEntries,
   setJournalType,
   setScores,
   setStandards,
@@ -5965,7 +5970,8 @@ function HomeScreen({
   streakCount,
   submittedToday,
   todayPoints,
-  trackAnalyticsEvent
+  trackAnalyticsEvent,
+  userId
 }) {
   const [standardsFeedback, setStandardsFeedback] = useState('');
   const [standardsHistoryOpen, setStandardsHistoryOpen] = useState(false);
@@ -6426,6 +6432,14 @@ function HomeScreen({
           )}
         </div>
       </section>
+
+      <GameDayMode
+        athleteProfile={athleteProfile}
+        notifyUser={notifyUser}
+        userId={userId}
+        setJournalEntries={setJournalEntries}
+        trackAnalyticsEvent={trackAnalyticsEvent}
+      />
 
       {scoreInfoOpen && (
         <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
@@ -8391,6 +8405,7 @@ function JournalScreen({
         >
           <option>Daily Reflection</option>
           <option>Game Reflection</option>
+          <option>Game Day Reflection</option>
           <option>Open Thoughts</option>
           <option>Pressure Moment</option>
         </select>
@@ -9126,7 +9141,7 @@ function AthleteStatsScreen({ athleteScore, goals, plans, planProgress, standard
   );
 }
 
-function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount }) {
+function athleteBadgeGroups({ gameDaySessions = [], goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount }) {
   const completedActivities = standardsHistory.reduce((total, day) => total + Number(day.completed || 0), 0);
   const completedLessons = Object.values(planProgress).filter(Boolean).length;
   const planSeries = buildPlanLibrary(plans);
@@ -9180,6 +9195,13 @@ function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standa
       ['Leader', 'Leadership begins with the standard you live by.', leadershipEarned, leadershipEarned ? 1 : 0, 1, 'Leadership Action']
     ]]
   ];
+  const gameDayCounts = gameDayBadgeCounts(gameDaySessions);
+  badgeGroups.push(['Game Day', [
+    ['Game Ready', 'You prepared your mind before competition.', gameDayCounts.pregame >= 1, Math.min(gameDayCounts.pregame, 1), 1, 'Routine', 'Complete your first full Game Day pregame routine.'],
+    ['Game Day Veteran', 'Mental preparation has become part of how you compete.', gameDayCounts.pregame >= 5, Math.min(gameDayCounts.pregame, 5), 5, 'Routines', 'Complete 5 full Game Day pregame routines.'],
+    ['Film Study', 'You came back to learn from how you competed.', gameDayCounts.reflections >= 10, Math.min(gameDayCounts.reflections, 10), 10, 'Reflections', 'Complete 10 post-game reflections.'],
+    ['Competitor', 'You prepare, compete, and learn with intention.', gameDayCounts.full >= 25, Math.min(gameDayCounts.full, 25), 25, 'Sessions', 'Complete 25 Game Day sessions with both the pregame routine and post-game reflection.']
+  ]]);
   const lockedDays = new Set(standardsHistory.map((day) => day.date)).size;
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100).length;
   const requirements = [
@@ -9212,9 +9234,9 @@ function athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standa
   return badgeGroups;
 }
 
-function AchievementsScreen({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount, setProfileView }) {
+function AchievementsScreen({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount, setProfileView, userId }) {
   const [achievementFilter, setAchievementFilter] = useState('All');
-  const badgeGroups = athleteBadgeGroups({ goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount });
+  const badgeGroups = athleteBadgeGroups({ gameDaySessions: loadGameDaySessions(userId), goals, journalEntries, plans, planProgress, standards, standardsHistory, streakCount });
   const earned = badgeGroups.flatMap(([, badges]) => badges).filter((badge) => badge[2]).length;
 
   return (

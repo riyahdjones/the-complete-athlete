@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const body = source.slice(source.indexOf('function athleteBadgeGroups('), source.indexOf('\nfunction AchievementsScreen('));
-const groups = new Function('buildPlanLibrary', `${body}; return athleteBadgeGroups;`)((plans) => plans);
+const groups = new Function('buildPlanLibrary', 'gameDayBadgeCounts', `${body}; return athleteBadgeGroups;`)((plans) => plans, () => ({ pregame: 0, reflections: 0, full: 0 }));
 const fixture = () => ({ goals: Array.from({length:20}, (_,id)=>({id,progress:100})), journalEntries:[], plans:Array.from({length:10},(_,id)=>({title:`Plan ${id}`,plans:[{id}]})),planProgress:Object.fromEntries(Array.from({length:10},(_,id)=>[id,true])),standards:[],standardsHistory:Array.from({length:365},(_,id)=>({date:String(id),completed:1})),streakCount:0 });
 const prestige = (input) => groups(input).at(-1)[1][0];
 test('Prestige requires all three lifetime milestones, without requiring a current streak',()=>{assert.equal(prestige(fixture())[2],true); for(const field of ['goals','plans','standardsHistory']){const data=fixture();data[field].pop();assert.equal(prestige(data)[2],false,field);}});
