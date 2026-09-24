@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Clock3, History, Pause, Play, RotateCcw, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
-import { GAME_DAY_QUESTIONS, selectGameDayQuestions } from './gameDayQuestions';
+import { GAME_DAY_QUESTIONS, selectGameDayQuestions, toggleGameDayChoice } from './gameDayQuestions';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
-const SPORTS = ['Baseball', 'Softball', 'Football', 'Basketball', 'Soccer', 'Volleyball', 'Track & Field', 'Wrestling', 'Lacrosse', 'Tennis', 'Golf', 'Swimming', 'Cheer', 'Other'];
 const STORAGE_PREFIX = 'tca-game-day-sessions';
 const DRAFT_PREFIX = 'tca-game-day-draft';
 const visualizationThoughts = [
@@ -104,12 +103,9 @@ function QuestionInput({ question, value, onChange }) {
   if (question.responseType === 'scale') {
     return <div className="game-day-scale">{Array.from({ length: 10 }, (_, index) => index + 1).map((number) => <button className={Number(value) === number ? 'active' : ''} key={number} onClick={() => onChange(String(number))} type="button">{number}</button>)}</div>;
   }
-  if (question.responseType === 'single_select') {
-    return <div className="game-day-chips">{question.options.map((option) => <button className={value === option ? 'active' : ''} key={option} onClick={() => onChange(option)} type="button">{option}</button>)}</div>;
-  }
-  if (question.responseType === 'multi_select') {
-    const values = Array.isArray(value) ? value : [];
-    return <div className="game-day-chips">{question.options.map((option) => <button className={values.includes(option) ? 'active' : ''} key={option} onClick={() => onChange(values.includes(option) ? values.filter((item) => item !== option) : values.length < question.maxSelections ? [...values, option] : values)} type="button">{option}</button>)}</div>;
+  if (question.responseType === 'single_select' || question.responseType === 'multi_select') {
+    const values = Array.isArray(value) ? value : value ? [value] : [];
+    return <><p className="game-day-choice-hint">Choose up to 3</p><div className="game-day-chips">{question.options.map((option) => <button className={values.includes(option) ? 'active' : ''} key={option} onClick={() => onChange(toggleGameDayChoice(values, option, 3))} type="button">{option}</button>)}</div></>;
   }
   return <textarea autoFocus className="game-day-answer" maxLength={220} placeholder={question.responseType === 'statement_completion' ? 'Complete the statement…' : 'Keep it short and real…'} value={value || ''} onChange={(event) => onChange(event.target.value)} />;
 }
@@ -203,15 +199,19 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
 
   function track(event, data = {}) { trackAnalyticsEvent?.(event, data, { area: 'game_day' }); }
   function begin(startOver = false) {
-    if (draft && !startOver) { setOpen(true); return; }
+    if (draft && !startOver) {
+      if (draft.stage === 'setup') setDraft((current) => ({ ...current, stage: 'questions', sport: current.sport || athleteProfile?.sport || 'Other' }));
+      setOpen(true);
+      return;
+    }
     const questions = selectGameDayQuestions(sessions);
-    setDraft({ id: crypto.randomUUID(), userId, stage: 'setup', sport: athleteProfile?.sport || '', opponentName: '', eventTime: '', startedAt: new Date().toISOString(), questionIds: questions.map((question) => question.id), responses: [], questionIndex: 0, visualizationCompleted: false });
+    setDraft({ id: crypto.randomUUID(), userId, stage: 'questions', sport: athleteProfile?.sport || 'Other', startedAt: new Date().toISOString(), questionIds: questions.map((question) => question.id), responses: [], questionIndex: 0, visualizationCompleted: false });
     setOpen(true);
     track('game_day_started');
   }
   const questions = useMemo(() => (draft?.questionIds || []).map((id) => GAME_DAY_QUESTIONS.find((question) => question.id === id)).filter(Boolean), [draft?.questionIds]);
   const activeQuestion = questions[draft?.questionIndex || 0];
-  const activeResponse = draft?.responses?.find((response) => response.questionId === activeQuestion?.id)?.answer ?? (activeQuestion?.responseType === 'multi_select' ? [] : '');
+  const activeResponse = draft?.responses?.find((response) => response.questionId === activeQuestion?.id)?.answer ?? (activeQuestion?.responseType === 'multi_select' || activeQuestion?.responseType === 'single_select' ? [] : '');
   function setAnswer(answer) {
     setDraft((current) => ({ ...current, responses: [...current.responses.filter((response) => response.questionId !== activeQuestion.id), { id: crypto.randomUUID(), gameDaySessionId: current.id, questionId: activeQuestion.id, category: activeQuestion.category, questionTextSnapshot: activeQuestion.questionText, answer, createdAt: new Date().toISOString() }] }));
   }
@@ -265,7 +265,6 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
 
     {open && draft && <div className="game-day-modal" role="dialog" aria-modal="true" aria-label="Game Day Mode">
       <header><button type="button" onClick={() => setOpen(false)} aria-label="Save and exit"><X /></button><div><span>Game Day Mode</span><strong>{draft.stage === 'questions' ? `${draft.questionIndex + 1} of 3` : 'Prepare. Trust. Compete.'}</strong></div></header>
-      {draft.stage === 'setup' && <main className="game-day-step"><span className="game-day-kicker">Check in</span><h2>What sport are you competing in today?</h2><select value={draft.sport} onChange={(event) => setDraft({ ...draft, sport: event.target.value })}><option value="">Choose your sport</option>{SPORTS.map((sport) => <option key={sport}>{sport}</option>)}</select><label>Opponent / Event Name <em>Optional</em><input value={draft.opponentName} onChange={(event) => setDraft({ ...draft, opponentName: event.target.value })} /></label><label>Game Time <em>Optional</em><input type="time" value={draft.eventTime} onChange={(event) => setDraft({ ...draft, eventTime: event.target.value })} /></label><button className="game-day-primary" disabled={!draft.sport} type="button" onClick={() => setDraft({ ...draft, stage: 'questions' })}>Continue <ArrowRight /></button></main>}
       {draft.stage === 'questions' && activeQuestion && <main className="game-day-step game-day-question"><div className="game-day-progress"><i style={{ width: `${((draft.questionIndex + 1) / 3) * 100}%` }} /></div><span className="game-day-kicker">{activeQuestion.category}</span><h2>{activeQuestion.questionText}</h2><QuestionInput question={activeQuestion} value={activeResponse} onChange={setAnswer} /><button className="game-day-primary" disabled={!activeResponse?.length} type="button" onClick={advanceQuestion}>{draft.questionIndex === 2 ? 'Build My Game Day' : 'Next'} <ArrowRight /></button></main>}
       {draft.stage === 'summary' && <main className="game-day-step game-day-summary"><span className="game-day-kicker">Your Game Day</span><h2>You identified what matters.</h2><div><span>Today’s Focus</span><strong>{summary.focus}</strong></div>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<div><span>Game Day Mindset</span><strong>{summary.mindset}</strong></div><section><Clock3 /><h3>60 Second<br />Game Day Visualization</h3><p>Put your headphones in. Close your eyes. See it before you do it.</p></section><button className="game-day-primary" type="button" onClick={() => { setVisualizing(true); track('game_day_visualization_started'); }}>Begin Visualization <Play /></button></main>}
       {draft.stage === 'locked' && <main className="game-day-step game-day-locked"><div className="locked-check"><Check /></div><span className="game-day-kicker">Locked in.</span><h2>{summary.focus}</h2>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<blockquote>{summary.mindset}</blockquote><button className="game-day-primary" type="button" onClick={lockIn}>I’m Ready</button></main>}

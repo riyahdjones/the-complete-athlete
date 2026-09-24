@@ -105,3 +105,9 @@ export function selectGameDayQuestions(sessionHistory, random = Math.random) {
   }
   return selected;
 }
+
+export function toggleGameDayChoice(currentValue, option, maxSelections = 3) {
+  const values = Array.isArray(currentValue) ? currentValue : currentValue ? [currentValue] : [];
+  if (values.includes(option)) return values.filter((value) => value !== option);
+  return values.length < maxSelections ? [...values, option] : values;
+}

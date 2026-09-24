@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GAME_DAY_QUESTIONS, selectGameDayQuestions } from '../src/gameDayQuestions.js';
+import { GAME_DAY_QUESTIONS, selectGameDayQuestions, toggleGameDayChoice } from '../src/gameDayQuestions.js';
 
 test('question bank contains all 80 active questions', () => {
   assert.equal(GAME_DAY_QUESTIONS.length, 80);
@@ -17,4 +17,14 @@ test('questions from the last five sessions are excluded when alternatives exist
   const recent = [{ questionIds: ['gd-confidence-1', 'gd-focus-1', 'gd-controllables-1'] }];
   const selected = selectGameDayQuestions(recent, () => 0.42);
   assert.equal(selected.some((question) => recent[0].questionIds.includes(question.id)), false);
+});
+
+test('picker questions support up to three choices and allow deselection', () => {
+  let selected = [];
+  selected = toggleGameDayChoice(selected, 'Calm');
+  selected = toggleGameDayChoice(selected, 'Focused');
+  selected = toggleGameDayChoice(selected, 'Confident');
+  selected = toggleGameDayChoice(selected, 'Aggressive');
+  assert.deepEqual(selected, ['Calm', 'Focused', 'Confident']);
+  assert.deepEqual(toggleGameDayChoice(selected, 'Focused'), ['Calm', 'Confident']);
 });

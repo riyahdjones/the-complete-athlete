@@ -11480,6 +11480,7 @@ select {
 .game-day-chips { display: flex; flex-wrap: wrap; gap: 9px; }
 .game-day-chips button { min-height: 42px; padding: 0 15px; color: #234469; border: 1px solid #cbdced; border-radius: 999px; background: #fff; font-weight: 800; }
 .game-day-chips button.active { color: #fff; border-color: #1475f1; background: #1475f1; box-shadow: 0 6px 14px rgba(20,117,241,.2); }
+.game-day-choice-hint { margin: -5px 0 -5px; color: #6b7b91; font-size: .72rem; font-weight: 750; }
 .game-day-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .game-day-scale button { aspect-ratio: 1; color: #315270; border: 1px solid #ccdbea; border-radius: 12px; background: #fff; font-weight: 900; }
 .game-day-scale button.active { color: #fff; border-color: #1679f4; background: #1679f4; }
@@ -11530,3 +11531,67 @@ select {
   .visualization-center p { animation: game-day-opacity .5s ease both; }
   @keyframes game-day-opacity { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* Premium Day Complete result. Shared by the restored navy app theme. */
+.day-complete-overlay {
+  position: fixed !important;
+  z-index: 10040 !important;
+  inset: 0 !important;
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: min(100%, 540px);
+  min-height: 100dvh;
+  margin: auto;
+  padding: max(34px, env(safe-area-inset-top)) 22px max(28px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  color: #0b1732;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 13%, rgba(31, 136, 255, .2), transparent 28%),
+    linear-gradient(160deg, #ffffff 0%, #f1f7ff 55%, #eaf3ff 100%) !important;
+}
+.day-complete-check {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 92px;
+  height: 92px;
+  color: #fff;
+  border: 11px solid #cce7ff;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #1584ff, #285ee8);
+  box-shadow: 0 0 0 8px rgba(28, 126, 245, .08), 0 16px 36px rgba(25, 102, 219, .25);
+}
+.day-complete-check svg { width: 44px; height: 44px; stroke-width: 3; }
+.day-complete-overlay h2 { margin: 24px 0 2px; color: #08172f; font-size: clamp(1.85rem, 8vw, 2.35rem); line-height: 1; letter-spacing: -.04em; }
+.day-complete-points { display: block; color: #1478f2; font-size: 1.35rem; line-height: 1.2; }
+.day-complete-overlay > p { margin: 8px 0 22px; color: #65748b; font-size: .92rem; }
+.day-complete-results {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  max-width: 430px;
+  overflow: hidden;
+  border: 1px solid #d3e1f2;
+  border-radius: 16px;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 10px 28px rgba(24, 64, 116, .08);
+}
+.day-complete-results span { display: grid !important; align-content: center; min-width: 0; min-height: 76px; padding: 11px 6px; border-right: 1px solid #dce7f4; }
+.day-complete-results span:last-child { border-right: 0; }
+.day-complete-results em, .day-complete-results strong { display: block !important; }
+.day-complete-results em { color: #728198; font-size: .65rem; font-style: normal; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+.day-complete-results strong { margin-top: 5px; color: #0c1a32; font-size: clamp(.78rem, 3.4vw, .96rem); white-space: nowrap; }
+.day-complete-overlay blockquote { max-width: 390px; margin: 22px auto 12px; color: #375271; font-size: .86rem; font-style: italic; line-height: 1.5; }
+.day-complete-overlay .primary-action,
+.day-complete-overlay .day-complete-secondary {
+  width: 100%;
+  max-width: 430px;
+  min-height: 50px;
+  border-radius: 14px;
+}
+.day-complete-overlay .primary-action { margin-top: 8px; color: #fff; border: 0; background: linear-gradient(135deg, #1682ff, #102650); box-shadow: 0 12px 28px rgba(16, 67, 145, .22); }
+.day-complete-overlay .day-complete-secondary { margin-top: 9px; color: #164b91; border: 1px solid #cbdcf0; background: rgba(255,255,255,.75); box-shadow: none; }

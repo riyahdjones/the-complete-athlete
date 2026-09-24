@@ -6409,6 +6409,14 @@ function HomeScreen({
         </div>
       </section>
 
+      <GameDayMode
+        athleteProfile={athleteProfile}
+        notifyUser={notifyUser}
+        userId={userId}
+        setJournalEntries={setJournalEntries}
+        trackAnalyticsEvent={trackAnalyticsEvent}
+      />
+
       <section className="panel athlete-score-panel">
         <PanelTitle icon={<Star size={18} />} title="Complete Athlete Score" action={`Today +${todayPoints}`} />
         <div className="score-hero">
@@ -6432,14 +6440,6 @@ function HomeScreen({
           )}
         </div>
       </section>
-
-      <GameDayMode
-        athleteProfile={athleteProfile}
-        notifyUser={notifyUser}
-        userId={userId}
-        setJournalEntries={setJournalEntries}
-        trackAnalyticsEvent={trackAnalyticsEvent}
-      />
 
       {scoreInfoOpen && (
         <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
