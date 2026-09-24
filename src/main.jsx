@@ -6986,7 +6986,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [planSearch, setPlanSearch] = useState('');
-  const [planDetailTab, setPlanDetailTab] = useState('overview');
+  const [planDetailTab, setPlanDetailTab] = useState('summary');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
   const continueSeries = planLibrary.find((series) => series.openCount > 0 && series.completedCount < series.plans.length) ?? planLibrary[0];
@@ -6999,9 +6999,6 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
     return !query || `${series.title} ${series.tagline} ${series.category}`.toLowerCase().includes(query);
   });
   const visiblePlans = selectedSeries?.plans ?? [];
-  const openCount = visiblePlans.filter((plan) => plan.unlocked).length;
-  const completedCount = visiblePlans.filter((plan) => plan.completedAt).length;
-  const lockedCount = visiblePlans.length - openCount;
   const defaultVisiblePlan = visiblePlans.find((plan) => plan.unlocked && !plan.completedAt)
     ?? [...visiblePlans].reverse().find((plan) => plan.unlocked)
     ?? visiblePlans[0];
@@ -7023,7 +7020,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
 
   function openSeries(series, source) {
     setSelectedSeriesId(series.id);
-    setPlanDetailTab('overview');
+    setPlanDetailTab('summary');
     setSelectedPlanId('');
     trackAnalyticsEvent?.('plan_series_opened', {
       source,
@@ -7108,17 +7105,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
           <strong>{visiblePlans.length} Days</strong>
           <p>{selectedSeries.tagline}</p>
           <button className="primary-action full" type="button" onClick={() => setPlanDetailTab('lessons')}>Continue Plan <ArrowRight size={18}/></button>
-          <div className="plan-detail-tabs" role="tablist">
-            {['overview', 'lessons', 'resources'].map((detailTab) => <button className={planDetailTab === detailTab ? 'active' : ''} key={detailTab} onClick={() => setPlanDetailTab(detailTab)} type="button">{detailTab}</button>)}
-          </div>
         </section>
-        {planDetailTab === 'overview' && <section className="plan-overview-content">
-          <h3>What You’ll Learn</h3>
-          <ul>
-            {visiblePlans.slice(0, 5).map((plan) => <li key={plan.id}><Check size={14}/><span>{plan.title}</span></li>)}
-          </ul>
-          {trialPlanMode ? <p>Day 1 is open during your trial. Membership unlocks the complete plan.</p> : lockedCount > 0 && <p>Complete each day to unlock the next lesson.</p>}
-        </section>}
         {planDetailTab === 'lessons' && <div className="plan-reader-stack single-plan-reader">
           <div className="plan-day-strip" aria-label="Plan days">
             {visiblePlans.map((plan, index) => <button className={String(plan.id) === String(selectedVisiblePlan?.id) ? 'active' : ''} disabled={!plan.unlocked} key={plan.id} onClick={() => setSelectedPlanId(String(plan.id))} type="button">{plan.completedAt ? <Check size={13}/> : plan.unlocked ? index + 1 : <LockKeyhole size={12}/>}</button>)}
@@ -7164,7 +7151,6 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
             </section>
           )}
         </div>}
-        {planDetailTab === 'resources' && <section className="plan-resources"><BookOpen size={24}/><h3>Plan Resources</h3><p>Exercises, reflection prompts, and practice installs are included inside each unlocked lesson.</p><button className="secondary-action" type="button" onClick={() => setPlanDetailTab('lessons')}>Open Lessons</button></section>}
       </div>
     );
   }
