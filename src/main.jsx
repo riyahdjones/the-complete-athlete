@@ -243,6 +243,7 @@ const pointValues = {
   goalCompleted: 150,
   planLessonCompleted: 10,
   planSeriesCompleted: 100,
+  gameDayCheckInCompleted: 15,
   streakBonusPerDay: 5,
   streakBonusCap: 25
 };
@@ -6410,6 +6411,8 @@ function HomeScreen({
 
       <GameDayMode
         athleteProfile={athleteProfile}
+        awardPoints={awardPoints}
+        checkInPoints={pointValues.gameDayCheckInCompleted}
         notifyUser={notifyUser}
         userId={userId}
         setJournalEntries={setJournalEntries}
@@ -6473,6 +6476,10 @@ function HomeScreen({
                 Reflection saved
               </span>
               <span>
+                <strong>+15</strong>
+                Game Day check-in completed
+              </span>
+              <span>
                 <strong>+10</strong>
                 Goal added
               </span>
@@ -6489,7 +6496,7 @@ function HomeScreen({
                 Full plan series completed
               </span>
             </div>
-            <p className="score-info-note">Your score is the total proof you have stacked through daily action, reflection, goals, and performance plans.</p>
+            <p className="score-info-note">Your score is the total proof you have stacked through daily action, reflection, Game Day preparation, goals, and performance plans.</p>
           </section>
         </div>
       )}

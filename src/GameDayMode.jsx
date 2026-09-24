@@ -202,7 +202,7 @@ function Visualization({ onComplete, onExit, track }) {
   </div>;
 }
 
-export default function GameDayMode({ athleteProfile, notifyUser, userId, setJournalEntries, trackAnalyticsEvent }) {
+export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints = 15, notifyUser, userId, setJournalEntries, trackAnalyticsEvent }) {
   const [sessions, setSessions] = useState(() => loadGameDaySessions(userId));
   const [cloudReady, setCloudReady] = useState(() => !isCloudUser(userId));
   const [draft, setDraft] = useState(() => {
@@ -275,6 +275,13 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
   function lockIn() {
     const finishedAt = new Date().toISOString();
     const finished = { ...draft, stage: 'complete', pregameCompletedAt: finishedAt, lockedInAt: finishedAt, updatedAt: finishedAt };
+    awardPoints?.({
+      type: 'game_day_check_in_completed',
+      points: checkInPoints,
+      label: 'Game Day check-in completed',
+      uniqueKey: `game-day-check-in-${finished.id}`,
+      metadata: { gameDaySessionId: finished.id }
+    });
     setSessions((current) => [finished, ...current.filter((session) => session.id !== finished.id)]);
     const nextPregameCount = gameDayBadgeCounts(sessions).pregame + 1;
     if (nextPregameCount === 1 || nextPregameCount === 5) {
