@@ -10,7 +10,8 @@ const visualizationThoughts = [
   [16, 'Feel calm.\nFeel ready.'], [22, 'See yourself playing fast and free.'],
   [28, 'Trust what you have trained.'], [34, 'See adversity happen.'],
   [40, 'Watch yourself respond.'], [46, 'Next play.\nNext moment.'],
-  [51, 'Compete with confidence.'], [56, 'You are ready.']
+  [52, 'Compete with confidence.'], [60, 'Stay present.'], [68, 'Trust your game.'],
+  [76, 'Play fast.\nPlay free.'], [84, 'You are ready.']
 ];
 
 function storageKey(prefix, userId) {
@@ -111,21 +112,55 @@ function QuestionInput({ question, value, onChange }) {
 }
 
 function Visualization({ onComplete, onExit, track }) {
-  const [seconds, setSeconds] = useState(60);
+  const [seconds, setSeconds] = useState(90);
   const [playing, setPlaying] = useState(true);
   const [soundOn, setSoundOn] = useState(true);
-  const audioRef = useRef(null);
+  const firstAudioRef = useRef(null);
+  const secondAudioRef = useRef(null);
+  const activeAudioRef = useRef(0);
+  const crossfadingRef = useRef(false);
   useEffect(() => {
     if (!playing) return undefined;
     const timer = window.setInterval(() => setSeconds((current) => Math.max(0, current - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [playing]);
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.volume = seconds > 57 ? (60 - seconds) / 30 : seconds < 4 ? seconds / 30 : 0.1;
-    if (playing && soundOn) audio.play().catch(() => {});
-    else audio.pause();
+    const audios = [firstAudioRef.current, secondAudioRef.current].filter(Boolean);
+    if (!playing || !soundOn) {
+      audios.forEach((audio) => audio.pause());
+      return;
+    }
+    if (crossfadingRef.current) audios.forEach((audio) => audio.play().catch(() => {}));
+    else audios[activeAudioRef.current]?.play().catch(() => {});
+  }, [playing, soundOn]);
+  useEffect(() => {
+    if (!playing || !soundOn) return undefined;
+    const timer = window.setInterval(() => {
+      const audios = [firstAudioRef.current, secondAudioRef.current];
+      const activeIndex = activeAudioRef.current;
+      const active = audios[activeIndex];
+      const incoming = audios[1 - activeIndex];
+      if (!active || !incoming) return;
+      const envelope = seconds > 87 ? (90 - seconds) / 3 : seconds < 4 ? seconds / 3 : 1;
+      if (!crossfadingRef.current && active.currentTime >= 57) {
+        incoming.currentTime = 0;
+        incoming.volume = 0;
+        incoming.play().catch(() => {});
+        crossfadingRef.current = true;
+      }
+      if (crossfadingRef.current) {
+        const progress = Math.min(1, Math.max(0, (active.currentTime - 57) / 3));
+        active.volume = 0.1 * (1 - progress) * envelope;
+        incoming.volume = 0.1 * progress * envelope;
+        if (progress >= 1) {
+          active.pause();
+          active.currentTime = 0;
+          activeAudioRef.current = 1 - activeIndex;
+          crossfadingRef.current = false;
+        }
+      } else active.volume = 0.1 * envelope;
+    }, 100);
+    return () => window.clearInterval(timer);
   }, [playing, soundOn, seconds]);
   useEffect(() => {
     if (seconds === 0) {
@@ -135,10 +170,23 @@ function Visualization({ onComplete, onExit, track }) {
     }
     return undefined;
   }, [seconds, onComplete, track]);
-  const elapsed = 60 - seconds;
+  const elapsed = 90 - seconds;
   const thought = [...visualizationThoughts].reverse().find(([start]) => elapsed >= start)?.[1] || 'Breathe.';
+  function restart() {
+    [firstAudioRef.current, secondAudioRef.current].filter(Boolean).forEach((audio) => {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = 0;
+    });
+    activeAudioRef.current = 0;
+    crossfadingRef.current = false;
+    setSeconds(90);
+    setPlaying(true);
+    if (soundOn && firstAudioRef.current) firstAudioRef.current.play().catch(() => {});
+  }
   return <div className={`game-day-visualization ${playing ? 'playing' : 'paused'}`} role="dialog" aria-modal="true" aria-label="Game Day visualization">
-    <audio ref={audioRef} loop preload="metadata" src="/audio/game-day-visualization.mp4" />
+    <audio ref={firstAudioRef} preload="auto" src="/audio/game-day-visualization.mp4" />
+    <audio ref={secondAudioRef} preload="auto" src="/audio/game-day-visualization.mp4" />
     <div className="visualization-orb" aria-hidden="true" />
     <button className="visualization-exit" type="button" onClick={onExit} aria-label="Exit visualization"><X /></button>
     <div className="visualization-center">
@@ -149,7 +197,7 @@ function Visualization({ onComplete, onExit, track }) {
     <div className="visualization-controls">
       <button type="button" onClick={() => setSoundOn((current) => !current)} aria-label={soundOn ? 'Turn sound off' : 'Turn sound on'}>{soundOn ? <Volume2 /> : <VolumeX />}</button>
       <button type="button" onClick={() => setPlaying((current) => !current)} aria-label={playing ? 'Pause' : 'Resume'}>{playing ? <Pause /> : <Play />}</button>
-      <button type="button" onClick={() => { setSeconds(60); setPlaying(true); }} aria-label="Restart"><RotateCcw /></button>
+      <button type="button" onClick={restart} aria-label="Restart"><RotateCcw /></button>
     </div>
   </div>;
 }
@@ -266,7 +314,7 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
     {open && draft && <div className="game-day-modal" role="dialog" aria-modal="true" aria-label="Game Day Mode">
       <header><button type="button" onClick={() => setOpen(false)} aria-label="Save and exit"><X /></button><div><span>Game Day Mode</span><strong>{draft.stage === 'questions' ? `${draft.questionIndex + 1} of 3` : 'Prepare. Trust. Compete.'}</strong></div></header>
       {draft.stage === 'questions' && activeQuestion && <main className="game-day-step game-day-question"><div className="game-day-progress"><i style={{ width: `${((draft.questionIndex + 1) / 3) * 100}%` }} /></div><span className="game-day-kicker">{activeQuestion.category}</span><h2>{activeQuestion.questionText}</h2><QuestionInput question={activeQuestion} value={activeResponse} onChange={setAnswer} /><button className="game-day-primary" disabled={!activeResponse?.length} type="button" onClick={advanceQuestion}>{draft.questionIndex === 2 ? 'Build My Game Day' : 'Next'} <ArrowRight /></button></main>}
-      {draft.stage === 'summary' && <main className="game-day-step game-day-summary"><span className="game-day-kicker">Your Game Day</span><h2>You identified what matters.</h2><div><span>Today’s Focus</span><strong>{summary.focus}</strong></div>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<div><span>Game Day Mindset</span><strong>{summary.mindset}</strong></div><section><Clock3 /><h3>60 Second<br />Game Day Visualization</h3><p>Put your headphones in. Close your eyes. See it before you do it.</p></section><button className="game-day-primary" type="button" onClick={() => { setVisualizing(true); track('game_day_visualization_started'); }}>Begin Visualization <Play /></button></main>}
+      {draft.stage === 'summary' && <main className="game-day-step game-day-summary"><span className="game-day-kicker">Your Game Day</span><h2>You identified what matters.</h2><div><span>Today’s Focus</span><strong>{summary.focus}</strong></div>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<div><span>Game Day Mindset</span><strong>{summary.mindset}</strong></div><section><Clock3 /><h3>90 Second<br />Game Day Visualization</h3><p>Put your headphones in. Close your eyes. See it before you do it.</p></section><button className="game-day-primary" type="button" onClick={() => { setVisualizing(true); track('game_day_visualization_started'); }}>Begin Visualization <Play /></button></main>}
       {draft.stage === 'locked' && <main className="game-day-step game-day-locked"><div className="locked-check"><Check /></div><span className="game-day-kicker">Locked in.</span><h2>{summary.focus}</h2>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<blockquote>{summary.mindset}</blockquote><button className="game-day-primary" type="button" onClick={lockIn}>I’m Ready</button></main>}
       {draft.stage === 'complete' && <main className="game-day-step game-day-finish"><Trophy /><h2>Go do work!</h2><p>Trust your game</p>{!readyFinish && <button className="game-day-primary" type="button" onClick={closeFinished}>Done</button>}</main>}
     </div>}
