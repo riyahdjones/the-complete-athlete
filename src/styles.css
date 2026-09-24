@@ -11594,4 +11594,4 @@ select {
   border-radius: 14px;
 }
 .day-complete-overlay .primary-action { margin-top: 8px; color: #fff; border: 0; background: linear-gradient(135deg, #1682ff, #102650); box-shadow: 0 12px 28px rgba(16, 67, 145, .22); }
-.day-complete-overlay .day-complete-secondary { margin-top: 9px; color: #164b91; border: 1px solid #cbdcf0; background: rgba(255,255,255,.75); box-shadow: none; }
+.day-complete-overlay .day-complete-secondary { margin-top: 12px; color: #fff; border: 0; background: linear-gradient(135deg, #1682ff, #102650); box-shadow: 0 12px 28px rgba(16, 67, 145, .22); }

@@ -6213,7 +6213,6 @@ function HomeScreen({
             <span><em>Streak</em><strong>{dayCompletion.streakBefore} → {dayCompletion.streakAfter}</strong></span>
           </div>
           <blockquote>“You showed up. That’s who you are becoming.”</blockquote>
-          <button className="primary-action full" onClick={() => setDayCompletion(null)} type="button">Keep Going <ArrowRight size={18}/></button>
           <button className="secondary-action full day-complete-secondary" onClick={() => setDayCompletion(null)} type="button">View Today</button>
         </div>
       )}
