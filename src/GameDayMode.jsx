@@ -138,7 +138,7 @@ function Visualization({ onComplete, onExit, track }) {
   const elapsed = 60 - seconds;
   const thought = [...visualizationThoughts].reverse().find(([start]) => elapsed >= start)?.[1] || 'Breathe.';
   return <div className={`game-day-visualization ${playing ? 'playing' : 'paused'}`} role="dialog" aria-modal="true" aria-label="Game Day visualization">
-    <audio ref={audioRef} loop preload="none" src="/audio/game-day-visualization.mp3" />
+    <audio ref={audioRef} loop preload="metadata" src="/audio/game-day-visualization.mp4" />
     <div className="visualization-orb" aria-hidden="true" />
     <button className="visualization-exit" type="button" onClick={onExit} aria-label="Exit visualization"><X /></button>
     <div className="visualization-center">
