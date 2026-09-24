@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Clock3, History, Pause, Play, RotateCcw, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { GAME_DAY_QUESTIONS, selectGameDayQuestions } from './gameDayQuestions';
+import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 const SPORTS = ['Baseball', 'Softball', 'Football', 'Basketball', 'Soccer', 'Volleyball', 'Track & Field', 'Wrestling', 'Lacrosse', 'Tennis', 'Golf', 'Swimming', 'Cheer', 'Other'];
 const STORAGE_PREFIX = 'tca-game-day-sessions';
@@ -15,6 +16,49 @@ const visualizationThoughts = [
 
 function storageKey(prefix, userId) {
   return `${prefix}:${userId || 'guest'}`;
+}
+
+const isCloudUser = (userId) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId || '');
+
+function sessionFromCloud(row) {
+  return {
+    id: row.id,
+    userId: row.athlete_user_id,
+    sport: row.sport,
+    opponentName: row.opponent_name || '',
+    eventTime: row.event_time || '',
+    startedAt: row.started_at,
+    questionIds: row.question_ids || [],
+    responses: row.responses || [],
+    pregameCompletedAt: row.pregame_completed_at,
+    visualizationCompleted: Boolean(row.visualization_completed),
+    visualizationCompletedAt: row.visualization_completed_at,
+    lockedInAt: row.locked_in_at,
+    reflection: row.reflection || null,
+    reflectionCompletedAt: row.reflection_completed_at,
+    updatedAt: row.updated_at,
+    stage: 'complete'
+  };
+}
+
+function sessionToCloud(session, userId) {
+  return {
+    id: session.id,
+    athlete_user_id: userId,
+    sport: session.sport,
+    opponent_name: session.opponentName || null,
+    event_time: session.eventTime || null,
+    started_at: session.startedAt,
+    question_ids: session.questionIds || [],
+    responses: session.responses || [],
+    pregame_completed_at: session.pregameCompletedAt || null,
+    visualization_completed: Boolean(session.visualizationCompleted),
+    visualization_completed_at: session.visualizationCompletedAt || null,
+    locked_in_at: session.lockedInAt || null,
+    reflection: session.reflection || null,
+    reflection_completed_at: session.reflectionCompletedAt || null,
+    updated_at: new Date().toISOString()
+  };
 }
 
 export function loadGameDaySessions(userId) {
@@ -116,6 +160,7 @@ function Visualization({ onComplete, onExit, track }) {
 
 export default function GameDayMode({ athleteProfile, notifyUser, userId, setJournalEntries, trackAnalyticsEvent }) {
   const [sessions, setSessions] = useState(() => loadGameDaySessions(userId));
+  const [cloudReady, setCloudReady] = useState(() => !isCloudUser(userId));
   const [draft, setDraft] = useState(() => {
     try { return JSON.parse(localStorage.getItem(storageKey(DRAFT_PREFIX, userId)) || 'null'); } catch { return null; }
   });
@@ -128,6 +173,29 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
   const [reflection, setReflection] = useState({ confidenceRating: 5, focusRating: 5, effortRating: 5, emotionalControlRating: 5, mistakeResponseRating: 5, didExecuteFocus: '', whatWentWell: '', whatLearned: '', nextGameTakeaway: '' });
 
   useEffect(() => localStorage.setItem(storageKey(STORAGE_PREFIX, userId), JSON.stringify(sessions)), [sessions, userId]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isCloudUser(userId)) return undefined;
+    let cancelled = false;
+    supabase.from('game_day_sessions').select('*').eq('athlete_user_id', userId).order('started_at', { ascending: false }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (!error && data) setSessions((current) => {
+        const merged = new Map(data.map(sessionFromCloud).map((session) => [session.id, session]));
+        current.forEach((session) => {
+          const remote = merged.get(session.id);
+          const localTime = session.updatedAt || session.reflectionCompletedAt || session.lockedInAt || session.startedAt;
+          const remoteTime = remote?.updatedAt || remote?.reflectionCompletedAt || remote?.lockedInAt || remote?.startedAt;
+          if (!remote || String(localTime) >= String(remoteTime)) merged.set(session.id, session);
+        });
+        return [...merged.values()].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+      });
+      setCloudReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [userId]);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isCloudUser(userId) || !cloudReady || sessions.length === 0) return;
+    supabase.from('game_day_sessions').upsert(sessions.map((session) => sessionToCloud(session, userId)), { onConflict: 'id' }).then(() => {});
+  }, [cloudReady, sessions, userId]);
   useEffect(() => {
     if (draft) localStorage.setItem(storageKey(DRAFT_PREFIX, userId), JSON.stringify(draft));
     else localStorage.removeItem(storageKey(DRAFT_PREFIX, userId));
@@ -157,7 +225,8 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
     setDraft((current) => ({ ...current, stage: 'locked', visualizationCompleted: true, visualizationCompletedAt: new Date().toISOString() }));
   }
   function lockIn() {
-    const finished = { ...draft, stage: 'complete', pregameCompletedAt: new Date().toISOString(), lockedInAt: new Date().toISOString() };
+    const finishedAt = new Date().toISOString();
+    const finished = { ...draft, stage: 'complete', pregameCompletedAt: finishedAt, lockedInAt: finishedAt, updatedAt: finishedAt };
     setSessions((current) => [finished, ...current.filter((session) => session.id !== finished.id)]);
     const nextPregameCount = gameDayBadgeCounts(sessions).pregame + 1;
     if (nextPregameCount === 1 || nextPregameCount === 5) {
@@ -173,7 +242,7 @@ export default function GameDayMode({ athleteProfile, notifyUser, userId, setJou
     const session = sessions.find((item) => item.id === reflectingId);
     if (!session || !reflection.didExecuteFocus || !reflection.whatWentWell.trim() || !reflection.whatLearned.trim() || !reflection.nextGameTakeaway.trim()) return;
     const completedAt = new Date().toISOString();
-    const next = sessions.map((item) => item.id === reflectingId ? { ...item, reflection: { ...reflection }, reflectionCompletedAt: completedAt } : item);
+    const next = sessions.map((item) => item.id === reflectingId ? { ...item, reflection: { ...reflection }, reflectionCompletedAt: completedAt, updatedAt: completedAt } : item);
     setSessions(next);
     const counts = gameDayBadgeCounts(next);
     if (counts.reflections === 10) notifyUser?.('Badge unlocked: Film Study', 'You completed 10 post-game reflections.', 'success', { id: 'game-day-badge-film-study', type: 'badge' });
