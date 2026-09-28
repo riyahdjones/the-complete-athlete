@@ -1,5 +1,5 @@
-import { json, readJson, setCorsHeaders, supabaseServiceRequest } from './_supabase.js';
-import { logAppEvent } from './_monitoring.js';
+import { json, readJson, setCorsHeaders, supabaseServiceRequest } from '../server/supabase.js';
+import { logAppEvent } from '../server/monitoring.js';
 
 const ACTIVE_EVENT_TYPES = new Set([
   'INITIAL_PURCHASE',

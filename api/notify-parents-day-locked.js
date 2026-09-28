@@ -1,6 +1,6 @@
-import { apnsConfigured, sendApplePush } from './_apns.js';
-import { loadPremiumAccessUserIds } from './_premium.js';
-import { json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from './_supabase.js';
+import { apnsConfigured, sendApplePush } from '../server/apns.js';
+import { loadPremiumAccessUserIds } from '../server/premium.js';
+import { json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from '../server/supabase.js';
 
 function boundedCount(value) {
   return Math.max(0, Math.min(9999, Number(value) || 0));

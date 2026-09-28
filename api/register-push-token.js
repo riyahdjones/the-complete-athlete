@@ -1,4 +1,4 @@
-import { json, readJson, setCorsHeaders, supabaseUserRequest, verifyUser } from './_supabase.js';
+import { json, readJson, setCorsHeaders, supabaseUserRequest, verifyUser } from '../server/supabase.js';
 
 function cleanToken(value) {
   return String(value ?? '').trim().slice(0, 500);

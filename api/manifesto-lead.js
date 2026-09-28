@@ -1,4 +1,4 @@
-import { envValue, json, readJson, setCorsHeaders } from './_supabase.js';
+import { envValue, json, readJson, setCorsHeaders } from '../server/supabase.js';
 
 const DEFAULT_LOCATION_ID = 'J5jwTA7jPr3FTKdXz9iP';
 const MANIFESTO_TAG = 'Ninety Percent Manifesto';

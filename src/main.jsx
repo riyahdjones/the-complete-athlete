@@ -3216,7 +3216,7 @@ function App() {
       }
     };
 
-    fetch(appApiUrl('/api/track-event'), {
+    fetch(appApiUrl('/api/track?action=event'), {
       method: 'POST',
       headers: {
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -3502,7 +3502,7 @@ function App() {
       const accessToken = data.session?.access_token;
       if (!active || !accessToken) return;
 
-      fetch(appApiUrl('/api/track-activity'), {
+      fetch(appApiUrl('/api/track?action=activity'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,

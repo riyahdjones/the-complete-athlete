@@ -1,4 +1,4 @@
-import { supabaseServiceRequest } from './_supabase.js';
+import { supabaseServiceRequest } from './supabase.js';
 
 export function subscriptionIsActive(subscription, now = Date.now()) {
   if (!['active', 'trialing'].includes(String(subscription?.status || ''))) return false;

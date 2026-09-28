@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { envValue, json, readJson, setCorsHeaders, verifyUser } from './_supabase.js';
+import { envValue, json, readJson, setCorsHeaders, verifyUser } from '../server/supabase.js';
 
 const defaultModelId = 'eleven_multilingual_v2';
 const maxTextLength = 3200;

@@ -1,4 +1,4 @@
-import { logAppEvent } from './_monitoring.js';
+import { logAppEvent } from '../server/monitoring.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_MODERATION_URL = 'https://api.openai.com/v1/moderations';

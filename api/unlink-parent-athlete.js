@@ -1,4 +1,4 @@
-import { json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from './_supabase.js';
+import { json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from '../server/supabase.js';
 
 export default async function handler(req, res) {
   setCorsHeaders(res);

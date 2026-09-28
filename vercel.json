@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/track-event",
+      "destination": "/api/track?action=event"
+    },
+    {
+      "source": "/api/track-activity",
+      "destination": "/api/track?action=activity"
+    },
+    {
       "source": "/manifesto",
       "destination": "/"
     },

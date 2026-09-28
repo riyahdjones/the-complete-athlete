@@ -1,6 +1,6 @@
-import { apnsConfigured, sendApplePush } from './_apns.js';
-import { loadPremiumAccessUserIds } from './_premium.js';
-import { envValue, json, setCorsHeaders, supabaseServiceRequest } from './_supabase.js';
+import { apnsConfigured, sendApplePush } from '../server/apns.js';
+import { loadPremiumAccessUserIds } from '../server/premium.js';
+import { envValue, json, setCorsHeaders, supabaseServiceRequest } from '../server/supabase.js';
 
 function dateKey(offsetDays = 0) {
   const date = new Date();

@@ -1,4 +1,4 @@
-import { logAppEvent } from './_monitoring.js';
+import { logAppEvent } from '../server/monitoring.js';
 
 function json(res, status, payload) {
   res.statusCode = status;

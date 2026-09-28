@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { premiumAccessSetFromRows, subscriptionIsActive } from './_premium.js';
+import { premiumAccessSetFromRows, subscriptionIsActive } from '../server/premium.js';
 
 const now = new Date('2026-09-28T12:00:00Z').getTime();
 

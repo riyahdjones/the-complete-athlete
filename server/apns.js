@@ -1,6 +1,6 @@
 import http2 from 'node:http2';
 import { webcrypto } from 'node:crypto';
-import { envValue } from './_supabase.js';
+import { envValue } from './supabase.js';
 
 function base64Url(input) {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);

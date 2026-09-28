@@ -1,6 +1,6 @@
-import { apnsConfigured, sendApplePush } from './_apns.js';
-import { userHasPremiumAccess } from './_premium.js';
-import { json, readJson, setCorsHeaders, supabaseUserRequest, verifyUser } from './_supabase.js';
+import { apnsConfigured, sendApplePush } from '../server/apns.js';
+import { userHasPremiumAccess } from '../server/premium.js';
+import { json, readJson, setCorsHeaders, supabaseUserRequest, verifyUser } from '../server/supabase.js';
 
 async function userPushTokens(token) {
   const result = await supabaseUserRequest(
