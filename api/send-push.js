@@ -1,4 +1,5 @@
 import { apnsConfigured, sendApplePush } from './_apns.js';
+import { userHasPremiumAccess } from './_premium.js';
 import { json, readJson, setCorsHeaders, supabaseUserRequest, verifyUser } from './_supabase.js';
 
 async function userPushTokens(token) {
@@ -50,6 +51,10 @@ export default async function handler(req, res) {
   const message = String(body.body || 'You have a new update.').slice(0, 220);
   const type = String(body.type || 'general').slice(0, 60);
   const notificationId = String(body.id || `manual-push-${user.id}-${Date.now()}`);
+
+  if (type !== 'dailyDeposits' && !(await userHasPremiumAccess(user.id))) {
+    return json(res, 403, { error: 'An active membership is required for this notification.' });
+  }
 
   await saveInAppNotification(authToken, user.id, {
     id: notificationId,

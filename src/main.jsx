@@ -202,7 +202,6 @@ const parentGuideProgressStorageKey = 'the-ninety-percent-parent-guide-progress'
 const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const athleteStartStorageKey = 'the-complete-athlete-start-today-complete';
-const trialPromptStorageKey = 'the-complete-athlete-trial-prompt-dismissed';
 const trialAccessStorageKey = 'the-complete-athlete-trial-access-expires';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
@@ -910,27 +909,6 @@ function loadAthleteStartComplete() {
     return localStorage.getItem(athleteStartStorageKey) === 'true';
   } catch {
     return false;
-  }
-}
-
-function scopedTrialPromptStorageKey(userId) {
-  return `${trialPromptStorageKey}:${String(userId || 'guest')}`;
-}
-
-function loadTrialPromptDismissed(userId) {
-  try {
-    if (!userId) return false;
-    return localStorage.getItem(scopedTrialPromptStorageKey(userId)) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function saveTrialPromptDismissed(userId) {
-  try {
-    if (userId) localStorage.setItem(scopedTrialPromptStorageKey(userId), 'true');
-  } catch {
-    // Ignore storage failures so purchase and restore flows can finish.
   }
 }
 
@@ -3142,9 +3120,10 @@ function App() {
     package: null,
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
   });
-  const [trialPromptDismissed, setTrialPromptDismissed] = useState(false);
   const [localTrialAccessActive, setLocalTrialAccessActive] = useState(false);
+  const [accessCheckTime, setAccessCheckTime] = useState(() => Date.now());
   const [backendPremiumAccess, setBackendPremiumAccess] = useState({
+    loading: isSupabaseConfigured,
     hasAccess: false,
     activeTrial: false,
     source: 'none',
@@ -3170,10 +3149,21 @@ function App() {
   }, [authSession]);
   const effectiveSession = authSession ?? localAthletePreviewSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
   const isAuthed = Boolean(effectiveSession);
+  const isLocalPreviewSession = Boolean(localAthletePreviewSession || localParentInviteSession || prototypeBypassLogin);
+  const nativeExpirationTime = new Date(subscription.expirationDate || '').getTime();
+  const backendExpirationTime = new Date(backendPremiumAccess.expiresAt || '').getTime();
+  const nativeAccessCurrent = subscription.active
+    && (!Number.isFinite(nativeExpirationTime) || nativeExpirationTime > accessCheckTime);
+  const backendAccessCurrent = backendPremiumAccess.hasAccess
+    && (!Number.isFinite(backendExpirationTime) || backendExpirationTime > accessCheckTime);
   const effectiveSubscription = {
     ...subscription,
-    active: subscription.active || backendPremiumAccess.hasAccess,
-    activeTrial: Boolean(subscription.activeTrial || backendPremiumAccess.activeTrial || localTrialAccessActive),
+    active: nativeAccessCurrent || backendAccessCurrent,
+    activeTrial: Boolean(
+      (subscription.activeTrial && nativeAccessCurrent)
+      || (backendPremiumAccess.activeTrial && backendAccessCurrent)
+      || localTrialAccessActive
+    ),
     accessSource: backendPremiumAccess.source,
     sponsorUserId: backendPremiumAccess.sponsorUserId,
     expirationDate: subscription.expirationDate || backendPremiumAccess.expiresAt,
@@ -3183,11 +3173,14 @@ function App() {
         : 'Premium access is active.'
       : subscription.message
   };
-  const premiumAccessAllowed = !effectiveSubscription.configured
+  const premiumAccessAllowed = isLocalPreviewSession
+    || !effectiveSubscription.configured
     || effectiveSubscription.active
     || effectiveSubscription.activeTrial
     || localTrialAccessActive;
-  const trialPlanMode = !premiumAccessAllowed || effectiveSubscription.activeTrial || localTrialAccessActive;
+  const premiumAccessLoading = !isLocalPreviewSession
+    && (effectiveSubscription.loading || backendPremiumAccess.loading);
+  const trialPlanMode = !premiumAccessAllowed;
   const standardsCompleted = standards.filter((item) => item.done).length;
   const submittedToday = lastSubmittedDate === dailyDate;
   const athleteOnboardingPreview = typeof window !== 'undefined'
@@ -3196,9 +3189,6 @@ function App() {
     && new URLSearchParams(window.location.search).get('startPreview') === 'athlete';
   const athleteTodayPreview = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('todayPreview') === 'athlete';
-  const trialGatePreview = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('trialPreview') === 'true';
-
   const trackAnalyticsEvent = useCallback(async (eventType, metadata = {}, options = {}) => {
     if (typeof window === 'undefined') return;
 
@@ -4923,8 +4913,14 @@ function App() {
   }, [effectiveSession, view]);
 
   useEffect(() => {
-    setTrialPromptDismissed(loadTrialPromptDismissed(effectiveSession?.id));
     setLocalTrialAccessActive(loadTrialAccessActive(effectiveSession?.id));
+    setAccessCheckTime(Date.now());
+    if (!effectiveSession?.id) return undefined;
+    const timer = window.setInterval(() => {
+      setAccessCheckTime(Date.now());
+      setLocalTrialAccessActive(loadTrialAccessActive(effectiveSession.id));
+    }, 30_000);
+    return () => window.clearInterval(timer);
   }, [effectiveSession?.id]);
 
   useEffect(() => {
@@ -4961,8 +4957,9 @@ function App() {
   }, [effectiveSession?.email, effectiveSession?.id, effectiveSession?.name]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !effectiveSession?.id || String(effectiveSession.id).startsWith('demo-')) {
+    if (!isSupabaseConfigured || !effectiveSession?.id || isLocalPreviewSession) {
       setBackendPremiumAccess({
+        loading: false,
         hasAccess: false,
         activeTrial: false,
         source: 'none',
@@ -4973,6 +4970,7 @@ function App() {
     }
 
     let active = true;
+    setBackendPremiumAccess((current) => ({ ...current, loading: true }));
 
     async function loadBackendPremiumAccess() {
       const [{ data, error }, subscriptionResult] = await Promise.all([
@@ -4988,6 +4986,7 @@ function App() {
       const access = Array.isArray(data) ? data[0] : data;
       const subscriptionRow = Array.isArray(subscriptionResult.data) ? subscriptionResult.data[0] : null;
       setBackendPremiumAccess({
+        loading: false,
         hasAccess: !error && Boolean(access?.has_access),
         activeTrial: subscriptionRow?.status === 'trialing',
         source: access?.access_source || 'none',
@@ -5001,7 +5000,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [effectiveSession?.id, premiumAccessRefreshKey]);
+  }, [effectiveSession?.id, isLocalPreviewSession, premiumAccessRefreshKey]);
 
   async function startPremiumSubscription() {
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
@@ -5025,8 +5024,6 @@ function App() {
           activeTrial: Boolean(status.activeTrial),
           expirationDate: status.expirationDate || ''
         }, { area: 'monetization' });
-        setTrialPromptDismissed(true);
-        saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
         setLocalTrialAccessActive(true);
         if (effectiveSession?.role === 'athlete') setTab('plans');
@@ -5050,19 +5047,9 @@ function App() {
       setSubscription((current) => ({
         ...current,
         loading: false,
-        message: error?.message || 'The App Store checkout could not open yet. You can still continue in free mode.'
+        message: error?.message || 'The App Store checkout could not open yet. Try again or restore your purchase.'
       }));
     }
-  }
-
-  function skipTrialPrompt() {
-    setTrialPromptDismissed(true);
-    saveTrialPromptDismissed(effectiveSession?.id);
-    trackAnalyticsEvent('trial_skipped', {}, { area: 'monetization' });
-    notifyUser('Free mode started', 'You can start the 7-day trial any time from Profile.', 'info', {
-      type: 'points',
-      id: `trial-skipped-${Date.now()}`
-    });
   }
 
   async function restorePremiumSubscription() {
@@ -5399,7 +5386,6 @@ function App() {
     view,
     athleteStartPreview,
     athleteTodayPreview,
-    trialGatePreview,
     trackAnalyticsEvent
   ]);
 
@@ -5427,12 +5413,15 @@ function App() {
     return <OnboardingScreen authSession={effectiveSession} completeOnboarding={completeOnboarding} />;
   }
 
-  if (!effectiveSubscription.loading && !premiumAccessAllowed && (!trialPromptDismissed || trialGatePreview)) {
+  if (premiumAccessLoading) {
+    return <MembershipCheckScreen />;
+  }
+
+  if (!premiumAccessAllowed) {
     return (
       <TrialPaywallScreen
         role={effectiveSession.role}
         restorePremiumSubscription={restorePremiumSubscription}
-        skipTrialPrompt={skipTrialPrompt}
         startPremiumSubscription={startPremiumSubscription}
         subscription={effectiveSubscription}
       />
@@ -8838,16 +8827,31 @@ function CoachScreen({
   );
 }
 
+function MembershipCheckScreen() {
+  return (
+    <main className="trial-gate-shell">
+      <section className="trial-gate-card membership-check-card" aria-live="polite">
+        <span className="trial-kicker">The Complete Athlete</span>
+        <h1>Checking membership...</h1>
+        <p>Getting your account ready.</p>
+      </section>
+    </main>
+  );
+}
+
 function TrialPaywallScreen({
   restorePremiumSubscription,
   role,
-  skipTrialPrompt,
   startPremiumSubscription,
   subscription
 }) {
   const product = subscription.package;
-  const priceLine = product?.price ? `${product.price}/month after trial` : '$5.99/month after trial';
   const canRestore = subscription.configured && subscription.native;
+  const expirationTime = new Date(subscription.expirationDate || '').getTime();
+  const trialEnded = Number.isFinite(expirationTime) && expirationTime <= Date.now();
+  const priceLine = product?.price
+    ? `${product.price}/month${trialEnded ? '' : ' after trial'}`
+    : `$5.99/month${trialEnded ? '' : ' after trial'}`;
   const roleLine = role === 'parent'
     ? 'Support your athlete with every parent guide and the full plan library.'
     : 'Train your mindset with every plan, daily tools, and focused coach support.';
@@ -8855,8 +8859,8 @@ function TrialPaywallScreen({
   return (
     <main className="trial-gate-shell">
       <section className="trial-gate-card">
-        <span className="trial-kicker">7-day free trial</span>
-        <h1>Unlock The Complete Athlete</h1>
+        <span className="trial-kicker">{trialEnded ? 'Membership required' : '7-day free trial'}</span>
+        <h1>{trialEnded ? 'Your free trial has ended' : 'Unlock The Complete Athlete'}</h1>
         <p>{roleLine}</p>
         <div className="trial-benefit-list">
           <span>
@@ -8881,7 +8885,7 @@ function TrialPaywallScreen({
           </span>
         </div>
         <div className="trial-price-card">
-          <span>Try everything first</span>
+          <span>{trialEnded ? 'Keep building' : 'Try everything first'}</span>
           <strong>{priceLine}</strong>
           <em>Cancel anytime through your Apple subscription settings.</em>
         </div>
@@ -8894,7 +8898,7 @@ function TrialPaywallScreen({
             type="button"
           >
             <Sparkles size={18} />
-            {subscription.loading ? 'Checking...' : 'Start Free Trial'}
+            {subscription.loading ? 'Checking...' : trialEnded ? 'Subscribe to Continue' : 'Start Free Trial'}
           </button>
           <button
             className="secondary-action inline"
@@ -8903,9 +8907,6 @@ function TrialPaywallScreen({
             type="button"
           >
             Restore Purchase
-          </button>
-          <button className="trial-skip-button" onClick={skipTrialPrompt} type="button">
-            Not now. Continue in free mode.
           </button>
         </div>
         <div className="trial-legal-links">

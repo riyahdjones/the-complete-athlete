@@ -1,4 +1,5 @@
 import { apnsConfigured, sendApplePush } from './_apns.js';
+import { loadPremiumAccessUserIds } from './_premium.js';
 import { envValue, json, setCorsHeaders, supabaseServiceRequest } from './_supabase.js';
 
 function dateKey(offsetDays = 0) {
@@ -293,7 +294,7 @@ export default async function handler(req, res) {
   const isMorningWindow = hour >= 6 && hour <= 8;
   const isReengagementWindow = isMorningWindow || (hour >= 9 && hour <= 11);
   const isEveningWindow = hour >= 19 && hour <= 21;
-  const [deposit, addedPlans, devices, recipients, inactiveUsers, unlockUsers, rescueUsers, milestoneUsers] = await Promise.all([
+  const [deposit, addedPlans, devices, recipients, inactiveUsers, unlockUsers, rescueUsers, milestoneUsers, premiumAccess] = await Promise.all([
     latestDailyDeposit(date),
     pendingPlanNotifications(),
     pushDevices(),
@@ -301,8 +302,10 @@ export default async function handler(req, res) {
     inactiveProfiles(),
     isMorningWindow ? planUnlockUsers(yesterday) : Promise.resolve(new Set()),
     isEveningWindow ? streakRescueUsers(date, yesterday) : Promise.resolve(new Set()),
-    isEveningWindow ? streakMilestoneUsers(date) : Promise.resolve(new Set())
+    isEveningWindow ? streakMilestoneUsers(date) : Promise.resolve(new Set()),
+    loadPremiumAccessUserIds()
   ]);
+  const premiumUserIds = premiumAccess.userIds;
   const uniqueUserIds = [...new Set(recipients.map((recipient) => recipient.id))];
   const preferences = await preferencesForUsers(uniqueUserIds);
   const sent = [];
@@ -321,6 +324,7 @@ export default async function handler(req, res) {
     const releaseDate = releaseDates[0] || '';
     const planDeliveries = [];
     for (const recipient of recipients) {
+      if (!premiumUserIds.has(recipient.id)) continue;
       const prefs = preferences.get(recipient.id) ?? {};
       if (prefs.performance_plans === false) continue;
 
@@ -366,6 +370,9 @@ export default async function handler(req, res) {
         tone: 'info'
       }));
     }
+
+    // Expired and inactive accounts retain only the Daily Deposit push.
+    if (!premiumUserIds.has(device.user_id)) continue;
 
     if (isMorningWindow && unlockUsers.has(device.user_id) && prefs.plan_unlocks !== false) {
       sent.push(sendToDevice(device, {
@@ -489,6 +496,8 @@ export default async function handler(req, res) {
     planUnlockCandidates: unlockUsers.size,
     streakRescueCandidates: rescueUsers.size,
     streakMilestoneCandidates: milestoneUsers.size,
+    premiumRecipients: premiumUserIds.size,
+    premiumLookupFailed: Boolean(premiumAccess.error),
     easternHour: hour,
     apnsConfigured: apnsConfigured(),
     sampleFailures: [...failures, ...rejected].slice(0, 8)
@@ -508,6 +517,8 @@ export default async function handler(req, res) {
     planUnlockCandidates: unlockUsers.size,
     streakRescueCandidates: rescueUsers.size,
     streakMilestoneCandidates: milestoneUsers.size,
+    premiumRecipients: premiumUserIds.size,
+    premiumLookupFailed: Boolean(premiumAccess.error),
     easternHour: hour,
     apnsConfigured: apnsConfigured()
   });

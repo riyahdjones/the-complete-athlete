@@ -1,4 +1,5 @@
 import { apnsConfigured, sendApplePush } from './_apns.js';
+import { loadPremiumAccessUserIds } from './_premium.js';
 import { json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from './_supabase.js';
 
 function boundedCount(value) {
@@ -32,7 +33,10 @@ export default async function handler(req, res) {
   );
   if (linksResult.error) return json(res, 500, { error: 'Parent links could not be loaded.' });
 
-  const parentIds = [...new Set((linksResult.data ?? []).map((link) => link.parent_user_id).filter(Boolean))];
+  const linkedParentIds = [...new Set((linksResult.data ?? []).map((link) => link.parent_user_id).filter(Boolean))];
+  if (!linkedParentIds.length) return json(res, 200, { ok: true, notified: 0, pushSent: 0 });
+  const { userIds: premiumUserIds } = await loadPremiumAccessUserIds();
+  const parentIds = linkedParentIds.filter((parentId) => premiumUserIds.has(parentId));
   if (!parentIds.length) return json(res, 200, { ok: true, notified: 0, pushSent: 0 });
 
   const input = await readJson(req);
@@ -73,7 +77,7 @@ export default async function handler(req, res) {
     ]);
     const preferences = new Map((preferencesResult.data ?? []).map((row) => [row.user_id, row.parent_updates]));
     const pushes = (devicesResult.data ?? [])
-      .filter((device) => preferences.get(device.user_id) !== false)
+      .filter((device) => premiumUserIds.has(device.user_id) && preferences.get(device.user_id) !== false)
       .map((device) => sendApplePush({
         token: device.token,
         title,
