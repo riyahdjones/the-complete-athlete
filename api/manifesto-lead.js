@@ -1,17 +1,8 @@
 import { envValue, json, readJson, setCorsHeaders } from '../server/supabase.js';
+import { upsertHighLevelContact } from '../server/highlevel.js';
 
-const DEFAULT_LOCATION_ID = 'J5jwTA7jPr3FTKdXz9iP';
 const MANIFESTO_TAG = 'Ninety Percent Manifesto';
 const SMS_OPT_IN_TAG = 'Ninety Percent SMS Opt-In';
-
-function splitName(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return { firstName: parts[0] || '', lastName: '' };
-  return {
-    firstName: parts[0],
-    lastName: parts.slice(1).join(' ')
-  };
-}
 
 function cleanLead(body) {
   const name = String(body.name || '').trim();
@@ -53,72 +44,6 @@ async function sendToWebhook(lead, url) {
   return { ok: true, method: 'webhook' };
 }
 
-async function highLevelRequest(path, token, options = {}) {
-  const version = envValue('GHL_API_VERSION') || '2021-07-28';
-  const response = await fetch(`https://services.leadconnectorhq.com${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Version: version,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    }
-  });
-  const text = await response.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = text ? { message: text } : null;
-  }
-  return {
-    data,
-    error: response.ok ? null : data?.message || data?.error || response.statusText,
-    status: response.status
-  };
-}
-
-async function sendToHighLevel(lead, token, locationId) {
-  const { firstName, lastName } = splitName(lead.name);
-  const upsert = await highLevelRequest('/contacts/upsert', token, {
-    method: 'POST',
-    body: JSON.stringify({
-      locationId,
-      name: lead.name,
-      firstName,
-      lastName,
-      email: lead.email,
-      phone: lead.phone,
-      source: lead.source,
-      createNewIfDuplicateAllowed: false
-    })
-  });
-
-  if (upsert.error) {
-    return { ok: false, status: upsert.status, error: upsert.error };
-  }
-
-  const contactId = upsert.data?.contact?.id || upsert.data?.id;
-  if (contactId) {
-    const tags = lead.smsConsent ? [MANIFESTO_TAG, SMS_OPT_IN_TAG] : [MANIFESTO_TAG];
-    const tagResult = await highLevelRequest(`/contacts/${contactId}/tags`, token, {
-      method: 'POST',
-      body: JSON.stringify({ tags })
-    });
-    if (tagResult.error) {
-      return { ok: false, status: tagResult.status, error: tagResult.error };
-    }
-  }
-
-  return {
-    ok: true,
-    method: 'api',
-    contactId,
-    created: Boolean(upsert.data?.new)
-  };
-}
-
 export default async function handler(req, res) {
   try {
     setCorsHeaders(res, 'POST, OPTIONS');
@@ -139,9 +64,6 @@ export default async function handler(req, res) {
     }
 
     const webhookUrl = envValue('GHL_MANIFESTO_WEBHOOK_URL');
-    const token = envValue('GHL_PRIVATE_INTEGRATION_TOKEN', 'GHL_ACCESS_TOKEN');
-    const locationId = envValue('GHL_LOCATION_ID') || DEFAULT_LOCATION_ID;
-
     if (webhookUrl) {
       const result = await sendToWebhook(lead, webhookUrl);
       return json(res, result.ok ? 200 : 502, result.ok ? { ok: true, method: result.method } : {
@@ -150,11 +72,13 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!token) {
-      return json(res, 503, { ok: false, error: 'GHL integration is not configured.' });
-    }
-
-    const result = await sendToHighLevel(lead, token, locationId);
+    const result = await upsertHighLevelContact({
+      name: lead.name,
+      email: lead.email,
+      phone: lead.phone,
+      source: lead.source,
+      tags: lead.smsConsent ? [MANIFESTO_TAG, SMS_OPT_IN_TAG] : [MANIFESTO_TAG]
+    });
     return json(res, result.ok ? 200 : 502, result.ok ? {
       ok: true,
       method: result.method,

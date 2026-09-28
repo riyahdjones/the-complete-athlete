@@ -1,4 +1,6 @@
-import { json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from '../server/supabase.js';
+import { timingSafeEqual } from 'node:crypto';
+import { upsertHighLevelContact } from '../server/highlevel.js';
+import { envValue, getAuthUserById, json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from '../server/supabase.js';
 
 const allowedSeverities = new Set(['info', 'warning', 'error', 'critical']);
 
@@ -23,6 +25,58 @@ function cleanMetadata(value, depth = 0) {
       .slice(0, 40)
       .map(([key, item]) => [String(key).slice(0, 60), cleanMetadata(item, depth + 1)])
   );
+}
+
+function secureEqual(left, right) {
+  const a = Buffer.from(String(left || ''));
+  const b = Buffer.from(String(right || ''));
+  return a.length > 0 && a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function syncAppUser(req, res, authenticatedUser) {
+  const body = await readJson(req);
+  const expectedSecret = envValue('GHL_USER_SYNC_WEBHOOK_SECRET');
+  const suppliedSecret = req.headers['x-tca-webhook-secret'];
+  const webhookAuthorized = secureEqual(suppliedSecret, expectedSecret);
+  const webhookRecord = body?.type === 'INSERT' && body?.table === 'profiles' ? body.record : null;
+  const userId = authenticatedUser?.id || (webhookAuthorized ? webhookRecord?.id : '');
+
+  if (!userId) return json(res, 401, { error: 'Unauthorized user sync.' });
+
+  const profileResult = await supabaseServiceRequest(
+    `profiles?id=eq.${encodeURIComponent(userId)}&select=id,role,full_name`
+  );
+  const profile = profileResult.data?.[0] || webhookRecord;
+  if (profileResult.error || !profile?.id) {
+    return json(res, profileResult.status || 404, { error: 'User profile was not found.' });
+  }
+
+  const authUser = authenticatedUser?.email ? authenticatedUser : await getAuthUserById(userId);
+  const email = String(authUser?.email || '').trim().toLowerCase();
+  if (!email) return json(res, 422, { error: 'User email was not found.' });
+
+  const role = profile.role === 'parent' ? 'parent' : 'athlete';
+  const result = await upsertHighLevelContact({
+    name: profile.full_name || authUser?.user_metadata?.full_name || role,
+    email,
+    source: 'The Complete Athlete App',
+    tags: [
+      'Complete Athlete App User',
+      role === 'parent' ? 'Complete Athlete Parent' : 'Complete Athlete Athlete'
+    ]
+  });
+
+  if (!result.ok) {
+    console.error('GHL app user sync failed', { status: result.status, error: result.error });
+    return json(res, result.status || 502, { error: 'GHL user sync failed.' });
+  }
+
+  return json(res, 200, {
+    ok: true,
+    contactId: result.contactId,
+    created: result.created,
+    role
+  });
 }
 
 async function trackActivity(req, res, user) {
@@ -84,6 +138,7 @@ export default async function handler(req, res) {
   const user = token ? await verifyUser(token) : null;
   const action = String(req.query?.action || '').toLowerCase();
 
+  if (action === 'new-user') return syncAppUser(req, res, user);
   if (action === 'activity') return trackActivity(req, res, user);
   if (action === 'event') return trackEvent(req, res, user);
   return json(res, 404, { error: 'Unknown tracking action.' });

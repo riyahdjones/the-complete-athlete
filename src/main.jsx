@@ -231,6 +231,18 @@ function appApiUrl(path) {
   return isProductionWeb ? cleanPath : `${productionApiOrigin}${cleanPath}`;
 }
 
+function syncAppUserToHighLevel(accessToken) {
+  if (!accessToken) return;
+  fetch(appApiUrl('/api/track?action=new-user'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: '{}'
+  }).catch(() => {});
+}
+
 function isNativePushRuntime() {
   return typeof window !== 'undefined' && Boolean(Capacitor?.isNativePlatform?.());
 }
@@ -3148,6 +3160,12 @@ function App() {
     return { id: 'local-parent-review', role: 'parent', name: 'App Review Parent', email: 'review-parent@example.com', parentAccessCode: 'TCA-FAMILY' };
   }, [authSession]);
   const effectiveSession = authSession ?? localAthletePreviewSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authSession?.id || authSession.role === 'admin') return;
+    supabase.auth.getSession().then(({ data }) => {
+      syncAppUserToHighLevel(data.session?.access_token || '');
+    }).catch(() => {});
+  }, [authSession?.id, authSession?.role]);
   const isAuthed = Boolean(effectiveSession);
   const isLocalPreviewSession = Boolean(localAthletePreviewSession || localParentInviteSession || prototypeBypassLogin);
   const nativeExpirationTime = new Date(subscription.expirationDate || '').getTime();

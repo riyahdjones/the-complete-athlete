@@ -48,6 +48,22 @@ export async function verifyUser(token) {
   return response.json().catch(() => null);
 }
 
+export async function getAuthUserById(userId) {
+  const supabaseUrl = envValue('VITE_SUPABASE_URL', 'SUPABASE_URL');
+  const serviceRoleKey = envValue('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceRoleKey || !userId) return null;
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`
+    }
+  });
+  if (!response.ok) return null;
+  const data = await response.json().catch(() => null);
+  return data?.user || data;
+}
+
 export async function supabaseServiceRequest(path, options = {}) {
   const supabaseUrl = envValue('VITE_SUPABASE_URL', 'SUPABASE_URL');
   const serviceRoleKey = envValue('SUPABASE_SERVICE_ROLE_KEY');
