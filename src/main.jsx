@@ -5749,6 +5749,9 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   return (
     <main className="auth-shell auth-login-shell" aria-label="The Complete Athlete login">
       <section className="auth-brand-panel auth-photo-panel">
+        <video className="auth-hero-video" autoPlay loop muted playsInline preload="auto" aria-hidden="true">
+          <source src="/assets/onboarding-login-hero.mp4" type="video/mp4" />
+        </video>
         <p className="eyebrow">The Complete Athlete</p>
         <h1>Access the side built for you.</h1>
         <p>Athletes build the day. Parents support the day.</p>
@@ -5756,18 +5759,18 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
           <span><Trophy size={16} /> Athlete</span>
           <span><Users size={16} /> Parent</span>
         </div>
+        <div className="auth-mode auth-entry-mode">
+          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')} type="button">
+            Create New Account
+          </button>
+          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">
+            Log In
+          </button>
+        </div>
       </section>
 
       <section className="auth-card">
-        <div className="auth-mode">
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">
-            Login
-          </button>
-          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')} type="button">
-            Create account
-          </button>
-        </div>
-
+        {mode === 'signup' && <p className="auth-role-prompt">Choose your experience</p>}
         <div className="role-tabs">
           {[
             ['athlete', Trophy, 'Athlete'],

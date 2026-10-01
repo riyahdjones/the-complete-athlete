@@ -98,16 +98,14 @@ input:disabled {
 }
 
 .auth-photo-panel {
-  background:
-    linear-gradient(180deg, rgba(8, 17, 31, 0.44) 0%, rgba(5, 7, 11, 0.74) 52%, rgba(5, 7, 11, 0.92) 100%),
-    url("/assets/onboarding-athlete-hero.png") center 28% / cover no-repeat;
+  background: #08111f;
 }
 
 .auth-photo-panel::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   background:
     radial-gradient(circle at 18% 8%, rgba(47, 109, 246, 0.28), transparent 36%),
     linear-gradient(145deg, rgba(28, 61, 126, 0.24), rgba(5, 7, 11, 0.18) 52%);
@@ -116,7 +114,26 @@ input:disabled {
 
 .auth-brand-panel > * {
   position: relative;
-  z-index: 1;
+  z-index: 2;
+}
+
+.auth-brand-panel > .auth-hero-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.auth-role-prompt {
+  margin: 2px 0 -2px;
+  color: var(--ink);
+  font-size: .76rem;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
 }
 
 .auth-brand-panel .eyebrow {
@@ -199,6 +216,37 @@ input:disabled {
   color: #ffffff;
   border-color: var(--ink);
   background: var(--ink);
+}
+
+.auth-entry-mode {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-entry-mode button {
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 999px;
+  color: #09152d;
+  background: rgba(255, 255, 255, .96);
+  font-size: .82rem;
+  font-weight: 950;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, .16);
+}
+
+.auth-entry-mode button:first-child,
+.auth-entry-mode button:first-child.active {
+  color: #fff;
+  border-color: #2f78ff;
+  background: linear-gradient(100deg, #2f78ff, #1856d6);
+}
+
+.auth-entry-mode button:last-child,
+.auth-entry-mode button:last-child.active {
+  color: #09152d;
+  border-color: rgba(255, 255, 255, .92);
+  background: rgba(255, 255, 255, .96);
 }
 
 .auth-form {
@@ -11947,4 +11995,38 @@ select {
 
 .previous-design .goals-discipline-quote + .goals-toolbar {
   margin-top: 14px;
+}
+
+/* Login hero video and bottom-positioned entry actions. */
+.auth-photo-panel,
+.native-shell .auth-login-shell .auth-brand-panel.auth-photo-panel {
+  background: #08111f;
+}
+
+.native-shell .auth-login-shell .auth-brand-panel.auth-photo-panel {
+  min-height: min(58svh, 520px);
+  align-content: end;
+  padding: max(54px, calc(env(safe-area-inset-top) + 16px)) 18px 18px;
+}
+
+.native-shell .auth-login-shell .auth-entry-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.native-shell .auth-login-shell .auth-entry-mode button {
+  min-width: 0;
+  min-height: 54px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: .8rem;
+  line-height: 1.1;
+}
+
+@media (max-width: 370px) {
+  .native-shell .auth-login-shell .auth-entry-mode button {
+    padding-inline: 9px;
+    font-size: .72rem;
+  }
 }
