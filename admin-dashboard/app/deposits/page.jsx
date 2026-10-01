@@ -132,15 +132,15 @@ export default async function DailyDepositsPage() {
   const supabase = supabaseAdmin();
 
   const [
-    { data: recentDeposits = [], error: recentError },
+    { data: pastDeposits = [], error: pastError, count: pastDepositCount },
     { data: futureDeposits = [], error: futureError, count: futureDepositCount }
   ] = await Promise.all([
     supabase
       .from('daily_deposits')
-      .select('id, title, body, focus_question, release_date, status, created_at')
+      .select('id, title, body, focus_question, release_date, status, created_at', { count: 'exact' })
       .lte('release_date', today)
       .order('release_date', { ascending: false })
-      .limit(30),
+      .range(0, 999),
     supabase
       .from('daily_deposits')
       .select('id, title, body, focus_question, release_date, status, created_at', { count: 'exact' })
@@ -149,8 +149,8 @@ export default async function DailyDepositsPage() {
       .range(0, 999)
   ]);
 
-  const error = recentError || futureError;
-  const latestDeposit = recentDeposits[0];
+  const error = pastError || futureError;
+  const latestDeposit = pastDeposits[0];
 
   return (
     <AdminShell eyebrow="Content Operations" title="Daily Deposits" description="Create, schedule, publish, and review the daily message delivered to athletes.">
@@ -205,13 +205,16 @@ export default async function DailyDepositsPage() {
 
       <section className="dashboard-section">
         <div className="section-head">
-          <p className="eyebrow">History</p>
-          <h2>Recent Deposits</h2>
-          <p>The last 30 deposits are shown here for quick review.</p>
+          <p className="eyebrow">Archive</p>
+          <h2>Past Deposits</h2>
+          <p>View and edit every deposit released through today. Select any entry to open its editor.</p>
         </div>
         <div className="deposit-list">
-          {recentDeposits.length ? recentDeposits.map((deposit) => <DepositRow key={deposit.id} deposit={deposit} />) : <p>No deposits yet.</p>}
+          {pastDeposits.length ? pastDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />) : <p>No past deposits yet.</p>}
         </div>
+        {pastDepositCount > pastDeposits.length && (
+          <p className="empty-row">Showing the newest {pastDeposits.length} of {pastDepositCount} past deposits.</p>
+        )}
       </section>
     </AdminShell>
   );
