@@ -202,6 +202,8 @@ const parentGuideProgressStorageKey = 'the-ninety-percent-parent-guide-progress'
 const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const athleteStartStorageKey = 'the-complete-athlete-start-today-complete';
+const parentStartAccountsStorageKey = 'the-complete-athlete-parent-first-value-accounts';
+const parentStarterPlanStorageKey = 'the-complete-athlete-parent-starter-plan';
 const trialAccessStorageKey = 'the-complete-athlete-trial-access-expires';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
@@ -908,6 +910,50 @@ function loadAthleteProfile() {
   }
 }
 
+function prepareProfilePhoto(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      const maxDimension = 720;
+      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Photo processing is unavailable.'));
+        return;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      const preview = canvas.toDataURL('image/jpeg', 0.82);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl);
+        if (!blob) {
+          reject(new Error('Photo processing failed.'));
+          return;
+        }
+        resolve({
+          file: new File([blob], 'profile.jpg', { type: 'image/jpeg' }),
+          preview
+        });
+      }, 'image/jpeg', 0.82);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('That photo could not be opened.'));
+    };
+    image.src = objectUrl;
+  });
+}
+
 function loadOnboardingComplete() {
   try {
     return localStorage.getItem(onboardingStorageKey) === 'true';
@@ -1519,6 +1565,27 @@ const parentMessageSeed = {
   sendDate: todayKey(),
   status: 'Scheduled'
 };
+
+const parentStarterPlanRecommendations = [
+  {
+    id: 'home-court-advantage-seed',
+    title: 'Home Court Advantage',
+    category: 'Home Support',
+    description: 'Create a safe home environment where your athlete can recover, grow, and stay connected.'
+  },
+  {
+    id: 'raising-complete-athlete-seed',
+    title: 'Raising a Complete Athlete',
+    category: 'Whole Athlete',
+    description: 'Build confidence, discipline, and character beyond the scoreboard.'
+  },
+  {
+    id: 'pressure-isnt-the-enemy-3-day-plan',
+    title: "Pressure Isn't the Enemy",
+    category: 'Resilience',
+    description: 'Help your athlete respond to pressure with preparation, calm, and resilience.'
+  }
+];
 
 function createParentGuideSeeds() {
   const releaseDate = todayKey();
@@ -3056,7 +3123,11 @@ function App() {
     try { return JSON.parse(localStorage.getItem('tca-parent-onboarding-accounts') || '{}'); }
     catch { return {}; }
   });
-  const [athleteStartComplete, setAthleteStartComplete] = useState(() => (loadOnboardingComplete() ? true : loadAthleteStartComplete()));
+  const [parentStartAccounts, setParentStartAccounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(parentStartAccountsStorageKey) || '{}'); }
+    catch { return {}; }
+  });
+  const [athleteStartComplete, setAthleteStartComplete] = useState(loadAthleteStartComplete);
   const [viewportRevision, setViewportRevision] = useState(0);
   const [isPhoneViewport, setIsPhoneViewport] = useState(() => (
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 720px)').matches : false
@@ -3168,6 +3239,9 @@ function App() {
   }, [authSession?.id, authSession?.role]);
   const isAuthed = Boolean(effectiveSession);
   const isLocalPreviewSession = Boolean(localAthletePreviewSession || localParentInviteSession || prototypeBypassLogin);
+  const forcePaywallPreview = import.meta.env.DEV
+    && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('paywallPreview') === 'athlete';
   const nativeExpirationTime = new Date(subscription.expirationDate || '').getTime();
   const backendExpirationTime = new Date(backendPremiumAccess.expiresAt || '').getTime();
   const nativeAccessCurrent = subscription.active
@@ -3191,12 +3265,15 @@ function App() {
         : 'Premium access is active.'
       : subscription.message
   };
-  const premiumAccessAllowed = isLocalPreviewSession
-    || !effectiveSubscription.configured
-    || effectiveSubscription.active
-    || effectiveSubscription.activeTrial
-    || localTrialAccessActive;
-  const premiumAccessLoading = !isLocalPreviewSession
+  const premiumAccessAllowed = forcePaywallPreview
+    ? false
+    : isLocalPreviewSession
+      || !effectiveSubscription.configured
+      || effectiveSubscription.active
+      || effectiveSubscription.activeTrial
+      || localTrialAccessActive;
+  const premiumAccessLoading = !forcePaywallPreview
+    && !isLocalPreviewSession
     && (effectiveSubscription.loading || backendPremiumAccess.loading);
   const trialPlanMode = !premiumAccessAllowed;
   const standardsCompleted = standards.filter((item) => item.done).length;
@@ -3944,26 +4021,40 @@ function App() {
     };
   }, [authSession?.id, authSession?.role, localParentInviteSession, parentLinkRefreshKey]);
 
+  async function persistAthleteProfile(profile = athleteProfile) {
+    try {
+      localStorage.setItem(athleteProfileStorageKey, JSON.stringify(profile));
+    } catch {
+      return 'Profile could not be saved on this device.';
+    }
+
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !isSupabaseId(authSession.id)) return '';
+
+    const [accountResult, athleteResult] = await Promise.all([
+      supabase
+        .from('profiles')
+        .update({ full_name: profile.name ?? '' })
+        .eq('id', authSession.id),
+      supabase
+        .from('athlete_profiles')
+        .upsert({
+          user_id: authSession.id,
+          sport: profile.sport ?? '',
+          age: profile.age ?? '',
+          location: profile.location ?? '',
+          photo_url: profile.photo ?? '',
+          parent_contact: profile.parentContact ?? '',
+          parent_access_code: profile.parentAccessCode ?? 'TCA-PARENT',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+    ]);
+
+    return accountResult.error?.message || athleteResult.error?.message || '';
+  }
+
   useEffect(() => {
-    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !supabaseAthleteDataReady) return;
-
-    supabase
-      .from('profiles')
-      .update({ full_name: athleteProfile.name ?? '' })
-      .eq('id', authSession.id);
-
-    supabase
-      .from('athlete_profiles')
-      .upsert({
-        user_id: authSession.id,
-        sport: athleteProfile.sport ?? '',
-        age: athleteProfile.age ?? '',
-        location: athleteProfile.location ?? '',
-        photo_url: athleteProfile.photo ?? '',
-        parent_contact: athleteProfile.parentContact ?? '',
-        parent_access_code: athleteProfile.parentAccessCode ?? 'TCA-PARENT',
-        updated_at: new Date().toISOString()
-      });
+    if (!supabaseAthleteDataReady) return;
+    persistAthleteProfile(athleteProfile);
   }, [athleteProfile, authSession?.id, authSession?.role, supabaseAthleteDataReady]);
 
   useEffect(() => {
@@ -4149,11 +4240,32 @@ function App() {
 
     async function persistJournal() {
       const pending = journalEntries.filter((entry) => entry.pending && entry.ownerId === authSession.id);
-      if (!pending.length) return;
-      const { error } = await supabase.from('journal_entries').upsert(pending.map((entry) => journalToSupabase(entry, authSession.id)), { onConflict: 'id' });
-      if (!cancelled && !error) {
+      if (pending.length) {
+        const { error } = await supabase.from('journal_entries').upsert(pending.map((entry) => journalToSupabase(entry, authSession.id)), { onConflict: 'id' });
+        if (cancelled || error) return;
+
         const savedIds = new Set(pending.map((entry) => entry.id));
         setJournalEntries((current) => current.map((entry) => savedIds.has(entry.id) ? { ...entry, pending: false } : entry));
+      }
+
+      const { data: existingRows, error: historyError } = await supabase
+        .from('journal_entries')
+        .select('id')
+        .eq('athlete_user_id', authSession.id);
+
+      if (cancelled || historyError) return;
+
+      const currentIds = new Set(journalEntries.map((entry) => entry.id));
+      const deletedIds = (existingRows ?? [])
+        .map((row) => row.id)
+        .filter((id) => !currentIds.has(id));
+
+      if (deletedIds.length) {
+        await supabase
+          .from('journal_entries')
+          .delete()
+          .eq('athlete_user_id', authSession.id)
+          .in('id', deletedIds);
       }
     }
 
@@ -4512,18 +4624,18 @@ function App() {
     const accessCode = parentAccessDraft.trim();
     if (!accessCode) {
       setParentLinkFeedback('Enter the parent access code from your athlete.');
-      return;
+      return false;
     }
     if (!isSupabaseConfigured || authSession?.role !== 'parent') {
       setParentLinkFeedback('Log in as a parent before linking an athlete.');
-      return;
+      return false;
     }
 
     const { data: athleteUserId, error } = await supabase.rpc('link_parent_to_athlete', { access_code: accessCode });
     if (error) {
       trackAnalyticsEvent('family_link_failed', { source: 'parent_settings', reason: error.message }, { area: 'family', severity: 'warning' });
       setParentLinkFeedback('That code did not link. Check the code and try again.');
-      return;
+      return false;
     }
 
     trackAnalyticsEvent('family_linked', { source: 'parent_settings' }, { area: 'family' });
@@ -4537,8 +4649,8 @@ function App() {
       }
       setLinkedAthleteId(athleteUserId);
     }
-    completeParentOnboarding();
     setParentLinkRefreshKey((value) => value + 1);
+    return true;
   }
 
   async function linkAthleteParentAccessCode(event) {
@@ -4822,7 +4934,15 @@ function App() {
     trackAnalyticsEvent('onboarding_completed', { role: 'parent' }, { area: 'activation' });
   }
 
-  function completeOnboarding(setup) {
+  function completeParentFirstValue(action = 'complete') {
+    if (!effectiveSession?.id) return;
+    const nextAccounts = { ...parentStartAccounts, [effectiveSession.id]: true };
+    setParentStartAccounts(nextAccounts);
+    localStorage.setItem(parentStartAccountsStorageKey, JSON.stringify(nextAccounts));
+    trackAnalyticsEvent('parent_first_value_completed', { action }, { area: 'activation' });
+  }
+
+  async function completeOnboarding(setup) {
     if (effectiveSession?.role === 'parent') {
       completeParentOnboarding();
       return;
@@ -4859,6 +4979,7 @@ function App() {
       .filter((standard) => standard.label.trim());
 
     setAthleteProfile(nextProfile);
+    await persistAthleteProfile(nextProfile);
     if (nextGoals.length) setGoals(nextGoals);
     if (nextStandards.length) setStandards(nextStandards);
     setTab('home');
@@ -5044,7 +5165,7 @@ function App() {
         }, { area: 'monetization' });
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
         setLocalTrialAccessActive(true);
-        if (effectiveSession?.role === 'athlete') setTab('plans');
+        if (effectiveSession?.role === 'athlete') setTab('home');
         setPremiumAccessRefreshKey((current) => current + 1);
         notifyUser('Premium unlocked', 'Your Complete Athlete subscription is active.', 'success', { type: 'points', id: `premium-active-${Date.now()}` });
       }
@@ -5052,6 +5173,7 @@ function App() {
       const cancelled = Boolean(error?.userCancelled);
       if (cancelled) {
         trackAnalyticsEvent('purchase_cancelled', {}, { area: 'monetization', severity: 'warning' });
+        trackAnalyticsEvent('paywall_abandoned', { reason: 'purchase_cancelled' }, { area: 'monetization', severity: 'warning' });
         setSubscription((current) => ({
           ...current,
           loading: false,
@@ -5093,7 +5215,7 @@ function App() {
         saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
         setLocalTrialAccessActive(true);
-        if (effectiveSession?.role === 'athlete') setTab('plans');
+        if (effectiveSession?.role === 'athlete') setTab('home');
         setPremiumAccessRefreshKey((current) => current + 1);
       }
     } catch (error) {
@@ -5295,6 +5417,7 @@ function App() {
           linkAthleteParentAccessCode={linkAthleteParentAccessCode}
           notificationPreferences={notificationPreferences}
           privacySettings={privacySettings}
+          persistAthleteProfile={persistAthleteProfile}
           requestBrowserNotifications={requestBrowserNotifications}
           logoutUser={logoutUser}
           setAthleteParentAccessDraft={setAthleteParentAccessDraft}
@@ -5420,13 +5543,17 @@ function App() {
   }
 
   if (!prototypeBypassLogin && !localParentInviteSession && !athleteTodayPreview && (effectiveSession?.role === 'parent'
-    ? parentLinkChecked && !linkedAthleteId && !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
+    ? parentLinkChecked && !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
     : !onboardingComplete)) {
     if (effectiveSession?.role === 'parent') {
       return <ParentOnboardingScreen completeOnboarding={completeOnboarding}
         linkParentAccessCode={linkParentAccessCode} parentAccessDraft={parentAccessDraft}
         setParentAccessDraft={setParentAccessDraft} parentLinkFeedback={parentLinkFeedback}
-        setParentLinkFeedback={setParentLinkFeedback} linkedAthleteId={linkedAthleteId} />;
+        setParentLinkFeedback={setParentLinkFeedback} linkedAthleteId={linkedAthleteId}
+        linkedAthletes={linkedAthletes} notificationPreferences={notificationPreferences}
+        requestBrowserNotifications={requestBrowserNotifications}
+        setNotificationPreferences={setNotificationPreferences}
+        updateNotificationPreference={updateNotificationPreference} />;
     }
     return <OnboardingScreen authSession={effectiveSession} completeOnboarding={completeOnboarding} />;
   }
@@ -5435,13 +5562,58 @@ function App() {
     return <MembershipCheckScreen />;
   }
 
+  if (
+    !premiumAccessAllowed
+    && effectiveSession.role === 'athlete'
+    && !athleteStartComplete
+  ) {
+    return (
+      <main className="activation-rep-shell">
+        <AthleteStartToday
+          athleteProfile={athleteProfile}
+          celebrate={celebrate}
+          lesson={activeLesson}
+          plans={plans}
+          planProgress={planProgress}
+          setAthleteStartComplete={setAthleteStartComplete}
+          setJournal={setJournal}
+          setJournalType={setJournalType}
+          setStandards={setStandards}
+          setTab={setTab}
+          setRequestedPlanSeriesId={setRequestedPlanSeriesId}
+          trackAnalyticsEvent={trackAnalyticsEvent}
+        />
+      </main>
+    );
+  }
+
+  if (
+    !premiumAccessAllowed
+    && effectiveSession.role === 'parent'
+    && !parentStartAccounts[effectiveSession.id]
+  ) {
+    return (
+      <main className="activation-rep-shell parent-activation-shell">
+        <ParentStartToday
+          authSession={effectiveSession}
+          completeParentFirstValue={completeParentFirstValue}
+          trackAnalyticsEvent={trackAnalyticsEvent}
+        />
+      </main>
+    );
+  }
+
   if (!premiumAccessAllowed) {
     return (
       <TrialPaywallScreen
+        athleteProfile={athleteProfile}
+        plans={plans}
+        planProgress={planProgress}
         role={effectiveSession.role}
         restorePremiumSubscription={restorePremiumSubscription}
         startPremiumSubscription={startPremiumSubscription}
         subscription={effectiveSubscription}
+        trackAnalyticsEvent={trackAnalyticsEvent}
       />
     );
   }
@@ -5688,35 +5860,111 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   );
 }
 
-function ParentOnboardingScreen({ completeOnboarding, linkParentAccessCode, parentAccessDraft, setParentAccessDraft, parentLinkFeedback, setParentLinkFeedback, linkedAthleteId }) {
+function ParentOnboardingScreen({
+  completeOnboarding,
+  linkParentAccessCode,
+  linkedAthleteId,
+  linkedAthletes,
+  notificationPreferences,
+  parentAccessDraft,
+  parentLinkFeedback,
+  requestBrowserNotifications,
+  setNotificationPreferences,
+  setParentAccessDraft,
+  setParentLinkFeedback,
+  updateNotificationPreference
+}) {
+  const [step, setStep] = useState(1);
+  const [linking, setLinking] = useState(false);
+
+  async function connectAthlete(event) {
+    setLinking(true);
+    const linked = await linkParentAccessCode(event);
+    setLinking(false);
+    if (linked) setStep(3);
+  }
+
+  function togglePush(checked) {
+    if (checked) {
+      requestBrowserNotifications();
+      return;
+    }
+    setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+  }
+
   return (
     <main className="onboarding-shell parent-onboarding" aria-label="Parent onboarding">
       <section className="onboarding-hero">
-        <p className="eyebrow">The Complete Athlete · Parents</p>
-        <h1>Support their growth.</h1>
-        <p>Your space for better conversations, steady encouragement, and a clear view of your athlete’s progress.</p>
+        <h1>Support without hovering.</h1>
+        <p>Help your athlete build confidence, discipline, and consistency.</p>
       </section>
       <div className="onboarding-form">
-        <section className="panel onboarding-panel">
-          <PanelTitle icon={<Users size={18} />} title="Your parent space" />
-          <p>Overview brings you a Daily Deposit and, once connected, your athlete’s progress and current plan.</p>
-          <p>Parent Corner brings together guides and resources to help you support your athlete. You can explore it before linking an account.</p>
-        </section>
-        <section className="panel onboarding-panel">
-          <PanelTitle icon={<Users size={18} />} title="Connect your athlete" action="Optional" />
-          {linkedAthleteId ? <p className="inline-note">Your athlete is connected.</p> : <>
-            <p>Have their parent access code? Enter it below. You can also connect later from Overview or Settings.</p>
-            <form className="standard-form" onSubmit={linkParentAccessCode}>
-              <input className="text-field" aria-label="Parent access code" placeholder="Enter athlete code"
-                value={parentAccessDraft} onChange={(event) => { setParentAccessDraft(event.target.value); setParentLinkFeedback(''); }} />
-              <button className="primary-action" type="submit">Link Athlete</button>
-            </form>
-          </>}
-          {parentLinkFeedback && <p className="inline-note" role="status">{parentLinkFeedback}</p>}
-        </section>
-        <button className="primary-action full onboarding-start" type="button" onClick={() => completeOnboarding({})}>
-          Go to Parent Overview
-        </button>
+        <div className="parent-onboarding-progress" aria-label={`Step ${step} of 3`}>
+          {[1, 2, 3].map((number) => <span className={number <= step ? 'active' : ''} key={number} />)}
+          <strong>Step {step} of 3</strong>
+        </div>
+
+        {step === 1 && (
+          <section className="panel onboarding-panel parent-onboarding-card">
+            <PanelTitle icon={<Sparkles size={18} />} title="What your parent space gives you" />
+            <div className="parent-onboarding-benefits">
+              <span><BarChart3 size={19} /><b>See their progress</b><small>Follow goals, streaks, and completed work.</small></span>
+              <span><MessageCircle size={19} /><b>Support their mindset</b><small>Use simple guidance for better conversations.</small></span>
+              <span><Bell size={19} /><b>Celebrate the work</b><small>Know when they lock in their day.</small></span>
+              <span><BookOpen size={19} /><b>Lead with a plan</b><small>Use performance plans that help you raise a confident, disciplined athlete.</small></span>
+            </div>
+            <button className="primary-action full" onClick={() => setStep(2)} type="button">
+              Set Up My Parent Space <ArrowRight size={18} />
+            </button>
+          </section>
+        )}
+
+        {step === 2 && (
+          <section className="panel onboarding-panel parent-onboarding-card">
+            <PanelTitle icon={<Users size={18} />} title="Connect your athlete" action="Optional" />
+            {linkedAthleteId ? (
+              <div className="parent-link-success">
+                <BadgeCheck size={22} />
+                <span><strong>Athlete connected</strong><small>{linkedAthletes.length} athlete{linkedAthletes.length === 1 ? '' : 's'} linked to this parent account.</small></span>
+              </div>
+            ) : (
+              <>
+                <p>Ask your athlete for the access code inside their Settings. Each athlete has their own code.</p>
+                <form className="standard-form parent-code-form" onSubmit={connectAthlete}>
+                  <label>
+                    <span>Athlete access code</span>
+                    <input className="text-field" autoCapitalize="characters" aria-label="Athlete access code" placeholder="TCA-XXXXXXXX"
+                      value={parentAccessDraft} onChange={(event) => { setParentAccessDraft(event.target.value.toUpperCase()); setParentLinkFeedback(''); }} />
+                  </label>
+                  <button className="primary-action" disabled={linking} type="submit">{linking ? 'Connecting...' : 'Connect Athlete'}</button>
+                </form>
+              </>
+            )}
+            {parentLinkFeedback && <p className="inline-note" role="status">{parentLinkFeedback}</p>}
+            <div className="parent-onboarding-actions">
+              <button className="ghost-action" onClick={() => setStep(1)} type="button">Back</button>
+              <button className="primary-action" onClick={() => setStep(3)} type="button">{linkedAthleteId ? 'Continue' : 'Connect Later'} <ArrowRight size={17} /></button>
+            </div>
+          </section>
+        )}
+
+        {step === 3 && (
+          <section className="panel onboarding-panel parent-onboarding-card">
+            <PanelTitle icon={<Bell size={18} />} title="Choose what gets surfaced" />
+            <p>Start with the moments that help you support without checking the app all day.</p>
+            <div className="parent-onboarding-toggles">
+              <label><span><strong>iPhone alerts</strong><small>Show approved parent updates on your lock screen.</small></span><input type="checkbox" checked={notificationPreferences.browserPush} onChange={(event) => togglePush(event.target.checked)} /></label>
+              <label><span><strong>Day locked in</strong><small>Know when your athlete completes and locks their day.</small></span><input type="checkbox" checked={notificationPreferences.parentUpdates} onChange={(event) => updateNotificationPreference('parentUpdates', event.target.checked)} /></label>
+              <label><span><strong>Streak and progress moments</strong><small>Celebrate consistency and meaningful milestones.</small></span><input type="checkbox" checked={notificationPreferences.streaks} onChange={(event) => updateNotificationPreference('streaks', event.target.checked)} /></label>
+              <label><span><strong>New performance plans</strong><small>See when fresh mental performance work becomes available.</small></span><input type="checkbox" checked={notificationPreferences.performancePlans} onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)} /></label>
+            </div>
+            <p className="privacy-note"><LockKeyhole size={15} />You control these anytime in Parent Settings.</p>
+            <div className="parent-onboarding-actions">
+              <button className="ghost-action" onClick={() => setStep(2)} type="button">Back</button>
+              <button className="primary-action" type="button" onClick={() => completeOnboarding({})}>Open Parent Overview <ArrowRight size={17} /></button>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
@@ -5758,7 +6006,7 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
     setMessage('');
   }
 
-  function choosePhoto(event) {
+  async function choosePhoto(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
@@ -5771,14 +6019,15 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoFile(file);
-      setSetup((current) => ({ ...current, photo: String(reader.result || '') }));
+    try {
+      setMessage('Preparing your photo...');
+      const prepared = await prepareProfilePhoto(file);
+      setPhotoFile(prepared.file);
+      setSetup((current) => ({ ...current, photo: prepared.preview }));
       setMessage('');
-    };
-    reader.onerror = () => setMessage('That photo could not be opened. Choose a different image.');
-    reader.readAsDataURL(file);
+    } catch {
+      setMessage('That photo could not be opened. Choose a different image.');
+    }
   }
 
   function removePhoto() {
@@ -5829,9 +6078,9 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
     setMessage(photoFile ? 'Adding your profile photo...' : '');
     try {
       const photo = await saveOnboardingPhoto();
-      completeOnboarding({ ...cleanSetup, photo });
+      await completeOnboarding({ ...cleanSetup, photo });
     } catch {
-      completeOnboarding(cleanSetup);
+      await completeOnboarding(cleanSetup);
     } finally {
       setSubmitting(false);
     }
@@ -5891,6 +6140,16 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
               />
             </label>
           </div>
+          <label>
+            <span>State or country</span>
+            <input
+              className="text-field"
+              autoComplete="address-level1"
+              placeholder="Optional"
+              value={setup.location}
+              onChange={(event) => updateField('location', event.target.value)}
+            />
+          </label>
         </section>
 
         <section className="panel onboarding-panel">
@@ -6586,6 +6845,22 @@ function AthleteStartToday({
     };
   });
 
+  useEffect(() => {
+    trackAnalyticsEvent?.('first_rep_viewed', {
+      challengeId: challenge.id,
+      challengeIds: challenges.map((selectedChallenge) => selectedChallenge.id)
+    }, { area: 'activation' });
+  }, []);
+
+  function revealPersonalizedPlan(action) {
+    const recommendation = recommendedPlans[0];
+    trackAnalyticsEvent?.('personalized_plan_revealed', {
+      action,
+      challengeId: challenge.id,
+      seriesTitle: recommendation?.series?.title || ''
+    }, { area: 'activation' });
+  }
+
   function markStartComplete() {
     setStandards((current) => {
       if (!current.length) {
@@ -6602,7 +6877,8 @@ function AthleteStartToday({
     trackAnalyticsEvent?.('first_rep_completed', {
       challengeId: challenge.id
     }, { area: 'activation' });
-    celebrate('First rep complete. Your full dashboard is ready.');
+    revealPersonalizedPlan('mark_complete');
+    celebrate('First rep complete. Your personalized path is ready.');
   }
 
   function openRecommendedPlan(recommendation) {
@@ -6612,6 +6888,7 @@ function AthleteStartToday({
       challengeId: recommendation.challenge.id,
       seriesTitle: recommendation.series?.title || ''
     }, { area: 'activation' });
+    revealPersonalizedPlan('recommended_plan');
     setRequestedPlanSeriesId?.(recommendation.series?.id || '');
     setTab('plans');
   }
@@ -6622,8 +6899,9 @@ function AthleteStartToday({
     trackAnalyticsEvent?.('first_time_home_skipped', {
       challengeId: challenge.id
     }, { area: 'activation' });
+    revealPersonalizedPlan('go_home');
     setTab('home');
-    celebrate('Home screen is ready when you are.');
+    celebrate('Your personalized path is ready.');
   }
 
   return (
@@ -8308,6 +8586,7 @@ function JournalScreen({
 }) {
   const [reflectionHistoryOpen, setReflectionHistoryOpen] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
+  const [deletingEntryId, setDeletingEntryId] = useState('');
 
   function saveJournalEntry() {
     const body = journal.trim();
@@ -8345,10 +8624,38 @@ function JournalScreen({
     celebrate(awarded ? `Journal saved. +${pointValues.journalSaved} points.` : 'Journal saved. That reflection is yours to revisit.');
   }
 
-  function openJournalEntry(entry) {
-    setJournalType(entry.type);
-    setJournal(entry.body);
-    setJournalGoalId(entry.linkedGoalId ? String(entry.linkedGoalId) : '');
+  async function deleteJournalEntry(entry) {
+    if (deletingEntryId) return;
+    const confirmed = window.confirm('Delete this journal entry? This cannot be undone.');
+    if (!confirmed) return;
+
+    setDeletingEntryId(entry.id);
+    const ownerId = loadAuthSession()?.id || entry.ownerId;
+
+    if (isSupabaseConfigured && isSupabaseId(ownerId)) {
+      const { error } = await supabase
+        .from('journal_entries')
+        .delete()
+        .eq('athlete_user_id', ownerId)
+        .eq('id', entry.id);
+
+      if (error) {
+        setDeletingEntryId('');
+        celebrate('That entry could not be deleted. Please try again.');
+        return;
+      }
+    }
+
+    setJournalEntries((current) => {
+      const next = current.filter((item) => item.id !== entry.id);
+      localStorage.setItem(`${journalStorageKey}:${ownerId || 'guest'}`, JSON.stringify(next));
+      return next;
+    });
+    trackAnalyticsEvent?.('journal_deleted', {
+      entryType: entry.type
+    }, { area: 'journal' });
+    setDeletingEntryId('');
+    celebrate('Journal entry deleted.');
   }
 
 
@@ -8363,19 +8670,21 @@ function JournalScreen({
 
         return (
           <article className="journal-entry" key={entry.id}>
-            <button
-              onClick={() => {
-                openJournalEntry(entry);
-                setReflectionHistoryOpen(false);
-              }}
-              type="button"
-            >
+            <div className="journal-entry-content">
               <span>{entry.type}</span>
               <strong>{entry.date} at {entry.time}</strong>
               {linkedGoal && <em>Connected to {linkedGoal.label}</em>}
               <p>{entry.body}</p>
+            </div>
+            <button
+              aria-label={`Delete journal entry from ${entry.date}`}
+              className="journal-delete"
+              disabled={deletingEntryId === entry.id}
+              onClick={() => deleteJournalEntry(entry)}
+              type="button"
+            >
+              <Trash2 size={17} />
             </button>
-
           </article>
         );
       })}
@@ -8845,6 +9154,64 @@ function CoachScreen({
   );
 }
 
+function ParentStartToday({ authSession, completeParentFirstValue, trackAnalyticsEvent }) {
+  const firstName = String(authSession?.name || 'Parent').trim().split(/\s+/)[0];
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const selectedPlan = parentStarterPlanRecommendations.find((plan) => plan.id === selectedPlanId);
+
+  useEffect(() => {
+    trackAnalyticsEvent?.('parent_first_value_viewed', {
+      recommendationCount: parentStarterPlanRecommendations.length
+    }, { area: 'activation' });
+  }, []);
+
+  function choosePlan() {
+    if (!selectedPlan) return;
+    localStorage.setItem(parentStarterPlanStorageKey, selectedPlan.id);
+    trackAnalyticsEvent?.('parent_starter_plan_selected', {
+      planId: selectedPlan.id,
+      planTitle: selectedPlan.title
+    }, { area: 'activation' });
+    completeParentFirstValue(`parent_plan_selected:${selectedPlan.id}`);
+  }
+
+  return (
+    <section className="parent-start-today" aria-label="Choose a recommended parent performance plan">
+      <div className="parent-start-hero">
+        <span>Start Here</span>
+        <h1>Choose where to start.</h1>
+        <p>{firstName}, pick the plan that would help your athlete most right now.</p>
+      </div>
+      <div className="parent-starter-plan-list" role="radiogroup" aria-label="Recommended parent plans">
+        {parentStarterPlanRecommendations.map((plan) => {
+          const selected = plan.id === selectedPlanId;
+          return (
+            <button
+              aria-checked={selected}
+              className={`parent-starter-plan${selected ? ' selected' : ''}`}
+              key={plan.id}
+              onClick={() => setSelectedPlanId(plan.id)}
+              role="radio"
+              type="button"
+            >
+              <span className="parent-starter-plan-icon"><BookOpen size={19} /></span>
+              <span className="parent-starter-plan-copy">
+                <small>{plan.category} · 3-Day Plan</small>
+                <strong>{plan.title}</strong>
+                <span>{plan.description}</span>
+              </span>
+              <span className="parent-starter-plan-check">{selected ? <Check size={16} /> : <ArrowRight size={16} />}</span>
+            </button>
+          );
+        })}
+      </div>
+      <button className="primary-action full" disabled={!selectedPlan} onClick={choosePlan} type="button">
+        {selectedPlan ? `Choose ${selectedPlan.title}` : 'Choose a Plan'} <ArrowRight size={18} />
+      </button>
+    </section>
+  );
+}
+
 function MembershipCheckScreen() {
   return (
     <main className="trial-gate-shell">
@@ -8858,11 +9225,16 @@ function MembershipCheckScreen() {
 }
 
 function TrialPaywallScreen({
+  athleteProfile,
+  plans,
+  planProgress,
   restorePremiumSubscription,
   role,
   startPremiumSubscription,
-  subscription
+  subscription,
+  trackAnalyticsEvent
 }) {
+  const paywallViewed = useRef(false);
   const product = subscription.package;
   const canRestore = subscription.configured && subscription.native;
   const expirationTime = new Date(subscription.expirationDate || '').getTime();
@@ -8870,41 +9242,101 @@ function TrialPaywallScreen({
   const priceLine = product?.price
     ? `${product.price}/month${trialEnded ? '' : ' after trial'}`
     : `$5.99/month${trialEnded ? '' : ' after trial'}`;
+  const challenges = athleteChallengesByIds(athleteProfile?.currentChallenges, athleteProfile?.currentChallenge);
+  const planLibrary = buildPlanLibrary(sequencedPlanAccess(plans || [], planProgress || {}, todayKey()));
+  const primaryChallenge = challenges[0];
+  const recommendedPlan = planLibrary.find((series) => series.title === primaryChallenge.recommendedPlanTitle)
+    ?? planLibrary.find((series) => {
+      const text = `${series.title} ${series.tagline} ${series.category}`.toLowerCase();
+      return primaryChallenge.planKeywords.some((keyword) => text.includes(keyword));
+    })
+    ?? planLibrary[0];
+  const goalLabels = challenges.slice(0, 2).map((challenge) => challenge.shortLabel);
+  const personalizedAthletePaywall = role === 'athlete' && !trialEnded;
+  const personalizedParentPaywall = role === 'parent' && !trialEnded;
+
+  useEffect(() => {
+    if (paywallViewed.current) return;
+    paywallViewed.current = true;
+    trackAnalyticsEvent?.('paywall_viewed', {
+      context: personalizedAthletePaywall ? 'after_first_rep' : personalizedParentPaywall ? 'after_first_parent_rep' : trialEnded ? 'trial_expired' : 'membership_required',
+      challengeIds: challenges.map((challenge) => challenge.id),
+      recommendedPlan: recommendedPlan?.title || ''
+    }, { area: 'monetization' });
+  }, [personalizedAthletePaywall, personalizedParentPaywall, trialEnded]);
+
+  const title = trialEnded
+    ? 'Your free trial has ended'
+    : personalizedAthletePaywall
+      ? 'Keep building the athlete you started becoming today.'
+      : personalizedParentPaywall
+        ? 'Keep building the athlete they’re becoming.'
+      : 'Unlock The Complete Athlete';
   const roleLine = role === 'parent'
-    ? 'Support your athlete with every parent guide and the full plan library.'
-    : 'Train your mindset with every plan, daily tools, and focused coach support.';
+    ? personalizedParentPaywall
+      ? 'Give your athlete daily mindset training and structure, with clear progress and parent guidance for you.'
+      : 'Support your athlete with clear progress, parent guidance, and the full plan library.'
+    : personalizedAthletePaywall
+      ? `Your first rep is complete${athleteProfile?.name ? `, ${String(athleteProfile.name).split(' ')[0]}` : ''}. Keep building with a plan made for what you want to improve.`
+      : 'Keep your mindset training, daily discipline, and personalized plan moving forward.';
+
+  function beginTrial() {
+    trackAnalyticsEvent?.('trial_cta_tapped', {
+      context: personalizedAthletePaywall ? 'after_first_rep' : personalizedParentPaywall ? 'after_first_parent_rep' : trialEnded ? 'trial_expired' : 'membership_required',
+      recommendedPlan: recommendedPlan?.title || '',
+      cta: trialEnded ? 'subscribe_to_continue' : 'start_7_day_trial'
+    }, { area: 'monetization' });
+    startPremiumSubscription();
+  }
 
   return (
     <main className="trial-gate-shell">
       <section className="trial-gate-card">
-        <span className="trial-kicker">{trialEnded ? 'Membership required' : '7-day free trial'}</span>
-        <h1>{trialEnded ? 'Your free trial has ended' : 'Unlock The Complete Athlete'}</h1>
+        <span className="trial-kicker">{trialEnded ? 'Membership required' : personalizedAthletePaywall ? 'Your personalized path is ready' : personalizedParentPaywall ? 'Your parent support system is ready' : '7-day free trial'}</span>
+        <h1>{title}</h1>
         <p>{roleLine}</p>
-        <div className="trial-benefit-list">
-          <span>
-            <BookOpen size={18} />
-            Full performance plan library
-          </span>
-          <span>
-            <Users size={18} />
-            Parent Corner access
-          </span>
-          <span>
-            <BadgeCheck size={18} />
-            Daily Deposit and Today tools
-          </span>
-          <span>
-            <Goal size={18} />
-            Goals, journal, and family access
-          </span>
-          <span>
-            <MessageCircle size={18} />
-            Limited mindset coach messages
-          </span>
-        </div>
+
+        {personalizedAthletePaywall && (
+          <div className="paywall-plan-result">
+            {recommendedPlan?.thumbnailImage && (
+              <div
+                className="paywall-plan-cover"
+                style={{ backgroundImage: `linear-gradient(90deg, rgba(5, 12, 28, 0.1), rgba(5, 12, 28, 0.72)), url(${recommendedPlan.thumbnailImage})`, backgroundPosition: recommendedPlan.coverPosition }}
+                aria-hidden="true"
+              />
+            )}
+            <div>
+              <span>Recommended for {goalLabels.join(' + ')}</span>
+              <strong>{recommendedPlan?.title || primaryChallenge.recommendedPlanTitle}</strong>
+              <em>10 focused minutes a day</em>
+            </div>
+          </div>
+        )}
+
+        {role === 'parent' ? (
+          <div className="trial-benefit-list outcome-list">
+            <span><Brain size={18} />Build confidence, discipline, and resilience</span>
+            <span><Target size={18} />Turn goals into consistent daily work</span>
+            <span><LineChart size={18} />See progress without hovering</span>
+            <span><BookOpen size={18} />Get simple parent guidance when needed</span>
+          </div>
+        ) : (
+          <div className="trial-benefit-list outcome-list">
+            <span><BadgeCheck size={18} />Build confidence through daily evidence</span>
+            <span><RotateCcw size={18} />Reset faster after mistakes</span>
+            <span><Target size={18} />Stay disciplined when motivation changes</span>
+            <span><Users size={18} />Give your family a clear way to support progress</span>
+          </div>
+        )}
+        {!trialEnded && (
+          <div className="trial-timeline" aria-label="Free trial timeline">
+            <div><b>Today</b><span>{role === 'parent' ? 'Unlock parent guidance and every linked athlete dashboard' : 'Unlock your complete personalized plan'}</span></div>
+            <div><b>Day 7</b><span>{priceLine.replace(' after trial', '')} begins unless canceled</span></div>
+          </div>
+        )}
         <div className="trial-price-card">
-          <span>{trialEnded ? 'Keep building' : 'Try everything first'}</span>
-          <strong>{priceLine}</strong>
+          <span>{trialEnded ? 'Keep building' : 'Start free today'}</span>
+          <strong>{trialEnded ? priceLine : `7 days free, then ${priceLine.replace(' after trial', '')}`}</strong>
           <em>Cancel anytime through your Apple subscription settings.</em>
         </div>
         {subscription.message && <p className="inline-note">{subscription.message}</p>}
@@ -8912,11 +9344,11 @@ function TrialPaywallScreen({
           <button
             className="primary-action full"
             disabled={subscription.loading}
-            onClick={startPremiumSubscription}
+            onClick={beginTrial}
             type="button"
           >
             <Sparkles size={18} />
-            {subscription.loading ? 'Checking...' : trialEnded ? 'Subscribe to Continue' : 'Start Free Trial'}
+            {subscription.loading ? 'Checking...' : trialEnded ? 'Subscribe to Continue' : 'Start My 7-Day Free Trial'}
           </button>
           <button
             className="secondary-action inline"
@@ -9279,6 +9711,7 @@ function AthleteSettingsScreen({
   linkAthleteParentAccessCode,
   logoutUser,
   notificationPreferences,
+  persistAthleteProfile,
   privacySettings,
   requestBrowserNotifications,
   restorePremiumSubscription,
@@ -9293,6 +9726,8 @@ function AthleteSettingsScreen({
   setProfileView
 }) {
   const [shareFeedback, setShareFeedback] = useState('');
+  const [profileSaveFeedback, setProfileSaveFeedback] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
   const [openProfileSections, setOpenProfileSections] = useState({ notifications: false, privacy: false });
   const accountEmail = authSession?.email || 'No email found';
 
@@ -9300,11 +9735,12 @@ function AthleteSettingsScreen({
     setAthleteProfile((current) => ({ ...current, [field]: value }));
   }
 
-  function useLocalPhoto(file) {
-    const reader = new FileReader();
-    reader.onload = () => updateAthleteProfile('photo', reader.result);
-    reader.onerror = () => setShareFeedback('Photo could not be added. Choose a different image.');
-    reader.readAsDataURL(file);
+  async function commitProfile(nextProfile, successMessage = 'Profile saved.') {
+    setProfileSaving(true);
+    setProfileSaveFeedback('Saving...');
+    const error = await persistAthleteProfile(nextProfile);
+    setProfileSaving(false);
+    setProfileSaveFeedback(error || successMessage);
   }
 
   async function updatePhoto(event) {
@@ -9312,25 +9748,40 @@ function AthleteSettingsScreen({
     if (!file) return;
 
     try {
-      if (isSupabaseConfigured && authSession?.id) {
-        const extension = file.name.split('.').pop() || 'jpg';
-        const path = `${authSession.id}/profile.${extension}`;
+      setProfileSaveFeedback('Preparing photo...');
+      const prepared = await prepareProfilePhoto(file);
+      let photo = prepared.preview;
+
+      if (isSupabaseConfigured && isSupabaseId(authSession?.id)) {
+        const path = `${authSession.id}/profile.jpg`;
         const { error } = await supabase.storage
           .from('athlete-profile-photos')
-          .upload(path, file, { cacheControl: '3600', upsert: true });
+          .upload(path, prepared.file, { cacheControl: '3600', contentType: 'image/jpeg', upsert: true });
 
         if (!error) {
           const { data } = supabase.storage.from('athlete-profile-photos').getPublicUrl(path);
-          updateAthleteProfile('photo', data.publicUrl);
-          return;
+          photo = `${data.publicUrl}?v=${Date.now()}`;
         }
       }
-      useLocalPhoto(file);
+
+      const nextProfile = { ...athleteProfile, photo };
+      setAthleteProfile(nextProfile);
+      await commitProfile(nextProfile, 'Profile photo saved.');
     } catch {
-      useLocalPhoto(file);
+      setProfileSaveFeedback('Photo could not be added. Choose a different image.');
     } finally {
       event.target.value = '';
     }
+  }
+
+  async function saveProfileDetails() {
+    await commitProfile(athleteProfile);
+  }
+
+  async function removeProfilePhoto() {
+    const nextProfile = { ...athleteProfile, photo: '' };
+    setAthleteProfile(nextProfile);
+    await commitProfile(nextProfile, 'Profile photo removed.');
   }
 
   function updatePrivacy(field, value) {
@@ -9406,7 +9857,7 @@ function AthleteSettingsScreen({
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={updatePhoto} />
           </label>
           {athleteProfile.photo && (
-            <button className="secondary-action inline" onClick={() => updateAthleteProfile('photo', '')}>
+            <button className="secondary-action inline" onClick={removeProfilePhoto} type="button">
               Remove Photo
             </button>
           )}
@@ -9433,6 +9884,11 @@ function AthleteSettingsScreen({
             />
           </label>
         </div>
+        <button className="primary-action full" disabled={profileSaving} onClick={saveProfileDetails} type="button">
+          <Check size={18} />
+          {profileSaving ? 'Saving Profile...' : 'Save Profile'}
+        </button>
+        {profileSaveFeedback && <p className="inline-note" role="status">{profileSaveFeedback}</p>}
       </section>
       <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
       <section className={openProfileSections.notifications ? 'panel notification-settings-panel collapsible-panel open' : 'panel notification-settings-panel collapsible-panel'}>
@@ -10189,7 +10645,9 @@ function ParentDashboard({
 }
 
 function ParentCornerSection({ parentGuides = [], parentMessage }) {
-  const [selectedParentContentId, setSelectedParentContentId] = useState('');
+  const [selectedParentContentId, setSelectedParentContentId] = useState(() => (
+    localStorage.getItem(parentStarterPlanStorageKey) || ''
+  ));
   const [parentGuideProgress, setParentGuideProgress] = useState(loadParentGuideProgress);
   const parentContent = parentGuides.length
     ? parentGuides.map((guide) => ({
