@@ -162,6 +162,20 @@ export default async function DailyDepositsPage() {
         </section>
       )}
 
+      <section className="dashboard-section" id="past-deposits">
+        <div className="section-head">
+          <p className="eyebrow">Archive</p>
+          <h2>Past Deposits</h2>
+          <p>View and edit every deposit released through today. Select any entry to open its editor.</p>
+        </div>
+        <div className="deposit-list">
+          {pastDeposits.length ? pastDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />) : <p>No past deposits yet.</p>}
+        </div>
+        {pastDepositCount > pastDeposits.length && (
+          <p className="empty-row">Showing the newest {pastDeposits.length} of {pastDepositCount} past deposits.</p>
+        )}
+      </section>
+
       <section className="dashboard-section">
         <div className="section-head">
           <p className="eyebrow">Queue</p>
@@ -203,19 +217,6 @@ export default async function DailyDepositsPage() {
         </section>
       )}
 
-      <section className="dashboard-section">
-        <div className="section-head">
-          <p className="eyebrow">Archive</p>
-          <h2>Past Deposits</h2>
-          <p>View and edit every deposit released through today. Select any entry to open its editor.</p>
-        </div>
-        <div className="deposit-list">
-          {pastDeposits.length ? pastDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />) : <p>No past deposits yet.</p>}
-        </div>
-        {pastDepositCount > pastDeposits.length && (
-          <p className="empty-row">Showing the newest {pastDeposits.length} of {pastDepositCount} past deposits.</p>
-        )}
-      </section>
     </AdminShell>
   );
 }
