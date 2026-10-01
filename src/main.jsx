@@ -5708,6 +5708,77 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode, parentFamilyCode: '' });
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authSheetOpen, setAuthSheetOpen] = useState(Boolean(invitedAsParent));
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  ));
+  const videoRef = useRef(null);
+  const closeSheetRef = useRef(null);
+  const sheetRef = useRef(null);
+  const authTriggerRef = useRef(null);
+
+  useEffect(() => {
+    const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    const syncMotion = () => setReduceMotion(Boolean(motionQuery?.matches));
+    const syncPlayback = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (document.hidden || motionQuery?.matches) {
+        video.pause();
+        return;
+      }
+      video.play().catch(() => {});
+    };
+    syncMotion();
+    syncPlayback();
+    motionQuery?.addEventListener?.('change', syncMotion);
+    motionQuery?.addEventListener?.('change', syncPlayback);
+    document.addEventListener('visibilitychange', syncPlayback);
+    return () => {
+      motionQuery?.removeEventListener?.('change', syncMotion);
+      motionQuery?.removeEventListener?.('change', syncPlayback);
+      document.removeEventListener('visibilitychange', syncPlayback);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authSheetOpen) return undefined;
+    window.requestAnimationFrame(() => closeSheetRef.current?.focus({ preventScroll: true }));
+    const handleDialogKey = (event) => {
+      if (event.key === 'Escape' && !isSubmitting) {
+        closeAuthSheet();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(sheetRef.current?.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      ) || [])];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleDialogKey);
+    return () => document.removeEventListener('keydown', handleDialogKey);
+  }, [authSheetOpen, isSubmitting]);
+
+  function closeAuthSheet() {
+    setAuthSheetOpen(false);
+    window.requestAnimationFrame(() => authTriggerRef.current?.focus({ preventScroll: true }));
+  }
+
+  function openAuth(nextMode, event) {
+    if (event?.currentTarget) authTriggerRef.current = event.currentTarget;
+    setMode(nextMode);
+    setAuthSheetOpen(true);
+  }
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -5747,118 +5818,122 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   }
 
   return (
-    <main className="auth-shell auth-login-shell" aria-label="The Complete Athlete login">
-      <section className="auth-brand-panel auth-photo-panel">
-        <video className="auth-hero-video" autoPlay loop muted playsInline preload="auto" aria-hidden="true">
-          <source src="/assets/onboarding-login-hero.mp4" type="video/mp4" />
-        </video>
-        <p className="eyebrow">The Complete Athlete</p>
-        <h1>Access the side built for you.</h1>
-        <p>Athletes build the day. Parents support the day.</p>
-        <div className="auth-role-summary">
-          <span><Trophy size={16} /> Athlete</span>
-          <span><Users size={16} /> Parent</span>
-        </div>
-        <div className="auth-mode auth-entry-mode">
-          <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')} type="button">
-            Create New Account
-          </button>
-          <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">
-            Log In
-          </button>
-        </div>
-      </section>
+    <main className={`auth-cinematic-shell${authSheetOpen ? ' sheet-open' : ''}`} aria-label="The Complete Athlete login">
+      <div className="auth-cinematic-media" aria-hidden="true">
+        {!reduceMotion && !videoFailed && (
+          <video
+            ref={videoRef}
+            className="auth-cinematic-video"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            poster="/assets/onboarding-athlete-hero.png"
+            aria-hidden="true"
+            tabIndex={-1}
+            onError={() => setVideoFailed(true)}
+          >
+            <source src="/assets/onboarding-login-hero.mp4" type="video/mp4" />
+          </video>
+        )}
+        <div className="auth-cinematic-scrim" />
+      </div>
 
-      <section className="auth-card">
-        {mode === 'signup' && <p className="auth-role-prompt">Choose your experience</p>}
-        <div className="role-tabs">
-          {[
-            ['athlete', Trophy, 'Athlete'],
-            ['parent', Users, 'Parent']
-          ].map(([id, Icon, label]) => (
-            <button className={role === id ? 'active' : ''} key={id} onClick={() => setRole(id)} type="button">
-              <Icon size={17} />
-              {label}
-            </button>
-          ))}
+      <section className="auth-cinematic-foreground" aria-hidden={authSheetOpen ? 'true' : undefined} inert={authSheetOpen ? true : undefined}>
+        <div className="auth-cinematic-brand">
+          <span className="auth-cinematic-monogram">TCA</span>
+          <p>THE COMPLETE ATHLETE</p>
+          <h1>TRAIN THE 90%<br />THAT CHANGES EVERYTHING.</h1>
         </div>
-
-        <form className="auth-form" onSubmit={submitAuth}>
-          {mode === 'signup' && (
-            <label>
-              <span>Name</span>
-              <input
-                className="text-field"
-                placeholder="Full name"
-                value={form.name}
-                onChange={(event) => updateForm('name', event.target.value)}
-              />
-            </label>
-          )}
-          <label>
-            <span>Email</span>
-            <input
-              className="text-field"
-              placeholder="name@email.com"
-              type="email"
-              value={form.email}
-              onChange={(event) => updateForm('email', event.target.value)}
-            />
-          </label>
-          <label>
-            <span>Password</span>
-            <input
-              className="text-field"
-              placeholder="Password"
-              type="password"
-              value={form.password}
-              onChange={(event) => updateForm('password', event.target.value)}
-            />
-          </label>
-          {mode === 'signup' && role === 'parent' && (
-            <label>
-              <span>Parent access code</span>
-              <input
-                className="text-field"
-                placeholder={parentAccessCode}
-                value={form.parentCode}
-                onChange={(event) => updateForm('parentCode', event.target.value)}
-              />
-            </label>
-          )}
-          {mode === 'signup' && role === 'athlete' && (
-            <label>
-              <span>Family access code</span>
-              <input
-                className="text-field"
-                placeholder="Optional parent code"
-                value={form.parentFamilyCode}
-                onChange={(event) => updateForm('parentFamilyCode', event.target.value)}
-              />
-            </label>
-          )}
-          {message && <p className="inline-warning">{message}</p>}
-          <button className="primary-action full" disabled={isSubmitting} type="submit">
-            <LockKeyhole size={18} />
-            {isSubmitting ? 'Working...' : mode === 'login' ? 'Log In' : 'Create Account'}
-          </button>
-          {mode === 'login' && (
-            <button className="ghost-action full" disabled={isSubmitting} onClick={sendPasswordReset} type="button">
-              Reset Password
-            </button>
-          )}
-          {mode === 'login' && message && message !== 'Signing in...' && (
-            <button className="ghost-action full review-access-button" disabled={isSubmitting} onClick={() => enterReviewerAccess(role)} type="button">
-              Continue with review access
-            </button>
-          )}
-        </form>
-        <div className="auth-legal-links">
+        <div className="auth-cinematic-actions" aria-label="Account actions">
+          <button className="auth-create-button" onClick={(event) => openAuth('signup', event)} type="button">Create account</button>
+          <button className="auth-login-button" onClick={(event) => openAuth('login', event)} type="button">Log in</button>
+        </div>
+        <div className="auth-cinematic-legal">
           <LegalLink href={LEGAL_URLS.privacy}>Privacy</LegalLink>
           <LegalLink href={LEGAL_URLS.terms}>Terms</LegalLink>
           <LegalLink href={LEGAL_URLS.support}>Support</LegalLink>
         </div>
       </section>
+
+      {authSheetOpen && (
+        <section ref={sheetRef} className="auth-bottom-sheet" role="dialog" aria-modal="true" aria-label={mode === 'signup' ? 'Create account' : 'Log in'}>
+          <div className="auth-sheet-handle" aria-hidden="true" />
+          <div className="auth-sheet-header">
+            <div>
+              <span>THE COMPLETE ATHLETE</span>
+              <h2>{mode === 'signup' ? 'Choose your experience' : 'Welcome back.'}</h2>
+              <p>{mode === 'signup' ? 'Create the account built for your role.' : 'Log in to continue building.'}</p>
+            </div>
+            <button ref={closeSheetRef} className="auth-sheet-close" aria-label="Close authentication form" disabled={isSubmitting} onClick={closeAuthSheet} type="button">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="auth-mode auth-sheet-mode">
+            <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')} type="button">Create account</button>
+            <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Log in</button>
+          </div>
+
+          <div className="role-tabs">
+            {[
+              ['athlete', Trophy, 'Athlete'],
+              ['parent', Users, 'Parent']
+            ].map(([id, Icon, label]) => (
+              <button className={role === id ? 'active' : ''} key={id} onClick={() => setRole(id)} type="button">
+                <Icon size={17} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <form className="auth-form" onSubmit={submitAuth}>
+            {mode === 'signup' && (
+              <label>
+                <span>Name</span>
+                <input className="text-field" placeholder="Full name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
+              </label>
+            )}
+            <label>
+              <span>Email</span>
+              <input className="text-field" placeholder="name@email.com" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} />
+            </label>
+            <label>
+              <span>Password</span>
+              <input className="text-field" placeholder="Password" type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} />
+            </label>
+            {mode === 'signup' && role === 'parent' && (
+              <label>
+                <span>Parent access code</span>
+                <input className="text-field" placeholder={parentAccessCode} value={form.parentCode} onChange={(event) => updateForm('parentCode', event.target.value)} />
+              </label>
+            )}
+            {mode === 'signup' && role === 'athlete' && (
+              <label>
+                <span>Family access code</span>
+                <input className="text-field" placeholder="Optional parent code" value={form.parentFamilyCode} onChange={(event) => updateForm('parentFamilyCode', event.target.value)} />
+              </label>
+            )}
+            {message && <p className="inline-warning">{message}</p>}
+            <button className="primary-action full" disabled={isSubmitting} type="submit">
+              <LockKeyhole size={18} />
+              {isSubmitting ? 'Working...' : mode === 'login' ? 'Log In' : 'Create Account'}
+            </button>
+            {mode === 'login' && (
+              <button className="ghost-action full" disabled={isSubmitting} onClick={sendPasswordReset} type="button">Reset Password</button>
+            )}
+            {mode === 'login' && message && message !== 'Signing in...' && (
+              <button className="ghost-action full review-access-button" disabled={isSubmitting} onClick={() => enterReviewerAccess(role)} type="button">Continue with review access</button>
+            )}
+          </form>
+          <div className="auth-legal-links">
+            <LegalLink href={LEGAL_URLS.privacy}>Privacy</LegalLink>
+            <LegalLink href={LEGAL_URLS.terms}>Terms</LegalLink>
+            <LegalLink href={LEGAL_URLS.support}>Support</LegalLink>
+          </div>
+        </section>
+      )}
     </main>
   );
 }
