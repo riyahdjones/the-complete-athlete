@@ -2973,6 +2973,26 @@ textarea {
   gap: 9px;
 }
 
+/* Keep the complete paywall reachable inside the fixed native app viewport. */
+.native-shell .trial-gate-shell {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  padding: max(28px, calc(env(safe-area-inset-top) + 12px)) 14px max(34px, calc(env(safe-area-inset-bottom) + 22px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.native-shell .trial-gate-card {
+  margin: 0 auto;
+}
+
 .trial-actions .secondary-action.inline {
   margin-top: 0;
 }
