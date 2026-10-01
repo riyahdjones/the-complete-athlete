@@ -9326,6 +9326,7 @@ function TrialPaywallScreen({
             <span><RotateCcw size={18} />Reset faster after mistakes</span>
             <span><Target size={18} />Stay disciplined when motivation changes</span>
             <span><Goal size={18} />Set meaningful goals and track the daily actions that move them forward</span>
+            <span><BookOpen size={18} />Follow focused performance plans built around what you want to improve</span>
             <span><MessageCircle size={18} />Get personal guidance from your AI performance coach</span>
             <span><Users size={18} />Give your family a clear way to support progress</span>
           </div>
