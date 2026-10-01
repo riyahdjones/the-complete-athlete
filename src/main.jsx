@@ -56,6 +56,15 @@ const LEGAL_URLS = {
   terms: 'https://the-complete-athlete.vercel.app/terms.html'
 };
 
+const PASSWORD_RESET_REDIRECT_URL = 'https://the-complete-athlete.vercel.app/?passwordRecovery=1';
+
+function hasPasswordRecoveryIntent() {
+  if (typeof window === 'undefined') return false;
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return query.get('passwordRecovery') === '1' || hash.get('type') === 'recovery';
+}
+
 if (typeof window !== 'undefined') {
   const isNativeShell =
     window.location.protocol === 'capacitor:' ||
@@ -3114,6 +3123,7 @@ function App() {
   const [initialDailyState] = useState(loadDailyState);
   const [authUsers, setAuthUsers] = useState(loadAuthUsers);
   const [authSession, setAuthSession] = useState(loadAuthSession);
+  const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(hasPasswordRecoveryIntent);
   const [onboardingComplete, setOnboardingComplete] = useState(() => (
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('firstTime') === 'athlete'
       ? false
@@ -3237,7 +3247,7 @@ function App() {
       syncAppUserToHighLevel(data.session?.access_token || '');
     }).catch(() => {});
   }, [authSession?.id, authSession?.role]);
-  const isAuthed = Boolean(effectiveSession);
+  const isAuthed = Boolean(effectiveSession) && !passwordRecoveryActive;
   const isLocalPreviewSession = Boolean(localAthletePreviewSession || localParentInviteSession || prototypeBypassLogin);
   const forcePaywallPreview = import.meta.env.DEV
     && typeof window !== 'undefined'
@@ -4530,10 +4540,24 @@ function App() {
     if (!isSupabaseConfigured) return 'Password reset is available when the live backend is connected.';
 
     const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${window.location.origin}/`
+      redirectTo: PASSWORD_RESET_REDIRECT_URL
     });
     if (error) return error.message;
-    return 'Password reset email sent. Check your inbox.';
+    trackAnalyticsEvent('password_reset_requested', {}, { area: 'auth' });
+    return 'If an account uses that email, a reset link is on the way. Check your inbox and spam folder.';
+  }
+
+  async function completePasswordRecovery(password) {
+    if (!isSupabaseConfigured) return 'Password recovery is unavailable while the backend is disconnected.';
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return error.message;
+
+    trackAnalyticsEvent('password_reset_completed', {}, { area: 'auth' });
+    await supabase.auth.signOut();
+    setAuthSession(null);
+    setPasswordRecoveryActive(false);
+    window.history.replaceState({}, '', window.location.pathname);
+    return '';
   }
 
   async function deleteAccount() {
@@ -4707,7 +4731,11 @@ function App() {
       setView(profile.role === 'parent' ? 'parent' : 'athlete');
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecoveryActive(true);
+        return;
+      }
       if (!session) setAuthSession(null);
     });
 
@@ -5533,8 +5561,10 @@ function App() {
   if (!isAuthed) {
     return (
       <AuthScreen
+        completePasswordRecovery={completePasswordRecovery}
         loginUser={loginUser}
         enterReviewerAccess={enterReviewerAccess}
+        passwordRecoveryActive={passwordRecoveryActive}
         requestPasswordReset={requestPasswordReset}
         signupUser={signupUser}
         parentAccessCode={athleteProfile.parentAccessCode}
@@ -5698,17 +5728,19 @@ const screenTitles = {
   profile: 'My Profile'
 };
 
-function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, signupUser, parentAccessCode }) {
+function AuthScreen({ completePasswordRecovery, enterReviewerAccess, loginUser, passwordRecoveryActive, requestPasswordReset, signupUser, parentAccessCode }) {
   const inviteParams = new URLSearchParams(window.location.search);
   const invitedRole = inviteParams.get('role');
   const invitedCode = inviteParams.get('parentCode') ?? '';
   const invitedAsParent = invitedRole === 'parent' && invitedCode;
   const [mode, setMode] = useState(invitedAsParent ? 'signup' : 'login');
+  const [authStep, setAuthStep] = useState(passwordRecoveryActive ? 'recovery' : 'form');
   const [role, setRole] = useState(invitedAsParent ? 'parent' : 'athlete');
   const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode, parentFamilyCode: '' });
+  const [recoveryForm, setRecoveryForm] = useState({ password: '', confirmPassword: '' });
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [authSheetOpen, setAuthSheetOpen] = useState(Boolean(invitedAsParent));
+  const [authSheetOpen, setAuthSheetOpen] = useState(Boolean(invitedAsParent || passwordRecoveryActive));
   const [videoFailed, setVideoFailed] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(() => (
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -5717,6 +5749,13 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   const closeSheetRef = useRef(null);
   const sheetRef = useRef(null);
   const authTriggerRef = useRef(null);
+
+  useEffect(() => {
+    if (!passwordRecoveryActive) return;
+    setAuthStep('recovery');
+    setAuthSheetOpen(true);
+    setMessage('');
+  }, [passwordRecoveryActive]);
 
   useEffect(() => {
     const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -5777,6 +5816,8 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
   function openAuth(nextMode, event) {
     if (event?.currentTarget) authTriggerRef.current = event.currentTarget;
     setMode(nextMode);
+    setAuthStep('form');
+    setMessage('');
     setAuthSheetOpen(true);
   }
 
@@ -5812,6 +5853,36 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
       setMessage(await requestPasswordReset(form.email));
     } catch (error) {
       setMessage(error?.message || 'Password reset could not be sent. Try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function submitPasswordRecovery(event) {
+    event.preventDefault();
+    if (recoveryForm.password.length < 8) {
+      setMessage('Use at least 8 characters for your new password.');
+      return;
+    }
+    if (recoveryForm.password !== recoveryForm.confirmPassword) {
+      setMessage('Those passwords do not match.');
+      return;
+    }
+    setIsSubmitting(true);
+    setMessage('Updating your password...');
+    try {
+      const error = await completePasswordRecovery(recoveryForm.password);
+      if (error) {
+        setMessage(error);
+        return;
+      }
+      setRecoveryForm({ password: '', confirmPassword: '' });
+      setForm((current) => ({ ...current, password: '' }));
+      setMode('login');
+      setAuthStep('form');
+      setMessage('Password updated. Log in with your new password.');
+    } catch (error) {
+      setMessage(error?.message || 'Your password could not be updated. Request a new reset link and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -5857,75 +5928,119 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
       </section>
 
       {authSheetOpen && (
-        <section ref={sheetRef} className="auth-bottom-sheet" role="dialog" aria-modal="true" aria-label={mode === 'signup' ? 'Create account' : 'Log in'}>
+        <section
+          ref={sheetRef}
+          className="auth-bottom-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label={authStep === 'forgot' ? 'Reset password' : authStep === 'recovery' ? 'Create a new password' : mode === 'signup' ? 'Create account' : 'Log in'}
+        >
           <div className="auth-sheet-handle" aria-hidden="true" />
           <div className="auth-sheet-header">
             <div>
               <span>THE COMPLETE ATHLETE</span>
-              <h2>{mode === 'signup' ? 'Choose your experience' : 'Welcome back.'}</h2>
-              <p>{mode === 'signup' ? 'Create the account built for your role.' : 'Log in to continue building.'}</p>
+              <h2>{authStep === 'forgot' ? 'Reset your password.' : authStep === 'recovery' ? 'Create a new password.' : mode === 'signup' ? 'Choose your experience' : 'Welcome back.'}</h2>
+              <p>{authStep === 'forgot' ? 'We’ll email you a secure reset link.' : authStep === 'recovery' ? 'Choose a password you have not used before.' : mode === 'signup' ? 'Create the account built for your role.' : 'Log in to continue building.'}</p>
             </div>
             <button ref={closeSheetRef} className="auth-sheet-close" aria-label="Close authentication form" disabled={isSubmitting} onClick={closeAuthSheet} type="button">
               <X size={20} />
             </button>
           </div>
 
-          <div className="auth-mode auth-sheet-mode">
-            <button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')} type="button">Create account</button>
-            <button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')} type="button">Log in</button>
-          </div>
+          {authStep === 'form' && (
+            <>
+              <div className="auth-mode auth-sheet-mode">
+                <button className={mode === 'signup' ? 'active' : ''} onClick={() => { setMode('signup'); setMessage(''); }} type="button">Create account</button>
+                <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setMessage(''); }} type="button">Log in</button>
+              </div>
 
-          <div className="role-tabs">
-            {[
-              ['athlete', Trophy, 'Athlete'],
-              ['parent', Users, 'Parent']
-            ].map(([id, Icon, label]) => (
-              <button className={role === id ? 'active' : ''} key={id} onClick={() => setRole(id)} type="button">
-                <Icon size={17} />
-                {label}
+              <div className="role-tabs">
+                {[
+                  ['athlete', Trophy, 'Athlete'],
+                  ['parent', Users, 'Parent']
+                ].map(([id, Icon, label]) => (
+                  <button className={role === id ? 'active' : ''} key={id} onClick={() => setRole(id)} type="button">
+                    <Icon size={17} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <form className="auth-form" onSubmit={submitAuth}>
+                {mode === 'signup' && (
+                  <label>
+                    <span>Name</span>
+                    <input className="text-field" placeholder="Full name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
+                  </label>
+                )}
+                <label>
+                  <span>Email</span>
+                  <input autoComplete="email" className="text-field" placeholder="name@email.com" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} />
+                </label>
+                <label>
+                  <span>Password</span>
+                  <input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} className="text-field" placeholder="Password" type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} />
+                </label>
+                {mode === 'signup' && role === 'parent' && (
+                  <label>
+                    <span>Parent access code</span>
+                    <input className="text-field" placeholder={parentAccessCode} value={form.parentCode} onChange={(event) => updateForm('parentCode', event.target.value)} />
+                  </label>
+                )}
+                {mode === 'signup' && role === 'athlete' && (
+                  <label>
+                    <span>Family access code</span>
+                    <input className="text-field" placeholder="Optional parent code" value={form.parentFamilyCode} onChange={(event) => updateForm('parentFamilyCode', event.target.value)} />
+                  </label>
+                )}
+                {message && <p className="inline-warning">{message}</p>}
+                <button className="primary-action full" disabled={isSubmitting} type="submit">
+                  <LockKeyhole size={18} />
+                  {isSubmitting ? 'Working...' : mode === 'login' ? 'Log In' : 'Create Account'}
+                </button>
+                {mode === 'login' && (
+                  <button className="auth-forgot-link" disabled={isSubmitting} onClick={() => { setAuthStep('forgot'); setMessage(''); }} type="button">Forgot password?</button>
+                )}
+                {mode === 'login' && message && message !== 'Signing in...' && (
+                  <button className="ghost-action full review-access-button" disabled={isSubmitting} onClick={() => enterReviewerAccess(role)} type="button">Continue with review access</button>
+                )}
+              </form>
+            </>
+          )}
+
+          {authStep === 'forgot' && (
+            <form className="auth-form auth-recovery-form" onSubmit={(event) => { event.preventDefault(); sendPasswordReset(); }}>
+              <label>
+                <span>Email</span>
+                <input autoComplete="email" autoFocus className="text-field" placeholder="name@email.com" required type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} />
+              </label>
+              {message && <p className="inline-warning auth-recovery-message">{message}</p>}
+              <button className="primary-action full" disabled={isSubmitting} type="submit">
+                <LockKeyhole size={18} />
+                {isSubmitting ? 'Sending...' : 'Send Reset Link'}
               </button>
-            ))}
-          </div>
+              <button className="ghost-action full" disabled={isSubmitting} onClick={() => { setAuthStep('form'); setMode('login'); setMessage(''); }} type="button">Back to Log In</button>
+            </form>
+          )}
 
-          <form className="auth-form" onSubmit={submitAuth}>
-            {mode === 'signup' && (
+          {authStep === 'recovery' && (
+            <form className="auth-form auth-recovery-form" onSubmit={submitPasswordRecovery}>
               <label>
-                <span>Name</span>
-                <input className="text-field" placeholder="Full name" value={form.name} onChange={(event) => updateForm('name', event.target.value)} />
+                <span>New password</span>
+                <input autoComplete="new-password" autoFocus className="text-field" minLength={8} placeholder="At least 8 characters" required type="password" value={recoveryForm.password} onChange={(event) => { setRecoveryForm((current) => ({ ...current, password: event.target.value })); setMessage(''); }} />
               </label>
-            )}
-            <label>
-              <span>Email</span>
-              <input className="text-field" placeholder="name@email.com" type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} />
-            </label>
-            <label>
-              <span>Password</span>
-              <input className="text-field" placeholder="Password" type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} />
-            </label>
-            {mode === 'signup' && role === 'parent' && (
               <label>
-                <span>Parent access code</span>
-                <input className="text-field" placeholder={parentAccessCode} value={form.parentCode} onChange={(event) => updateForm('parentCode', event.target.value)} />
+                <span>Confirm new password</span>
+                <input autoComplete="new-password" className="text-field" minLength={8} placeholder="Enter it again" required type="password" value={recoveryForm.confirmPassword} onChange={(event) => { setRecoveryForm((current) => ({ ...current, confirmPassword: event.target.value })); setMessage(''); }} />
               </label>
-            )}
-            {mode === 'signup' && role === 'athlete' && (
-              <label>
-                <span>Family access code</span>
-                <input className="text-field" placeholder="Optional parent code" value={form.parentFamilyCode} onChange={(event) => updateForm('parentFamilyCode', event.target.value)} />
-              </label>
-            )}
-            {message && <p className="inline-warning">{message}</p>}
-            <button className="primary-action full" disabled={isSubmitting} type="submit">
-              <LockKeyhole size={18} />
-              {isSubmitting ? 'Working...' : mode === 'login' ? 'Log In' : 'Create Account'}
-            </button>
-            {mode === 'login' && (
-              <button className="ghost-action full" disabled={isSubmitting} onClick={sendPasswordReset} type="button">Reset Password</button>
-            )}
-            {mode === 'login' && message && message !== 'Signing in...' && (
-              <button className="ghost-action full review-access-button" disabled={isSubmitting} onClick={() => enterReviewerAccess(role)} type="button">Continue with review access</button>
-            )}
-          </form>
+              {message && <p className="inline-warning auth-recovery-message">{message}</p>}
+              <button className="primary-action full" disabled={isSubmitting} type="submit">
+                <LockKeyhole size={18} />
+                {isSubmitting ? 'Updating...' : 'Update Password'}
+              </button>
+              <button className="ghost-action full" disabled={isSubmitting} onClick={() => { setAuthStep('forgot'); setMessage(''); }} type="button">Request Another Link</button>
+            </form>
+          )}
           <div className="auth-legal-links">
             <LegalLink href={LEGAL_URLS.privacy}>Privacy</LegalLink>
             <LegalLink href={LEGAL_URLS.terms}>Terms</LegalLink>

@@ -12297,6 +12297,29 @@ select {
   background: linear-gradient(100deg, #287fff, #10254d);
 }
 
+.auth-forgot-link {
+  justify-self: center;
+  min-height: 36px;
+  padding: 4px 10px;
+  color: #1f68dc;
+  border: 0;
+  background: transparent;
+  font-size: .86rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.auth-recovery-form {
+  padding-top: 4px;
+}
+
+.auth-recovery-message {
+  margin: 2px 0;
+  border-radius: 12px;
+  line-height: 1.45;
+}
+
 .auth-bottom-sheet .auth-legal-links a {
   color: #52647e;
 }
