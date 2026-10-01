@@ -5842,9 +5842,8 @@ function AuthScreen({ enterReviewerAccess, loginUser, requestPasswordReset, sign
 
       <section className="auth-cinematic-foreground" aria-hidden={authSheetOpen ? 'true' : undefined} inert={authSheetOpen ? true : undefined}>
         <div className="auth-cinematic-brand">
-          <span className="auth-cinematic-monogram">TCA</span>
           <p>THE COMPLETE ATHLETE</p>
-          <h1>TRAIN THE 90%<br />THAT CHANGES EVERYTHING.</h1>
+          <h1>TRAIN THE PART OF YOUR GAME<br />NO ONE SEES.</h1>
         </div>
         <div className="auth-cinematic-actions" aria-label="Account actions">
           <button className="auth-create-button" onClick={(event) => openAuth('signup', event)} type="button">Create account</button>

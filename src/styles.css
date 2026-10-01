@@ -12107,22 +12107,6 @@ select {
   text-shadow: 0 3px 24px rgba(0, 0, 0, .5);
 }
 
-.auth-cinematic-monogram {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 46px;
-  border: 1px solid rgba(255, 255, 255, .35);
-  border-radius: 14px;
-  color: #fff;
-  background: linear-gradient(135deg, #2683ff, #155bd7);
-  box-shadow: 0 12px 30px rgba(4, 35, 90, .35);
-  font-size: 1rem;
-  font-style: italic;
-  font-weight: 1000;
-  letter-spacing: -.08em;
-}
-
 .auth-cinematic-brand p {
   margin: 2px 0 0;
   color: rgba(255, 255, 255, .82);
