@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { deleteDailyDeposit, saveDailyDeposit } from '../actions';
 import { isAdminAuthed } from '../../lib/admin-auth';
@@ -124,10 +125,12 @@ function DepositQueueSummary({ deposits, totalCount }) {
   );
 }
 
-export default async function DailyDepositsPage() {
+export default async function DailyDepositsPage({ searchParams }) {
   const authed = await isAdminAuthed();
   if (!authed) redirect('/');
 
+  const params = await searchParams;
+  const activeView = params?.view === 'past' ? 'past' : 'scheduled';
   const today = todayKey();
   const supabase = supabaseAdmin();
 
@@ -150,8 +153,6 @@ export default async function DailyDepositsPage() {
   ]);
 
   const error = pastError || futureError;
-  const latestDeposit = pastDeposits[0];
-
   return (
     <AdminShell eyebrow="Content Operations" title="Daily Deposits" description="Create, schedule, publish, and review the daily message delivered to athletes.">
 
@@ -162,61 +163,63 @@ export default async function DailyDepositsPage() {
         </section>
       )}
 
-      <section className="dashboard-section" id="past-deposits">
-        <div className="section-head">
-          <p className="eyebrow">Archive</p>
-          <h2>Past Deposits</h2>
-          <p>View and edit every deposit released through today. Select any entry to open its editor.</p>
-        </div>
-        <div className="deposit-list">
-          {pastDeposits.length ? pastDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />) : <p>No past deposits yet.</p>}
-        </div>
-        {pastDepositCount > pastDeposits.length && (
-          <p className="empty-row">Showing the newest {pastDeposits.length} of {pastDepositCount} past deposits.</p>
-        )}
-      </section>
+      <nav className="deposit-view-tabs" aria-label="Daily Deposit views">
+        <Link className={activeView === 'scheduled' ? 'active' : ''} href="/deposits?view=scheduled">
+          <span>Scheduled Deposits</span>
+          <strong>{futureDepositCount ?? futureDeposits.length}</strong>
+        </Link>
+        <Link className={activeView === 'past' ? 'active' : ''} href="/deposits?view=past">
+          <span>Past Deposits</span>
+          <strong>{pastDepositCount ?? pastDeposits.length}</strong>
+        </Link>
+      </nav>
 
-      <section className="dashboard-section">
-        <div className="section-head">
-          <p className="eyebrow">Queue</p>
-          <h2>Future Daily Deposits</h2>
-          <p>Review what is already scheduled ahead so you can see the upcoming rhythm at a glance.</p>
-        </div>
-        {futureDeposits.length ? (
-          <>
-            <DepositQueueSummary deposits={futureDeposits} totalCount={futureDepositCount} />
-            <div className="deposit-list future-deposit-list">
-              {futureDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />)}
+      {activeView === 'scheduled' ? (
+        <>
+          <section className="dashboard-section">
+            <div className="section-head">
+              <p className="eyebrow">Create</p>
+              <h2>Create a Daily Deposit</h2>
+              <p>Pick the date, write the deposit, add the focus, then schedule or publish it.</p>
             </div>
-            {futureDepositCount > futureDeposits.length && (
-              <p className="empty-row">Showing the first {futureDeposits.length} future deposits. More are queued in the database.</p>
+            <DepositForm />
+          </section>
+          <section className="dashboard-section">
+            <div className="section-head">
+              <p className="eyebrow">Queue</p>
+              <h2>Scheduled Deposits</h2>
+              <p>Review and edit every deposit scheduled for a future date.</p>
+            </div>
+            {futureDeposits.length ? (
+              <>
+                <DepositQueueSummary deposits={futureDeposits} totalCount={futureDepositCount} />
+                <div className="deposit-list future-deposit-list">
+                  {futureDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />)}
+                </div>
+                {futureDepositCount > futureDeposits.length && (
+                  <p className="empty-row">Showing the first {futureDeposits.length} scheduled deposits. More are queued in the database.</p>
+                )}
+              </>
+            ) : (
+              <p className="empty-state">No future deposits are scheduled yet.</p>
             )}
-          </>
-        ) : (
-          <p className="empty-state">No future deposits are queued yet.</p>
-        )}
-      </section>
-
-      <section className="dashboard-section">
-        <div className="section-head">
-          <p className="eyebrow">Create</p>
-          <h2>Today&apos;s Deposit</h2>
-          <p>Pick the date, write the deposit, add the focus, then publish when it is ready.</p>
-        </div>
-        <DepositForm />
-      </section>
-
-      {latestDeposit && (
-        <section className="dashboard-section">
+          </section>
+        </>
+      ) : (
+        <section className="dashboard-section" id="past-deposits">
           <div className="section-head">
-            <p className="eyebrow">Quick Edit</p>
-            <h2>Latest Deposit</h2>
-            <p>Use this when you want to adjust the newest entry without searching through history.</p>
+            <p className="eyebrow">Archive</p>
+            <h2>Past Deposits</h2>
+            <p>View and edit every deposit released through today. Select any entry to open its editor.</p>
           </div>
-          <DepositForm deposit={latestDeposit} />
+          <div className="deposit-list">
+            {pastDeposits.length ? pastDeposits.map((deposit) => <DepositRow editable key={deposit.id} deposit={deposit} />) : <p>No past deposits yet.</p>}
+          </div>
+          {pastDepositCount > pastDeposits.length && (
+            <p className="empty-row">Showing the newest {pastDeposits.length} of {pastDepositCount} past deposits.</p>
+          )}
         </section>
       )}
-
     </AdminShell>
   );
 }
