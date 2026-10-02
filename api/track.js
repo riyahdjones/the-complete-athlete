@@ -1,6 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import { upsertHighLevelContact } from '../server/highlevel.js';
+import { handleSupabaseAuthEmail } from '../server/supabase-auth-email.js';
 import { envValue, getAuthUserById, json, readJson, setCorsHeaders, supabaseServiceRequest, verifyUser } from '../server/supabase.js';
+
+export const config = {
+  api: { bodyParser: false }
+};
 
 const allowedSeverities = new Set(['info', 'warning', 'error', 'critical']);
 
@@ -127,6 +132,10 @@ async function trackEvent(req, res, user) {
 }
 
 export default async function handler(req, res) {
+  const requestUrl = new URL(req.url || '/', 'https://the-complete-athlete.vercel.app');
+  const action = String(requestUrl.searchParams.get('action') || '').toLowerCase();
+  if (action === 'auth-email') return handleSupabaseAuthEmail(req, res);
+
   setCorsHeaders(res, 'POST, OPTIONS');
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -136,8 +145,6 @@ export default async function handler(req, res) {
 
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const user = token ? await verifyUser(token) : null;
-  const action = String(req.query?.action || '').toLowerCase();
-
   if (action === 'new-user') return syncAppUser(req, res, user);
   if (action === 'activity') return trackActivity(req, res, user);
   if (action === 'event') return trackEvent(req, res, user);
