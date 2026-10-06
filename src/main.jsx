@@ -10238,6 +10238,7 @@ function CoachScreen({
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceTranscribing, setVoiceTranscribing] = useState(false);
   const [voiceSpeaking, setVoiceSpeaking] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError, setVoiceError] = useState('');
@@ -10275,6 +10276,7 @@ function CoachScreen({
   useEffect(() => {
     const controller = createCoachVoiceController({
       locale: language === 'es' ? 'es-US' : 'en-US',
+      transcribeAudio: transcribeCoachAudio,
       onTranscript(text, isFinal) {
         setVoiceTranscript(text);
         setMessageDraft(text);
@@ -10285,6 +10287,9 @@ function CoachScreen({
       },
       onListeningChange(active) {
         setVoiceListening(active);
+      },
+      onTranscribingChange(active) {
+        setVoiceTranscribing(active);
       },
       onSpeakingChange(active) {
         setVoiceSpeaking(active);
@@ -10300,6 +10305,7 @@ function CoachScreen({
       }
     });
     voiceControllerRef.current = controller;
+    setVoiceError('');
     setVoiceSupported(controller.isSupported());
     return () => {
       voiceModeRef.current = false;
@@ -10308,8 +10314,37 @@ function CoachScreen({
     };
   }, [language]);
 
+  async function transcribeCoachAudio(blob) {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('The voice recording could not be read.'));
+      reader.readAsDataURL(blob);
+    });
+    const audio = dataUrl.split(',')[1] || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
+    }
+    const response = await fetch(appApiUrl('/api/coach-transcribe'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        audio,
+        mimeType: blob.type || 'audio/webm',
+        language
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.text) {
+      throw new Error(payload.error || 'Voice recognition could not connect. Please try again.');
+    }
+    return payload.text;
+  }
+
   async function startVoiceListening() {
-    if (coachThinking || !voiceControllerRef.current) return;
+    if (coachThinking || voiceTranscribing || !voiceControllerRef.current) return;
     setVoiceError('');
     setVoiceTranscript('');
     try {
@@ -10338,6 +10373,7 @@ function CoachScreen({
     setVoiceMode(false);
     setVoiceListening(false);
     setVoiceSpeaking(false);
+    setVoiceTranscribing(false);
     setVoiceTranscript('');
     try {
       await voiceControllerRef.current?.stopListening({ submit: false });
@@ -10365,6 +10401,7 @@ function CoachScreen({
   }
 
   async function handleVoiceControl() {
+    if (voiceTranscribing) return;
     if (voiceListening) {
       await voiceControllerRef.current?.stopListening({ submit: true });
       return;
@@ -10637,14 +10674,14 @@ function CoachScreen({
             <ChevronRight size={18} />
           </button>
         ) : (
-          <div className={`coach-voice-session${voiceListening ? ' listening' : ''}${voiceSpeaking ? ' speaking' : ''}`}>
-            <button className="coach-voice-orb" onClick={handleVoiceControl} type="button" aria-label={voiceListening ? 'Finish speaking' : voiceSpeaking ? 'Interrupt coach' : 'Speak to coach'}>
+          <div className={`coach-voice-session${voiceListening ? ' listening' : ''}${voiceSpeaking ? ' speaking' : ''}${voiceTranscribing ? ' transcribing' : ''}`} aria-live="polite">
+            <button className="coach-voice-orb" disabled={voiceTranscribing} onClick={handleVoiceControl} type="button" aria-label={voiceListening ? 'Finish speaking' : voiceSpeaking ? 'Interrupt coach' : 'Speak to coach'}>
               {voiceSpeaking ? <Volume2 size={23} /> : <Mic size={23} />}
             </button>
             <div className="coach-voice-copy">
               <span>Voice Coach</span>
-              <strong>{coachThinking ? 'Coach is thinking…' : voiceSpeaking ? 'Coach is speaking' : voiceListening ? 'I’m listening…' : 'Your turn'}</strong>
-              <p>{voiceTranscript || (voiceListening ? 'Say what’s on your mind.' : voiceSpeaking ? 'Tap the speaker to interrupt.' : 'Tap the microphone to continue.')}</p>
+              <strong>{voiceTranscribing ? 'Turning your voice into text…' : coachThinking ? 'Coach is thinking…' : voiceSpeaking ? 'Coach is speaking' : voiceListening ? 'I’m listening…' : 'Your turn'}</strong>
+              <p>{voiceTranscript || (voiceTranscribing ? 'One moment.' : voiceListening ? 'Say what’s on your mind, then tap the microphone.' : voiceSpeaking ? 'Tap the speaker to interrupt.' : 'Tap the microphone to continue.')}</p>
             </div>
             <button className="coach-voice-end" onClick={endVoiceSession} type="button">End</button>
           </div>

@@ -9,14 +9,22 @@ function browserRecognitionConstructor() {
 
 export function createCoachVoiceController({
   locale = 'en-US',
+  transcribeAudio,
   onTranscript = () => {},
   onListeningChange = () => {},
+  onTranscribingChange = () => {},
   onSpeakingChange = () => {},
   onError = () => {}
 } = {}) {
   const native = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
   const BrowserRecognition = browserRecognitionConstructor();
   let recognition = null;
+  let mediaRecorder = null;
+  let mediaStream = null;
+  let mediaChunks = [];
+  let mediaStopPromise = null;
+  let resolveMediaStop = null;
+  let recordingTimeout = null;
   let utterance = null;
   let latestTranscript = '';
   let finalDelivered = false;
@@ -25,12 +33,14 @@ export function createCoachVoiceController({
   let nativeHandles = [];
 
   function friendlyError(error) {
-    const message = String(error?.message || error || '').toLowerCase();
+    const rawMessage = String(error?.message || error || '').trim();
+    const message = rawMessage.toLowerCase();
     if (message.includes('denied') || message.includes('not-allowed') || message.includes('permission')) {
       return 'Microphone access is off. Allow Microphone and Speech Recognition in iPhone Settings, then try again.';
     }
     if (message.includes('network')) return 'Voice recognition needs a connection. Check your signal and try again.';
-    if (message.includes('no-speech')) return 'I did not hear anything. Tap the microphone and try again.';
+    if (message.includes('no-speech') || message.includes('did not hear')) return 'I did not hear anything. Tap the microphone and try again.';
+    if (rawMessage && rawMessage.length <= 180) return rawMessage;
     return 'Voice Coach could not start. Please try again.';
   }
 
@@ -65,7 +75,11 @@ export function createCoachVoiceController({
     if (native) return true;
     return Boolean(
       typeof window !== 'undefined'
-      && BrowserRecognition
+      && (BrowserRecognition || (
+        typeof window.MediaRecorder !== 'undefined'
+        && navigator?.mediaDevices?.getUserMedia
+        && typeof transcribeAudio === 'function'
+      ))
       && typeof window.speechSynthesis !== 'undefined'
       && typeof window.SpeechSynthesisUtterance !== 'undefined'
     );
@@ -91,6 +105,57 @@ export function createCoachVoiceController({
     if (native) {
       await requestPermissions();
       await NativeVoiceCoach.startListening({ locale });
+      return;
+    }
+
+    if (typeof window.MediaRecorder !== 'undefined' && navigator?.mediaDevices?.getUserMedia && typeof transcribeAudio === 'function') {
+      mediaStream?.getTracks?.().forEach((track) => track.stop());
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+      const preferredMimeTypes = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'];
+      const mimeType = preferredMimeTypes.find((type) => window.MediaRecorder.isTypeSupported?.(type)) || '';
+      mediaChunks = [];
+      mediaStopPromise = new Promise((resolve) => {
+        resolveMediaStop = resolve;
+      });
+      mediaRecorder = mimeType
+        ? new window.MediaRecorder(mediaStream, { mimeType })
+        : new window.MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data?.size) mediaChunks.push(event.data);
+      };
+      mediaRecorder.onerror = (event) => {
+        reportError(event?.error || 'Voice recording failed.');
+      };
+      mediaRecorder.onstart = () => onListeningChange(true);
+      mediaRecorder.onstop = async () => {
+        window.clearTimeout(recordingTimeout);
+        recordingTimeout = null;
+        mediaStream?.getTracks?.().forEach((track) => track.stop());
+        mediaStream = null;
+        onListeningChange(false);
+        let text = '';
+        if (submitOnRecognitionEnd && mediaChunks.length) {
+          onTranscribingChange(true);
+          try {
+            const blob = new Blob(mediaChunks, { type: mediaRecorder?.mimeType || mimeType || 'audio/webm' });
+            text = String(await transcribeAudio(blob) || '').trim();
+            if (text) deliverTranscript(text, true);
+          } catch (error) {
+            reportError(error);
+          } finally {
+            onTranscribingChange(false);
+          }
+        }
+        mediaChunks = [];
+        resolveMediaStop?.(text);
+        resolveMediaStop = null;
+      };
+      mediaRecorder.start(250);
+      recordingTimeout = window.setTimeout(() => {
+        if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+      }, 45_000);
       return;
     }
 
@@ -125,6 +190,11 @@ export function createCoachVoiceController({
       onListeningChange(false);
       if (submit && result?.text && !finalDelivered) deliverTranscript(result.text, true);
       return String(result?.text || latestTranscript || '').trim();
+    }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      const pendingResult = mediaStopPromise;
+      mediaRecorder.stop();
+      return String(await pendingResult || latestTranscript || '').trim();
     }
     recognition?.stop?.();
     onListeningChange(false);
@@ -178,6 +248,11 @@ export function createCoachVoiceController({
     }
     await Promise.all(nativeHandles.map((handle) => handle?.remove?.()));
     nativeHandles = [];
+    window.clearTimeout?.(recordingTimeout);
+    mediaStream?.getTracks?.().forEach((track) => track.stop());
+    mediaStream = null;
+    mediaRecorder = null;
+    mediaChunks = [];
     recognition = null;
     utterance = null;
   }

@@ -3364,6 +3364,24 @@ textarea {
     linear-gradient(145deg, #f6f9ff 0%, #e3edff 100%);
 }
 
+.coach-voice-session.transcribing .coach-voice-orb {
+  opacity: 0.72;
+}
+
+.coach-voice-session.transcribing .coach-voice-orb::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid rgba(47, 113, 246, 0.22);
+  border-top-color: #2f6df6;
+  border-radius: inherit;
+  animation: coach-voice-spin 0.8s linear infinite;
+}
+
+@keyframes coach-voice-spin {
+  to { transform: rotate(360deg); }
+}
+
 .coach-voice-orb {
   position: relative;
   width: 54px;
@@ -3642,7 +3660,8 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .coach-voice-session.listening .coach-voice-orb::before,
-  .coach-voice-session.speaking .coach-voice-orb::before {
+  .coach-voice-session.speaking .coach-voice-orb::before,
+  .coach-voice-session.transcribing .coach-voice-orb::after {
     animation: none;
   }
 }
