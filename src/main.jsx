@@ -5797,6 +5797,7 @@ function App() {
             setJournalEntries={setJournalEntries}
             setJournalGoalId={setJournalGoalId}
             setJournalType={setJournalType}
+            setProfileView={setProfileView}
             goals={goals}
             trackAnalyticsEvent={trackAnalyticsEvent}
           />
@@ -10184,6 +10185,7 @@ function JournalScreen({
   setJournalEntries,
   setJournalGoalId,
   setJournalType,
+  setProfileView,
   setGoalDraft,
   setGoals,
   standards,
@@ -10298,6 +10300,7 @@ function JournalScreen({
 
   return (
     <>
+      <button className="profile-subview-back" type="button" onClick={() => setProfileView?.('overview')}>← Back to Profile</button>
       <section className="panel journal-panel">
         <PanelTitle icon={<PenLine size={18} />} title="Journal" action="Private" />
         <div className="journal-intro">
@@ -11458,6 +11461,7 @@ function AthleteSettingsScreen({
 
   return (
     <>
+      <button className="profile-subview-back" type="button" onClick={() => setProfileView?.('overview')}>← Back to Profile</button>
       <section className="profile-head">
         <div className="profile-avatar">
           {athleteProfile.photo ? (
