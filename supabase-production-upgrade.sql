@@ -17,6 +17,12 @@ add column if not exists updated_at timestamptz not null default now();
 alter table public.goals
 add column if not exists updated_at timestamptz not null default now();
 
+alter table public.goals
+  add column if not exists category text not null default '',
+  add column if not exists affirmation text not null default '',
+  add column if not exists target_date date,
+  add column if not exists milestones jsonb not null default '[]'::jsonb;
+
 alter table public.daily_standards
 add column if not exists updated_at timestamptz not null default now(),
 add column if not exists done boolean not null default false,

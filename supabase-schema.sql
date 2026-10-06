@@ -38,6 +38,10 @@ create table if not exists public.goals (
   label text not null,
   value text not null,
   progress integer not null default 0 check (progress >= 0 and progress <= 100),
+  category text not null default '',
+  affirmation text not null default '',
+  target_date date,
+  milestones jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
 

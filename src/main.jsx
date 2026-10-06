@@ -76,6 +76,7 @@ import {
   supportedLanguages
 } from './i18n';
 import GameDayMode, { gameDayBadgeCounts, loadGameDaySessions } from './GameDayMode';
+import GoalCommandCenter from './GoalsScreen';
 import {
   canUseNativePurchases,
   loadRevenueCatSubscription,
@@ -1137,8 +1138,10 @@ function mergeWithSeedPlans(sourcePlans) {
 
 function loadGoals() {
   try {
-    const saved = JSON.parse(localStorage.getItem(goalsStorageKey) ?? '[]');
-    return Array.isArray(saved) && saved.length ? saved : goalsSeed;
+    const stored = localStorage.getItem(goalsStorageKey);
+    if (stored === null) return goalsSeed;
+    const saved = JSON.parse(stored);
+    return Array.isArray(saved) ? saved : goalsSeed;
   } catch {
     return goalsSeed;
   }
@@ -1148,12 +1151,19 @@ function isSupabaseId(id) {
   return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id);
 }
 
-function goalFromSupabase(row) {
+function goalFromSupabase(row, localGoal = {}) {
   return {
+    ...localGoal,
     id: row.id,
     label: row.label ?? '',
     value: row.value ?? '',
-    progress: Math.max(0, Math.min(100, Number(row.progress) || 0))
+    progress: Math.max(0, Math.min(100, Number(row.progress) || 0)),
+    category: row.category || localGoal.category || row.label || '',
+    affirmation: row.affirmation ?? localGoal.affirmation ?? '',
+    targetDate: row.target_date ?? localGoal.targetDate ?? '',
+    milestones: Array.isArray(row.milestones)
+      ? row.milestones
+      : Array.isArray(localGoal.milestones) ? localGoal.milestones : []
   };
 }
 
@@ -1162,11 +1172,65 @@ function goalToSupabase(goal, athleteUserId) {
     athlete_user_id: athleteUserId,
     label: goal.label ?? '',
     value: goal.value ?? '',
-    progress: Math.max(0, Math.min(100, Number(goal.progress) || 0))
+    progress: Math.max(0, Math.min(100, Number(goal.progress) || 0)),
+    category: goal.category ?? goal.label ?? '',
+    affirmation: goal.affirmation ?? '',
+    target_date: goal.targetDate || null,
+    milestones: Array.isArray(goal.milestones) ? goal.milestones : []
   };
 
   if (isSupabaseId(goal.id)) payload.id = goal.id;
   return payload;
+}
+
+const goalSelectColumns = 'id, label, value, progress, category, affirmation, target_date, milestones';
+const legacyGoalSelectColumns = 'id, label, value, progress';
+
+async function fetchGoalsForAthlete(athleteUserId) {
+  let result = await supabase
+    .from('goals')
+    .select(goalSelectColumns)
+    .eq('athlete_user_id', athleteUserId)
+    .order('created_at', { ascending: true });
+  if (result.error) {
+    result = await supabase
+      .from('goals')
+      .select(legacyGoalSelectColumns)
+      .eq('athlete_user_id', athleteUserId)
+      .order('created_at', { ascending: true });
+  }
+  return result;
+}
+
+function legacyGoalPayload(goal, athleteUserId) {
+  const payload = goalToSupabase(goal, athleteUserId);
+  delete payload.category;
+  delete payload.affirmation;
+  delete payload.target_date;
+  delete payload.milestones;
+  return payload;
+}
+
+async function insertGoalsForAthlete(goals, athleteUserId) {
+  let result = await supabase
+    .from('goals')
+    .insert(goals.map((goal) => goalToSupabase(goal, athleteUserId)))
+    .select(goalSelectColumns);
+  if (result.error) {
+    result = await supabase
+      .from('goals')
+      .insert(goals.map((goal) => legacyGoalPayload(goal, athleteUserId)))
+      .select(legacyGoalSelectColumns);
+  }
+  return result;
+}
+
+async function upsertGoalsForAthlete(goals, athleteUserId) {
+  let result = await supabase.from('goals').upsert(goals.map((goal) => goalToSupabase(goal, athleteUserId)));
+  if (result.error) {
+    result = await supabase.from('goals').upsert(goals.map((goal) => legacyGoalPayload(goal, athleteUserId)));
+  }
+  return result;
 }
 
 function profileFromSupabase(row, authSession, currentProfile) {
@@ -3243,7 +3307,6 @@ function App() {
     }
   }, [authSession?.id]);
   const [goals, setGoals] = useState(loadGoals);
-  const [goalDraft, setGoalDraft] = useState({ label: '', value: '', targetDate: '' });
   const [plans, setPlans] = useState(loadPlans);
   const localizedPlans = useMemo(
     () => localizePlans(plans, language, spanishPlanTranslations, plansSeed),
@@ -3842,11 +3905,7 @@ function App() {
           .select('sport, age, location, photo_url, parent_contact, parent_access_code')
           .eq('user_id', authSession.id)
           .maybeSingle(),
-        supabase
-          .from('goals')
-          .select('id, label, value, progress')
-          .eq('athlete_user_id', authSession.id)
-          .order('created_at', { ascending: true }),
+        fetchGoalsForAthlete(authSession.id),
         supabase
           .from('daily_standards')
           .select('id, label, goal_id, done, entry_date')
@@ -3887,7 +3946,9 @@ function App() {
       }
 
       if (!goalsResult.error && Array.isArray(goalsResult.data)) {
-        setGoals(goalsResult.data.map(goalFromSupabase));
+        setGoals((current) => goalsResult.data.map((row) => (
+          goalFromSupabase(row, current.find((goal) => String(goal.id) === String(row.id)))
+        )));
       }
 
       if (!standardsResult.error && Array.isArray(standardsResult.data)) {
@@ -4131,11 +4192,7 @@ function App() {
           .select('sport, age, location, photo_url, parent_contact, parent_access_code')
           .eq('user_id', athleteUserId)
           .maybeSingle(),
-        supabase
-          .from('goals')
-          .select('id, label, value, progress')
-          .eq('athlete_user_id', athleteUserId)
-          .order('created_at', { ascending: true }),
+        fetchGoalsForAthlete(athleteUserId),
         supabase
           .from('standards_history')
           .select('entry_date, completed, total, percent, standards, submitted_at')
@@ -4274,13 +4331,10 @@ function App() {
       const localGoals = goals.filter((goal) => !isSupabaseId(goal.id));
 
       if (localGoals.length) {
-        const { data, error } = await supabase
-          .from('goals')
-          .insert(localGoals.map((goal) => goalToSupabase(goal, authSession.id)))
-          .select('id, label, value, progress');
+        const { data, error } = await insertGoalsForAthlete(localGoals, authSession.id);
 
         if (!cancelled && !error && Array.isArray(data)) {
-          const savedGoals = data.map(goalFromSupabase);
+          const savedGoals = data.map((row, index) => goalFromSupabase(row, localGoals[index]));
           const idMap = new Map(localGoals.map((goal, index) => [goal.id, savedGoals[index]?.id]).filter(([, id]) => id));
 
           setGoals([...remoteGoals, ...savedGoals]);
@@ -4317,7 +4371,7 @@ function App() {
       }
 
       if (remoteGoals.length) {
-        await supabase.from('goals').upsert(remoteGoals.map((goal) => goalToSupabase(goal, authSession.id)));
+        await upsertGoalsForAthlete(remoteGoals, authSession.id);
       }
     }
 
@@ -5758,14 +5812,17 @@ function App() {
         />
       ),
       journal: (
-        <GoalsScreen
+        <GoalCommandCenter
           awardPoints={awardPoints}
           celebrate={celebrate}
-          goalDraft={goalDraft}
+          goalAddedPoints={pointValues.goalAdded}
+          goalCompletedPoints={pointValues.goalCompleted}
           goals={goals}
-          setGoalDraft={setGoalDraft}
           setGoals={setGoals}
+          setStandards={setStandards}
           standards={standards}
+          standardsHistory={standardsHistory}
+          streakCount={streakCount}
           trackAnalyticsEvent={trackAnalyticsEvent}
         />
       ),
@@ -5879,7 +5936,6 @@ function App() {
     awardPoints,
     completion,
     confidenceAverage,
-    goalDraft,
     goals,
     journal,
     journalEntries,
@@ -8011,7 +8067,9 @@ function HomeScreen({
         standards: standards.map((standard) => ({
           label: standard.label,
           done: standard.done,
-          goalLabel: goals.find((goal) => goal.id === standard.goalId)?.label ?? ''
+          goalId: standard.goalId ?? null,
+          goalLabel: goals.find((goal) => goal.id === standard.goalId)?.label ?? '',
+          goalValue: goals.find((goal) => goal.id === standard.goalId)?.value ?? ''
         }))
       })
     );
@@ -8039,6 +8097,7 @@ function HomeScreen({
       streakAfter: nextStreak,
       completed: completedStandards.length,
       total: standards.length,
+      goalDeposits: completedGoalIds.map((goalId) => goals.find((goal) => String(goal.id) === String(goalId))?.value).filter(Boolean),
       requestReview: isFirstLockedDay
     });
     setStandardsFeedback('');
@@ -8143,6 +8202,13 @@ function HomeScreen({
             <span><em>Productivity</em><strong>{dayCompletion.completed}/{dayCompletion.total}</strong></span>
             <span><em>Streak</em><strong>{dayCompletion.streakBefore} → {dayCompletion.streakAfter}</strong></span>
           </div>
+          {dayCompletion.goalDeposits?.length > 0 && (
+            <div className="goal-day-deposit-celebration">
+              <span>You made today count.</span>
+              <strong>+1 Locked-In Day</strong>
+              <p>Another deposit toward {dayCompletion.goalDeposits[0]}.</p>
+            </div>
+          )}
           <blockquote>“You showed up. That’s who you are becoming.”</blockquote>
           <button
             className="secondary-action full day-complete-secondary"
@@ -8240,6 +8306,7 @@ function HomeScreen({
                       standard.id === id ? { ...standard, done: !standard.done } : standard
                     )
                   );
+                  navigator.vibrate?.(8);
                 }}
               />
             ))}
@@ -8609,249 +8676,6 @@ function NotificationTray({ notifications, onClose }) {
   );
 }
 
-function GoalsScreen({
-  awardPoints,
-  celebrate,
-  goalDraft,
-  goals,
-  setGoalDraft,
-  setGoals,
-  standards,
-  trackAnalyticsEvent
-}) {
-  const [goalFilter, setGoalFilter] = useState('active');
-  const [goalComposerOpen, setGoalComposerOpen] = useState(false);
-  const [archivedGoalIds, setArchivedGoalIds] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('the-complete-athlete-archived-goals') || '[]'); }
-    catch { return []; }
-  });
-  const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100);
-  const linkedStandards = standards.filter((standard) => standard.goalId);
-  const completedLinkedStandards = linkedStandards.filter((standard) => standard.done);
-  const filteredGoals = goals.filter((goal) => {
-    const archived = archivedGoalIds.includes(goal.id);
-    if (goalFilter === 'archived') return archived;
-    if (goalFilter === 'completed') return !archived && Number(goal.progress) >= 100;
-    return !archived && Number(goal.progress) < 100;
-  });
-
-  function toggleGoalArchive(id) {
-    setArchivedGoalIds((current) => {
-      const next = current.includes(id) ? current.filter((goalId) => goalId !== id) : [...current, id];
-      localStorage.setItem('the-complete-athlete-archived-goals', JSON.stringify(next));
-      return next;
-    });
-  }
-
-  function updateGoal(id, field, value) {
-    setGoals((current) =>
-      current.map((goal) =>
-        goal.id === id
-          ? {
-              ...goal,
-              [field]: field === 'progress'
-                ? Math.max(0, Math.min(100, Number(value) || 0))
-                : value
-            }
-          : goal
-      )
-    );
-  }
-
-  function addGoal(event) {
-    event.preventDefault();
-    const label = goalDraft.label.trim();
-    const value = goalDraft.value.trim();
-    if (!label || !value) return;
-    const id = Date.now();
-    setGoals((current) => [...current, { id, label, value, progress: 0, targetDate: goalDraft.targetDate || '' }]);
-    setGoalDraft({ label: '', value: '', targetDate: '' });
-    setGoalComposerOpen(false);
-    const awarded = awardPoints({
-      type: 'goal_added',
-      points: pointValues.goalAdded,
-      label: 'Goal added',
-      uniqueKey: `goal-added-${id}`,
-      metadata: { goalLabel: label }
-    });
-    trackAnalyticsEvent?.('goal_added', {
-      labelLength: label.length,
-      valueLength: value.length
-    }, { area: 'goals' });
-    celebrate(awarded ? `Goal added. +${pointValues.goalAdded} points.` : 'Goal added. Write it, read it, prove it.');
-  }
-
-  function removeGoal(id) {
-    setGoals((current) => current.filter((goal) => goal.id !== id));
-  }
-
-  function completeGoal(id) {
-    const goal = goals.find((item) => item.id === id);
-    const wasComplete = Number(goal?.progress) >= 100;
-    setGoals((current) =>
-      current.map((goal) => (goal.id === id ? { ...goal, progress: 100 } : goal))
-    );
-    const awarded = !wasComplete && awardPoints({
-      type: 'goal_completed',
-      points: pointValues.goalCompleted,
-      label: `${goal?.label || 'Goal'} completed`,
-      uniqueKey: `goal-completed-${id}`,
-      metadata: { goalLabel: goal?.label || '' }
-    });
-    trackAnalyticsEvent?.('goal_completed', {
-      alreadyComplete: wasComplete,
-      linkedStandards: standards.filter((standard) => String(standard.goalId) === String(id)).length
-    }, { area: 'goals' });
-    celebrate(awarded ? `Goal complete. +${pointValues.goalCompleted} points.` : 'Goal complete. Achievement unlocked.');
-  }
-
-  return (
-    <>
-      <blockquote className="goals-discipline-quote">
-        “Goals are the GPS for where you want to go, but it’s your daily discipline that gets you there.”
-      </blockquote>
-      <section className="goals-toolbar">
-        <div className="segmented-control" aria-label="Filter goals">
-          {['active', 'completed', 'archived'].map((filter) => <button className={goalFilter === filter ? 'active' : ''} key={filter} onClick={() => setGoalFilter(filter)} type="button">{filter}</button>)}
-        </div>
-        <div className="goal-proof-compact"><span><strong>{linkedStandards.length}</strong> linked items</span><span><strong>{completedLinkedStandards.length}</strong> done today</span></div>
-      </section>
-
-      <button className="primary-action full add-goal-trigger" type="button" onClick={() => setGoalComposerOpen((open) => !open)}>
-        <Plus size={18} /> {goalComposerOpen ? 'Close Goal Form' : 'Add Goal'}
-      </button>
-      {goalComposerOpen && <section className="panel goal-composer-panel">
-        <PanelTitle icon={<Plus size={18} />} title="Add Goal" />
-        <form className="goal-form" onSubmit={addGoal}>
-          <input
-            className="text-field"
-            placeholder="Goal type, like Dream Goal"
-            value={goalDraft.label}
-            onChange={(event) => setGoalDraft((current) => ({ ...current, label: event.target.value }))}
-          />
-          <textarea
-            className="goal-textarea"
-            placeholder="Write the goal clearly"
-            value={goalDraft.value}
-            onChange={(event) => setGoalDraft((current) => ({ ...current, value: event.target.value }))}
-          />
-          <label className="goal-date-field">
-            <span>Completion date <em>Optional</em></span>
-            <input
-              type="date"
-              value={goalDraft.targetDate || ''}
-              onChange={(event) => setGoalDraft((current) => ({ ...current, targetDate: event.target.value }))}
-            />
-          </label>
-          <button className="primary-action full" type="submit">
-            <Plus size={18} />
-            Add Goal
-          </button>
-        </form>
-      </section>}
-
-      <div className="stack goal-stack">
-        {filteredGoals.length === 0 && <p className="empty-note goal-empty-state">No {goalFilter} goals yet.</p>}
-        {filteredGoals.map((goal) => {
-          const goalStandards = standards.filter((standard) => String(standard.goalId) === String(goal.id));
-          const completedGoalStandards = goalStandards.filter((standard) => standard.done);
-          const goalProgress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
-          const progressInputId = `goal-progress-${goal.id}`;
-          return (
-            <section className="goal-card editable" key={goal.id}>
-              <label>
-                <span>Goal type</span>
-                <input
-                  value={goal.label}
-                  onChange={(event) => updateGoal(goal.id, 'label', event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Type it in. Be specific</span>
-                <textarea
-                  value={goal.value}
-                  onChange={(event) => updateGoal(goal.id, 'value', event.target.value)}
-                />
-              </label>
-              <div className="goal-proof-summary">
-                <span>
-                  <strong>{goalStandards.length}</strong>
-                  Linked items
-                </span>
-                <span>
-                  <strong>{completedGoalStandards.length}</strong>
-                  Done today
-                </span>
-                <span>
-                  <strong>{goalProgress}%</strong>
-                  Goal progress
-                </span>
-              </div>
-              <div className="goal-progress">
-                <div className="goal-progress-heading">
-                  <label htmlFor={progressInputId}>How close are you?</label>
-                  <strong>{goalProgress}%</strong>
-                </div>
-                <input
-                  id={progressInputId}
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={goalProgress}
-                  onChange={(event) => updateGoal(goal.id, 'progress', event.target.value)}
-                  aria-label={`Set progress for ${goal.label || 'goal'}`}
-                  aria-valuetext={`${goalProgress}% complete`}
-                  style={{ '--goal-progress': `${goalProgress}%` }}
-                />
-                <small>Slide the bar to set your own estimate. A locked-in day adds 1%.</small>
-              </div>
-              <label className="goal-date-field goal-card-date">
-                <span><CalendarDays size={15}/> Completion date <em>Optional</em></span>
-                <input
-                  type="date"
-                  value={goal.targetDate || ''}
-                  onChange={(event) => updateGoal(goal.id, 'targetDate', event.target.value)}
-                  aria-label={`Completion date for ${goal.label || 'goal'}`}
-                />
-              </label>
-              <div className="goal-linked-standards">
-                <strong>Daily activity helping this goal</strong>
-                {goalStandards.length === 0 ? (
-                  <p>No activities linked yet. Add an activity on Today and connect it to this goal.</p>
-                ) : (
-                  goalStandards.map((standard) => (
-                      <span className={standard.done ? 'linked-standard done' : 'linked-standard'} key={standard.id}>
-                        {standard.done && <Check size={14} />}
-                        {standard.label}
-                      </span>
-                    ))
-                )}
-              </div>
-              <div className="goal-actions">
-                <button
-                  className={goal.progress >= 100 ? 'complete-goal done' : 'complete-goal'}
-                  type="button"
-                  onClick={() => completeGoal(goal.id)}
-                >
-                  <Check size={16} />
-                  {goal.progress >= 100 ? 'Goal Complete' : 'Complete Goal'}
-                </button>
-                <button className="remove-goal" type="button" onClick={() => removeGoal(goal.id)}>
-                  <Trash2 size={16} />
-                  Remove Goal
-                </button>
-                <button className="remove-goal archive-goal" type="button" onClick={() => toggleGoalArchive(goal.id)}>
-                  {archivedGoalIds.includes(goal.id) ? 'Restore' : 'Archive'}
-                </button>
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </>
-  );
-}
 
 function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', requestedPlanId = '', setRequestedPlanSeriesId, setRequestedPlanId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, requestMilestoneReview, trackAnalyticsEvent }) {
   const readOnly = !setPlanProgress;
@@ -10182,7 +10006,6 @@ function PlanEpisode({ language = 'en', steps, planId, preserveHeadings = false 
 function JournalScreen({
   awardPoints,
   celebrate,
-  goalDraft,
   goals,
   journal,
   journalEntries,
@@ -10193,9 +10016,6 @@ function JournalScreen({
   setJournalGoalId,
   setJournalType,
   setProfileView,
-  setGoalDraft,
-  setGoals,
-  standards,
   trackAnalyticsEvent
 }) {
   const [reflectionHistoryOpen, setReflectionHistoryOpen] = useState(false);
