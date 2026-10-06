@@ -30,6 +30,10 @@
 	<string>The Complete Athlete uses the camera only when you choose to take a profile photo.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>The Complete Athlete uses your photo library only when you choose a profile photo.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The Complete Athlete uses the microphone when you choose to speak with your AI performance coach.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>The Complete Athlete converts your spoken coaching questions into text so your AI performance coach can respond.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -3287,6 +3287,162 @@ textarea {
   background: #fff4c2;
 }
 
+.coach-voice-launch {
+  width: 100%;
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(79, 139, 255, 0.55);
+  border-radius: 18px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(85, 157, 255, 0.35), transparent 36%),
+    linear-gradient(135deg, #1f6ff2 0%, #123d91 48%, #0d1936 100%);
+  box-shadow: 0 12px 28px rgba(23, 75, 172, 0.22);
+  text-align: left;
+}
+
+.coach-voice-launch:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.coach-voice-launch > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.coach-voice-launch strong {
+  font-size: 0.94rem;
+  font-weight: 950;
+}
+
+.coach-voice-launch small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.73rem;
+  font-weight: 750;
+}
+
+.coach-voice-launch-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.coach-voice-session {
+  min-height: 92px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  overflow: hidden;
+  border: 1px solid #bfd5ff;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(47, 113, 246, 0.14), transparent 32%),
+    linear-gradient(145deg, #f8fbff 0%, #edf4ff 100%);
+  box-shadow: 0 12px 30px rgba(21, 64, 128, 0.13);
+}
+
+.coach-voice-session.listening {
+  border-color: #4f8bff;
+}
+
+.coach-voice-session.speaking {
+  border-color: #173f92;
+  background:
+    radial-gradient(circle at 12% 20%, rgba(47, 113, 246, 0.2), transparent 34%),
+    linear-gradient(145deg, #f6f9ff 0%, #e3edff 100%);
+}
+
+.coach-voice-orb {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #ffffff;
+  background: linear-gradient(145deg, #367dff, #123f9b 70%, #0d1a37);
+  box-shadow: 0 8px 18px rgba(31, 93, 212, 0.28);
+}
+
+.coach-voice-session.listening .coach-voice-orb::before,
+.coach-voice-session.speaking .coach-voice-orb::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border: 2px solid rgba(47, 113, 246, 0.28);
+  border-radius: inherit;
+  animation: coach-voice-pulse 1.35s ease-out infinite;
+}
+
+@keyframes coach-voice-pulse {
+  0% { opacity: 0.8; transform: scale(0.84); }
+  70%, 100% { opacity: 0; transform: scale(1.16); }
+}
+
+.coach-voice-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.coach-voice-copy > span {
+  color: #2f6df6;
+  font-size: 0.65rem;
+  font-weight: 950;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.coach-voice-copy strong {
+  color: #0e1c39;
+  font-size: 0.91rem;
+  font-weight: 950;
+}
+
+.coach-voice-copy p {
+  display: -webkit-box;
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: #63708a;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.coach-voice-end {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid #d3ddec;
+  border-radius: 999px;
+  color: #4b5a74;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.coach-voice-error {
+  margin: -2px 4px 0;
+  color: #a32b3c;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .visualization-flow {
   display: grid;
   gap: 10px;
@@ -3410,11 +3566,40 @@ textarea {
 }
 
 .bubble.coach {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: end;
+  gap: 8px;
   justify-self: start;
   color: var(--ink);
   background: #ffffff;
   border: 1px solid var(--line);
   border-bottom-left-radius: 6px;
+}
+
+.bubble.coach > span {
+  min-width: 0;
+}
+
+.coach-message-audio {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  align-self: end;
+  border: 1px solid #dbe5f4;
+  border-radius: 50%;
+  color: #1b5fd3;
+  background: #f2f7ff;
+}
+
+.coach-message-audio:focus-visible,
+.coach-voice-launch:focus-visible,
+.coach-voice-orb:focus-visible,
+.coach-voice-end:focus-visible {
+  outline: 3px solid rgba(47, 113, 246, 0.32);
+  outline-offset: 2px;
 }
 
 .bubble.athlete {
@@ -3436,6 +3621,30 @@ textarea {
   align-items: center;
   gap: 8px;
   margin-top: 12px;
+}
+
+@media (max-width: 360px) {
+  .coach-voice-session {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    gap: 9px;
+    padding: 11px;
+  }
+
+  .coach-voice-orb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .coach-voice-end {
+    padding: 0 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-voice-session.listening .coach-voice-orb::before,
+  .coach-voice-session.speaking .coach-voice-orb::before {
+    animation: none;
+  }
 }
 
 .profile-head {

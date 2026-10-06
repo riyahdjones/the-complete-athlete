@@ -2,6 +2,8 @@ import UIKit
 import Capacitor
 import StoreKit
 import WidgetKit
+import Speech
+import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -66,6 +68,189 @@ class TCAViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(TCAAuthPlugin())
         bridge?.registerPluginInstance(TCAReviewPlugin())
         bridge?.registerPluginInstance(TCAGoalWidgetPlugin())
+        bridge?.registerPluginInstance(TCAVoiceCoachPlugin())
+    }
+}
+
+@objc(TCAVoiceCoachPlugin)
+public class TCAVoiceCoachPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesizerDelegate {
+    public let identifier = "TCAVoiceCoachPlugin"
+    public let jsName = "TCAVoiceCoach"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startListening", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopListening", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopSpeaking", returnType: CAPPluginReturnPromise)
+    ]
+
+    private let audioEngine = AVAudioEngine()
+    private let speechSynthesizer = AVSpeechSynthesizer()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var inputTapInstalled = false
+    private var latestTranscript = ""
+
+    @objc func requestPermissions(_ call: CAPPluginCall) {
+        SFSpeechRecognizer.requestAuthorization { speechStatus in
+            AVAudioSession.sharedInstance().requestRecordPermission { microphoneAllowed in
+                DispatchQueue.main.async {
+                    call.resolve([
+                        "speech": speechStatus == .authorized,
+                        "microphone": microphoneAllowed
+                    ])
+                }
+            }
+        }
+    }
+
+    @objc func startListening(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard SFSpeechRecognizer.authorizationStatus() == .authorized,
+                  AVAudioSession.sharedInstance().recordPermission == .granted else {
+                call.reject("Microphone or speech recognition permission denied.", "PERMISSION_DENIED")
+                return
+            }
+
+            let localeIdentifier = call.getString("locale") ?? "en-US"
+            guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)), recognizer.isAvailable else {
+                call.reject("Speech recognition is temporarily unavailable.", "SPEECH_UNAVAILABLE")
+                return
+            }
+
+            self.stopRecognition()
+            self.speechSynthesizer.stopSpeaking(at: .immediate)
+            self.latestTranscript = ""
+
+            let request = SFSpeechAudioBufferRecognitionRequest()
+            request.shouldReportPartialResults = true
+            self.recognitionRequest = request
+
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.record, mode: .measurement, options: [.duckOthers])
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
+
+                let inputNode = self.audioEngine.inputNode
+                let recordingFormat = inputNode.outputFormat(forBus: 0)
+                guard recordingFormat.sampleRate > 0 else {
+                    call.reject("The microphone is unavailable.", "MICROPHONE_UNAVAILABLE")
+                    return
+                }
+                inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+                    request.append(buffer)
+                }
+                self.inputTapInstalled = true
+                self.audioEngine.prepare()
+                try self.audioEngine.start()
+            } catch {
+                self.stopRecognition()
+                call.reject("Voice Coach could not access the microphone.", "MICROPHONE_START_FAILED", error)
+                return
+            }
+
+            self.recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+                guard let self else { return }
+                DispatchQueue.main.async {
+                    if let result {
+                        let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+                        self.latestTranscript = text
+                        self.notifyListeners("voiceTranscript", data: [
+                            "text": text,
+                            "isFinal": result.isFinal
+                        ])
+                        if result.isFinal {
+                            self.stopRecognition()
+                        }
+                    }
+                    if let error, self.audioEngine.isRunning {
+                        self.notifyListeners("voiceError", data: ["message": error.localizedDescription])
+                        self.stopRecognition()
+                    }
+                }
+            }
+
+            self.notifyListeners("voiceListening", data: ["active": true])
+            call.resolve()
+        }
+    }
+
+    @objc func stopListening(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let text = self.latestTranscript
+            self.stopRecognition()
+            call.resolve(["text": text])
+        }
+    }
+
+    @objc func speak(_ call: CAPPluginCall) {
+        guard let text = call.getString("text")?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            call.reject("There is no coach response to read.")
+            return
+        }
+
+        DispatchQueue.main.async {
+            self.stopRecognition()
+            self.speechSynthesizer.stopSpeaking(at: .immediate)
+            self.speechSynthesizer.delegate = self
+
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
+            } catch {
+                call.reject("Voice playback could not start.", "VOICE_PLAYBACK_FAILED", error)
+                return
+            }
+
+            let utterance = AVSpeechUtterance(string: text)
+            let localeIdentifier = call.getString("locale") ?? "en-US"
+            utterance.voice = AVSpeechSynthesisVoice(language: localeIdentifier)
+            let requestedRate = Float(call.getDouble("rate") ?? Double(AVSpeechUtteranceDefaultSpeechRate))
+            utterance.rate = min(max(requestedRate, 0.38), 0.58)
+            utterance.pitchMultiplier = 0.96
+            utterance.preUtteranceDelay = 0.08
+            self.speechSynthesizer.speak(utterance)
+            call.resolve()
+        }
+    }
+
+    @objc func stopSpeaking(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.speechSynthesizer.stopSpeaking(at: .immediate)
+            self.notifyListeners("voiceSpeaking", data: ["active": false])
+            call.resolve()
+        }
+    }
+
+    private func stopRecognition() {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if inputTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            inputTapInstalled = false
+        }
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionRequest = nil
+        recognitionTask = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        notifyListeners("voiceListening", data: ["active": false])
+    }
+
+    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        notifyListeners("voiceSpeaking", data: ["active": true])
+    }
+
+    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        notifyListeners("voiceSpeaking", data: ["active": false])
+    }
+
+    public func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        notifyListeners("voiceSpeaking", data: ["active": false])
     }
 }
 

@@ -31,6 +31,7 @@ import {
   LineChart,
   LockKeyhole,
   MessageCircle,
+  Mic,
   Pause,
   PenLine,
   Play,
@@ -77,6 +78,7 @@ import {
 } from './i18n';
 import GameDayMode, { gameDayBadgeCounts, loadGameDaySessions } from './GameDayMode';
 import GoalCommandCenter from './GoalsScreen';
+import { createCoachVoiceController } from './coachVoice';
 import {
   canUseNativePurchases,
   loadRevenueCatSubscription,
@@ -10233,9 +10235,20 @@ function CoachScreen({
 }) {
   const [coachStatus, setCoachStatus] = useState('');
   const [coachThinking, setCoachThinking] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceSpeaking, setVoiceSpeaking] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState('');
   const coachFirstName = String(athleteProfile?.name || authSession?.name || 'Athlete').trim().split(/\s+/)[0];
   const chatPanelRef = useRef(null);
   const coachDraftRef = useRef(null);
+  const voiceControllerRef = useRef(null);
+  const voiceModeRef = useRef(false);
+  const voiceSendRef = useRef(null);
+  const voiceListenRef = useRef(null);
+  const resumeListeningAfterSpeechRef = useRef(false);
 
   function resizeCoachDraft(target = coachDraftRef.current) {
     if (!target) return;
@@ -10258,6 +10271,112 @@ function CoachScreen({
       panel.scrollTop = panel.scrollHeight;
     }
   }, [messages, coachThinking]);
+
+  useEffect(() => {
+    const controller = createCoachVoiceController({
+      locale: language === 'es' ? 'es-US' : 'en-US',
+      onTranscript(text, isFinal) {
+        setVoiceTranscript(text);
+        setMessageDraft(text);
+        if (isFinal && voiceModeRef.current && text.trim()) {
+          setVoiceTranscript('');
+          voiceSendRef.current?.(text.trim());
+        }
+      },
+      onListeningChange(active) {
+        setVoiceListening(active);
+      },
+      onSpeakingChange(active) {
+        setVoiceSpeaking(active);
+        if (!active && resumeListeningAfterSpeechRef.current && voiceModeRef.current) {
+          resumeListeningAfterSpeechRef.current = false;
+          window.setTimeout(() => voiceListenRef.current?.(), 420);
+        }
+      },
+      onError(message) {
+        setVoiceError(message);
+        setVoiceListening(false);
+        setVoiceSpeaking(false);
+      }
+    });
+    voiceControllerRef.current = controller;
+    setVoiceSupported(controller.isSupported());
+    return () => {
+      voiceModeRef.current = false;
+      controller.destroy();
+      if (voiceControllerRef.current === controller) voiceControllerRef.current = null;
+    };
+  }, [language]);
+
+  async function startVoiceListening() {
+    if (coachThinking || !voiceControllerRef.current) return;
+    setVoiceError('');
+    setVoiceTranscript('');
+    try {
+      await voiceControllerRef.current.startListening();
+      trackAnalyticsEvent?.('coach_voice_listening_started', {}, { area: 'coach' });
+    } catch (error) {
+      setVoiceError(error?.message || 'Voice Coach could not start. Please try again.');
+      setVoiceListening(false);
+    }
+  }
+
+  voiceListenRef.current = startVoiceListening;
+
+  async function startVoiceSession() {
+    if (!voiceSupported || !voiceControllerRef.current) return;
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    setVoiceError('');
+    trackAnalyticsEvent?.('coach_voice_session_started', {}, { area: 'coach' });
+    await startVoiceListening();
+  }
+
+  async function endVoiceSession() {
+    voiceModeRef.current = false;
+    resumeListeningAfterSpeechRef.current = false;
+    setVoiceMode(false);
+    setVoiceListening(false);
+    setVoiceSpeaking(false);
+    setVoiceTranscript('');
+    try {
+      await voiceControllerRef.current?.stopListening({ submit: false });
+      await voiceControllerRef.current?.stopSpeaking();
+    } catch {
+      // Ending a voice session should always return the interface to text chat.
+    }
+    trackAnalyticsEvent?.('coach_voice_session_ended', {}, { area: 'coach' });
+  }
+
+  async function speakCoachMessage(text, continueConversation = false) {
+    if (!voiceControllerRef.current || !text) return;
+    setVoiceError('');
+    resumeListeningAfterSpeechRef.current = continueConversation;
+    try {
+      await voiceControllerRef.current.speak(text);
+      trackAnalyticsEvent?.('coach_reply_played', {
+        automatic: continueConversation,
+        replyLength: String(text).length
+      }, { area: 'coach' });
+    } catch (error) {
+      resumeListeningAfterSpeechRef.current = false;
+      setVoiceError(error?.message || 'The coach response could not be played.');
+    }
+  }
+
+  async function handleVoiceControl() {
+    if (voiceListening) {
+      await voiceControllerRef.current?.stopListening({ submit: true });
+      return;
+    }
+    if (voiceSpeaking) {
+      resumeListeningAfterSpeechRef.current = false;
+      await voiceControllerRef.current?.stopSpeaking();
+      await startVoiceListening();
+      return;
+    }
+    await startVoiceListening();
+  }
 
   function coachReply(text) {
     const lower = text.toLowerCase();
@@ -10384,8 +10503,8 @@ function CoachScreen({
     return payload;
   }
 
-  async function sendMessage() {
-    const clean = messageDraft.trim();
+  async function sendMessage(voiceText = '') {
+    const clean = (typeof voiceText === 'string' && voiceText ? voiceText : messageDraft).trim();
     if (!clean || coachThinking) return;
     const nextMessages = [
       ...messages,
@@ -10417,6 +10536,7 @@ function CoachScreen({
         replyLength: String(payload.reply || '').length
       }, { area: 'coach' });
       saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: payload.reply }]);
+      if (voiceModeRef.current) await speakCoachMessage(payload.reply, true);
     } catch (error) {
       if (error.code === 'coach_daily_limit') {
         trackAnalyticsEvent?.('coach_daily_limit_hit', {
@@ -10440,6 +10560,7 @@ function CoachScreen({
           reason: error.message || 'backend_unavailable'
         }, { area: 'coach', severity: 'warning' });
         saveCoachSession(sessionId, sessionTitle, [...nextMessages, { role: 'coach', text: reply }]);
+        if (voiceModeRef.current) await speakCoachMessage(reply, true);
       } else {
         const backendMessage =
           error.status === 401
@@ -10457,6 +10578,8 @@ function CoachScreen({
     }
   }
 
+  voiceSendRef.current = sendMessage;
+
   function useTopic(prompt) {
     setMessageDraft(prompt);
     trackAnalyticsEvent?.('coach_topic_selected', {
@@ -10465,6 +10588,7 @@ function CoachScreen({
   }
 
   function startNewChat() {
+    void endVoiceSession();
     setCoachComposerFocused(false);
     setActiveCoachSessionId(null);
     setMessages([]);
@@ -10474,6 +10598,7 @@ function CoachScreen({
   }
 
   function openCoachSession(session) {
+    void endVoiceSession();
     setCoachComposerFocused(false);
     setActiveCoachSessionId(session.id);
     setMessages(session.messages);
@@ -10505,6 +10630,28 @@ function CoachScreen({
           </button>
         </div>
 
+        {!voiceMode ? (
+          <button className="coach-voice-launch" disabled={!voiceSupported} onClick={startVoiceSession} type="button">
+            <span className="coach-voice-launch-icon"><Mic size={20} /></span>
+            <span><strong>Start Voice Session</strong><small>{voiceSupported ? 'Talk it through with your coach' : 'Available in the iPhone app'}</small></span>
+            <ChevronRight size={18} />
+          </button>
+        ) : (
+          <div className={`coach-voice-session${voiceListening ? ' listening' : ''}${voiceSpeaking ? ' speaking' : ''}`}>
+            <button className="coach-voice-orb" onClick={handleVoiceControl} type="button" aria-label={voiceListening ? 'Finish speaking' : voiceSpeaking ? 'Interrupt coach' : 'Speak to coach'}>
+              {voiceSpeaking ? <Volume2 size={23} /> : <Mic size={23} />}
+            </button>
+            <div className="coach-voice-copy">
+              <span>Voice Coach</span>
+              <strong>{coachThinking ? 'Coach is thinking…' : voiceSpeaking ? 'Coach is speaking' : voiceListening ? 'I’m listening…' : 'Your turn'}</strong>
+              <p>{voiceTranscript || (voiceListening ? 'Say what’s on your mind.' : voiceSpeaking ? 'Tap the speaker to interrupt.' : 'Tap the microphone to continue.')}</p>
+            </div>
+            <button className="coach-voice-end" onClick={endVoiceSession} type="button">End</button>
+          </div>
+        )}
+
+        {voiceError && <p className="coach-voice-error">{voiceError}</p>}
+
         <div className="coach-topics">
           {coachTopics.map((topic) => (
             <button key={topic.title} onClick={() => useTopic(topic.prompt)}>
@@ -10521,7 +10668,12 @@ function CoachScreen({
           )}
           {messages.map((message, index) => (
             <div translate="no" className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'} key={`${message.role}-${index}`}>
-              {message.text}
+              <span>{message.text}</span>
+              {message.role === 'coach' && voiceSupported && (
+                <button className="coach-message-audio" onClick={() => speakCoachMessage(message.text, false)} type="button" aria-label="Listen to this coach response">
+                  <Volume2 size={15} />
+                </button>
+              )}
             </div>
           ))}
           {coachThinking && (
@@ -10560,7 +10712,7 @@ function CoachScreen({
             enterKeyHint="send"
             rows={2}
           />
-          <button className="icon-button dark" onClick={sendMessage} aria-label="Send message" disabled={coachThinking}>
+          <button className="icon-button dark" onClick={() => sendMessage()} aria-label="Send message" disabled={coachThinking}>
             <Send size={18} />
           </button>
         </div>
