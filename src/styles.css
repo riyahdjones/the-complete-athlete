@@ -13080,8 +13080,8 @@ select {
 
 .activity-quick-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: .95fr 1fr 1.13fr 1.17fr;
+  gap: 5px;
 }
 
 .activity-quick-grid button {
@@ -13090,8 +13090,8 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 7px 6px;
+  gap: 4px;
+  padding: 7px 4px;
   color: #18315e;
   border: 1px solid #d5dfef;
   border-radius: 999px;
@@ -13100,9 +13100,19 @@ select {
   font-size: .61rem;
   font-weight: 850;
   line-height: 1.15;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  white-space: nowrap;
   transition: color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.activity-quick-grid button > svg {
+  flex: 0 0 auto;
+}
+
+.activity-quick-grid button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quick-add-edit-button {

@@ -7567,7 +7567,7 @@ function QuickAddSection({ draft, onSelect, userId }) {
                 type="button"
               >
                 <Icon size={16} />
-                {item.label}
+                <span>{item.label}</span>
               </button>
             );
           })}
