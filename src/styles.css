@@ -12643,6 +12643,37 @@ select {
   background: #f9fbfd;
 }
 
+.auth-password-field {
+  position: relative;
+  width: 100%;
+}
+
+.auth-password-field .text-field {
+  padding-right: 54px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: #53647c;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  transform: translateY(-50%);
+}
+
+.auth-password-toggle:hover,
+.auth-password-toggle[aria-pressed="true"] {
+  color: #135fd0;
+  background: #eaf2ff;
+}
+
 .auth-bottom-sheet .primary-action {
   min-height: 50px;
   border-radius: 14px;

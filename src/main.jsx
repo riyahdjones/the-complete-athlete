@@ -21,6 +21,8 @@ import {
   Copy,
   Download,
   Dumbbell,
+  Eye,
+  EyeOff,
   Flame,
   GraduationCap,
   Goal,
@@ -6123,6 +6125,7 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, language, l
   const [role, setRole] = useState(invitedAsParent ? 'parent' : 'athlete');
   const [form, setForm] = useState({ name: '', email: '', password: '', parentCode: invitedCode, parentFamilyCode: '' });
   const [recoveryForm, setRecoveryForm] = useState({ password: '', confirmPassword: '' });
+  const [passwordVisibility, setPasswordVisibility] = useState({ auth: false, recovery: false, confirmation: false });
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authSheetOpen, setAuthSheetOpen] = useState(Boolean(invitedAsParent || passwordRecoveryActive));
@@ -6209,6 +6212,10 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, language, l
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
     setMessage('');
+  }
+
+  function togglePasswordVisibility(field) {
+    setPasswordVisibility((current) => ({ ...current, [field]: !current[field] }));
   }
 
   useEffect(() => {
@@ -6384,7 +6391,18 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, language, l
                 </label>
                 <label>
                   <span>Password</span>
-                  <input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} className="text-field" placeholder="Password" type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} />
+                  <div className="auth-password-field">
+                    <input autoComplete={mode === 'login' ? 'current-password' : 'new-password'} className="text-field" placeholder="Password" type={passwordVisibility.auth ? 'text' : 'password'} value={form.password} onChange={(event) => updateForm('password', event.target.value)} />
+                    <button
+                      aria-label={passwordVisibility.auth ? 'Hide password' : 'Show password'}
+                      aria-pressed={passwordVisibility.auth}
+                      className="auth-password-toggle"
+                      onClick={() => togglePasswordVisibility('auth')}
+                      type="button"
+                    >
+                      {passwordVisibility.auth ? <EyeOff size={19} /> : <Eye size={19} />}
+                    </button>
+                  </div>
                 </label>
                 {mode === 'signup' && role === 'parent' && (
                   <label>
@@ -6432,11 +6450,33 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, language, l
             <form className="auth-form auth-recovery-form" onSubmit={submitPasswordRecovery}>
               <label>
                 <span>New password</span>
-                <input autoComplete="new-password" autoFocus className="text-field" minLength={8} placeholder="At least 8 characters" required type="password" value={recoveryForm.password} onChange={(event) => { setRecoveryForm((current) => ({ ...current, password: event.target.value })); setMessage(''); }} />
+                <div className="auth-password-field">
+                  <input autoComplete="new-password" autoFocus className="text-field" minLength={8} placeholder="At least 8 characters" required type={passwordVisibility.recovery ? 'text' : 'password'} value={recoveryForm.password} onChange={(event) => { setRecoveryForm((current) => ({ ...current, password: event.target.value })); setMessage(''); }} />
+                  <button
+                    aria-label={passwordVisibility.recovery ? 'Hide new password' : 'Show new password'}
+                    aria-pressed={passwordVisibility.recovery}
+                    className="auth-password-toggle"
+                    onClick={() => togglePasswordVisibility('recovery')}
+                    type="button"
+                  >
+                    {passwordVisibility.recovery ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
+                </div>
               </label>
               <label>
                 <span>Confirm new password</span>
-                <input autoComplete="new-password" className="text-field" minLength={8} placeholder="Enter it again" required type="password" value={recoveryForm.confirmPassword} onChange={(event) => { setRecoveryForm((current) => ({ ...current, confirmPassword: event.target.value })); setMessage(''); }} />
+                <div className="auth-password-field">
+                  <input autoComplete="new-password" className="text-field" minLength={8} placeholder="Enter it again" required type={passwordVisibility.confirmation ? 'text' : 'password'} value={recoveryForm.confirmPassword} onChange={(event) => { setRecoveryForm((current) => ({ ...current, confirmPassword: event.target.value })); setMessage(''); }} />
+                  <button
+                    aria-label={passwordVisibility.confirmation ? 'Hide password confirmation' : 'Show password confirmation'}
+                    aria-pressed={passwordVisibility.confirmation}
+                    className="auth-password-toggle"
+                    onClick={() => togglePasswordVisibility('confirmation')}
+                    type="button"
+                  >
+                    {passwordVisibility.confirmation ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
+                </div>
               </label>
               {message && <p className="inline-warning auth-recovery-message">{message}</p>}
               <button className="primary-action full" disabled={isSubmitting} type="submit">
