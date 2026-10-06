@@ -129,13 +129,16 @@ if (typeof window !== 'undefined') {
     document.documentElement.classList.add('native-shell');
     let nativeTouchStartX = 0;
     let nativeTouchStartY = 0;
+    const isNativeHorizontalScroller = (element) => (
+      element instanceof Element && Boolean(element.closest('[data-native-horizontal-scroll="true"]'))
+    );
     const lockHorizontalScroll = () => {
       if (isTextEntryActive()) return;
       if (window.scrollX) window.scrollTo(0, window.scrollY);
       document.documentElement.scrollLeft = 0;
       if (document.body) document.body.scrollLeft = 0;
       document.querySelectorAll('*').forEach((element) => {
-        if (element.scrollLeft) element.scrollLeft = 0;
+        if (element.scrollLeft && !element.matches('[data-native-horizontal-scroll="true"]')) element.scrollLeft = 0;
       });
     };
     const containNativeOverflow = () => {
@@ -145,6 +148,7 @@ if (typeof window !== 'undefined') {
       document.querySelectorAll('body *').forEach((element) => {
         if (!(element instanceof HTMLElement)) return;
         if (element.closest('svg')) return;
+        if (isNativeHorizontalScroller(element)) return;
         const rect = element.getBoundingClientRect();
         if (!rect.width || rect.height === 0) return;
 
@@ -183,6 +187,7 @@ if (typeof window !== 'undefined') {
     const blockNativeHorizontalPan = (event) => {
       const target = event.target;
       if (isTextEntryActive() || target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && target.type === 'range')) return;
+      if (isNativeHorizontalScroller(target)) return;
       const touch = event.touches?.[0];
       if (!touch) return;
       const dx = Math.abs(touch.clientX - nativeTouchStartX);
@@ -11159,12 +11164,15 @@ function ProfileScreen({ athleteProfile, athleteScore, athleteJourney, authSessi
           <span><strong>{planStats.completed}/{planStats.total}</strong>Plans complete</span>
           <span><strong>{first21.completed}/{first21.total || 21}</strong>Journey days</span>
         </div>
-        <div className="rank-roadmap" aria-label="Major rank progression">
-          {athleteRanks.map((item, index) => (
-            <span className={index < rank.currentIndex ? 'earned' : index === rank.currentIndex ? 'current' : 'locked'} key={item.name}>
-              {index <= rank.currentIndex ? <Check size={12}/> : <LockKeyhole size={11}/>} {item.name}
-            </span>
-          ))}
+        <div className="rank-roadmap-shell">
+          <div className="rank-roadmap" aria-label="All seven ranks. Swipe horizontally to see each rank." data-native-horizontal-scroll="true" tabIndex={0}>
+            {athleteRanks.map((item, index) => (
+              <span className={index < rank.currentIndex ? 'earned' : index === rank.currentIndex ? 'current' : 'locked'} key={item.name}>
+                {index <= rank.currentIndex ? <Check size={12}/> : <LockKeyhole size={11}/>} {item.name}
+              </span>
+            ))}
+          </div>
+          <span className="rank-roadmap-hint">Swipe to see every rank <ChevronRight size={13} /></span>
         </div>
       </section>
       <section className="profile-menu" aria-label="Profile navigation">

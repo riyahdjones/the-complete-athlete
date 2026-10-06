@@ -15443,20 +15443,41 @@ select {
   grid-template-columns: repeat(4, minmax(0,1fr));
   margin-top: 4px;
 }
-.rank-roadmap {
+.rank-roadmap-shell {
   grid-column: 1 / -1;
+  min-width: 0;
+}
+.rank-roadmap {
   display: flex;
   gap: 6px;
   overflow-x: auto;
   margin-top: 4px;
-  padding: 11px 0 1px;
+  padding: 11px 26px 4px 0;
   border-top: 1px solid rgba(255,255,255,.1);
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+  touch-action: pan-x;
 }
 .rank-roadmap::-webkit-scrollbar { display: none; }
-.rank-roadmap span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 6px 8px; color: rgba(255,255,255,.52); font-size: .57rem; font-weight: 850; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; }
+.rank-roadmap span { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; padding: 6px 8px; color: rgba(255,255,255,.52); font-size: .57rem; font-weight: 850; border: 1px solid rgba(255,255,255,.1); border-radius: 999px; scroll-snap-align: start; }
 .rank-roadmap span.earned { color: #b9d5ff; border-color: rgba(91,148,255,.3); }
 .rank-roadmap span.current { color: #fff; border-color: #5a96ff; background: rgba(47,109,246,.3); box-shadow: 0 0 14px rgba(47,109,246,.22); }
+.rank-roadmap-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 5px;
+  color: #8eb5ff;
+  font-size: .55rem;
+  font-weight: 850;
+  letter-spacing: .02em;
+}
+.native-shell .rank-roadmap {
+  overflow-x: auto !important;
+  touch-action: pan-x !important;
+}
 
 .previous-design .athlete-rank-card + .profile-menu {
   margin-top: 15px;
