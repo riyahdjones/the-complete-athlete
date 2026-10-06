@@ -10327,10 +10327,11 @@ function CoachScreen({
       const { data } = await supabase.auth.getSession();
       if (data.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
     }
-    const response = await fetch(appApiUrl('/api/coach-transcribe'), {
+    const response = await fetch(appApiUrl('/api/coach'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        action: 'transcribe',
         audio,
         mimeType: blob.type || 'audio/webm',
         language

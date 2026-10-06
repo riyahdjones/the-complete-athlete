@@ -2,6 +2,17 @@ import { logAppEvent } from '../server/monitoring.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_MODERATION_URL = 'https://api.openai.com/v1/moderations';
+const OPENAI_TRANSCRIPTIONS_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const MAX_AUDIO_BYTES = 3 * 1024 * 1024;
+const allowedAudioMimeTypes = new Map([
+  ['audio/webm', 'webm'],
+  ['audio/mp4', 'mp4'],
+  ['audio/mpeg', 'mp3'],
+  ['audio/mp3', 'mp3'],
+  ['audio/ogg', 'ogg'],
+  ['audio/wav', 'wav'],
+  ['audio/x-m4a', 'm4a']
+]);
 const MAX_MESSAGE_LENGTH = 1200;
 const MAX_HISTORY_MESSAGES = 12;
 const MAX_MEMORY_ITEMS = 8;
@@ -1018,6 +1029,60 @@ function shouldBlockModeration(result) {
   );
 }
 
+async function transcribeVoiceTurn({ body, apiKey, user }) {
+  const mimeType = String(body.mimeType || '').split(';')[0].toLowerCase();
+  const extension = allowedAudioMimeTypes.get(mimeType);
+  if (!extension) return { status: 400, payload: { error: 'This audio format is not supported.' } };
+
+  let audio;
+  try {
+    audio = Buffer.from(String(body.audio || ''), 'base64');
+  } catch {
+    return { status: 400, payload: { error: 'The voice recording is invalid.' } };
+  }
+  if (!audio.length) return { status: 400, payload: { error: 'No voice recording was received.' } };
+  if (audio.length > MAX_AUDIO_BYTES) {
+    return { status: 413, payload: { error: 'Keep each voice turn under 45 seconds.' } };
+  }
+
+  const form = new FormData();
+  form.append('file', new Blob([audio], { type: mimeType }), `coach-turn.${extension}`);
+  form.append('model', process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
+  form.append('language', String(body.language || '').toLowerCase().startsWith('es') ? 'es' : 'en');
+  form.append('response_format', 'json');
+
+  const response = await fetch(OPENAI_TRANSCRIPTIONS_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
+  });
+  if (!response.ok) {
+    await logAppEvent({
+      area: 'coach',
+      eventType: 'voice_transcription_failed',
+      severity: 'error',
+      userId: user.id,
+      metadata: { status: response.status, mimeType, bytes: audio.length }
+    });
+    return { status: 502, payload: { error: 'Voice recognition could not connect. Please try again.' } };
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  const text = String(payload.text || '').replace(/\s+/g, ' ').trim().slice(0, MAX_MESSAGE_LENGTH);
+  if (!text) {
+    return { status: 422, payload: { error: 'I did not hear a clear message. Tap the microphone and try again.' } };
+  }
+
+  await logAppEvent({
+    area: 'coach',
+    eventType: 'voice_transcribed',
+    severity: 'info',
+    userId: user.id,
+    metadata: { characters: text.length, bytes: audio.length }
+  });
+  return { status: 200, payload: { text } };
+}
+
 export default async function handler(req, res) {
   setCorsHeaders(res);
 
@@ -1074,6 +1139,11 @@ export default async function handler(req, res) {
       metadata: { role: role || 'unknown' }
     });
     return json(res, 403, { error: 'My Mindset Coach is private to athlete accounts.' });
+  }
+
+  if (body.action === 'transcribe') {
+    const result = await transcribeVoiceTurn({ body, apiKey, user });
+    return json(res, result.status, result.payload);
   }
 
   const message = cleanMessage(body.message);
