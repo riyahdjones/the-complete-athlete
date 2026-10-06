@@ -82,6 +82,9 @@ export async function savePerformancePlan(formData) {
   const subject = text(formData, 'subject');
   const releaseDate = text(formData, 'releaseDate') || new Date().toISOString().slice(0, 10);
   const challengeDay = text(formData, 'challengeDay');
+  const titleEs = text(formData, 'titleEs');
+  const subjectEs = text(formData, 'subjectEs');
+  const challengeDayEs = text(formData, 'challengeDayEs');
   const challengeLength = Number(text(formData, 'challengeLength')) || 7;
 
   const episodeSections = [
@@ -103,6 +106,10 @@ export async function savePerformancePlan(formData) {
     .map((step) => step.trim())
     .filter(Boolean);
   const steps = episodeSections.length ? episodeSections : legacySteps;
+  const stepsEs = text(formData, 'stepsEs')
+    .split('\n')
+    .map((step) => step.trim())
+    .filter(Boolean);
 
   const payload = {
     title,
@@ -110,7 +117,13 @@ export async function savePerformancePlan(formData) {
     steps,
     release_date: releaseDate,
     challenge_day: challengeDay,
-    challenge_length: challengeLength
+    challenge_length: challengeLength,
+    ...(titleEs || subjectEs || stepsEs.length || challengeDayEs ? {
+      title_es: titleEs || null,
+      subject_es: subjectEs || null,
+      steps_es: stepsEs.length ? stepsEs : null,
+      challenge_day_es: challengeDayEs || null
+    } : {})
   };
 
   const query = id

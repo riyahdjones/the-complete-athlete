@@ -146,7 +146,10 @@ function displayCoachText(value) {
     .trim();
 }
 
-function crisisResponse() {
+function crisisResponse(language = 'en') {
+  if (language === 'es') {
+    return 'Tu seguridad importa más que el rendimiento en este momento. Díselo de inmediato a un adulto de confianza: tu padre, madre, tutor, entrenador, consejero escolar u otro adulto cercano. Si crees que podrías hacerte daño o dañar a otra persona, llama ahora a los servicios de emergencia. En Estados Unidos o Canadá, llama o envía un mensaje de texto al 988. Aléjate de cualquier cosa que pudiera hacerte daño, acércate a otra persona y di en voz alta: “Necesito ayuda ahora mismo.”';
+  }
   return [
     'Your safety matters more than performance right now.',
     'Please tell a trusted adult immediately: a parent, guardian, coach, school counselor, or another adult near you. If you might hurt yourself or someone else, call emergency services now. In the U.S. or Canada, call or text 988 for crisis support.',
@@ -154,14 +157,20 @@ function crisisResponse() {
   ].join(' ');
 }
 
-function blockedResponse() {
+function blockedResponse(language = 'en') {
+  if (language === 'es') {
+    return 'Puedo ayudarte a recuperarte y elegir una mejor respuesta, pero no puedo ayudar con daño, amenazas, contenido sexual ni nada inseguro. Habla con un adulto de confianza si alguien pudiera salir herido. Si se trata de presión competitiva, cuéntame el momento deportivo y la respuesta que quieres entrenar.';
+  }
   return [
     'I can help you reset and choose a better response, but I cannot help with harm, threats, sexual content, or anything unsafe.',
     'Bring this to a trusted adult if someone could get hurt. If this is about competition pressure, tell me the sport moment and what response you want to train.'
   ].join(' ');
 }
 
-function limitResponse(limit) {
+function limitResponse(limit, language = 'en') {
+  if (language === 'es') {
+    return `Ya usaste tus ${limit} mensajes con el coach de hoy. Vuelve mañana y continuaremos desde aquí. Por ahora, escribe el momento real, la respuesta que quieres entrenar y una acción que todavía puedes controlar hoy.`;
+  }
   return [
     `You have used your ${limit} coach messages for today.`,
     'Come back tomorrow and we will keep working from here. For now, write down the real moment, the response you want to train, and one action you can still control today.'
@@ -507,7 +516,17 @@ function isCasualCheckIn(message) {
   return /^(yo+|hey+|hi+|hello+|sup|what'?s up|you there|are you there|u there|can you help|help me|coach|mindset coach)[\s?.!]*$/i.test(message);
 }
 
-function clarifyingResponse(message, athlete, history = []) {
+function clarifyingResponse(message, athlete, history = [], language = 'en') {
+  if (language === 'es') {
+    const lower = message.toLowerCase();
+    const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
+    const namePhrase = firstName && firstName !== 'Athlete' && firstName !== 'Unknown' ? `, ${firstName}` : '';
+    if (isCasualCheckIn(message)) return `Estoy aquí${namePhrase}. ¿Qué está pasando hoy?`;
+    if (/coach|entrenador|feedback|correcci[oó]n/.test(lower)) return 'Estoy contigo. ¿Qué te dijo o hizo tu entrenador recientemente y cómo respondiste en ese momento?';
+    if (/playing time|banca|titular|jugar/.test(lower)) return 'Te escucho. ¿Qué te ha dicho tu entrenador sobre tu rol y qué parte de eso es la más difícil ahora?';
+    if (/teammate|equipo|compañer/.test(lower)) return 'Estoy contigo. ¿Qué pasó recientemente con tu compañero o equipo y qué quieres manejar de otra manera?';
+    return 'Ayúdame a ver el momento exacto. ¿Qué pasó recientemente y qué te dijiste justo después?';
+  }
   if (isCasualCheckIn(message)) {
     const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
     const namePhrase = firstName && firstName !== 'Athlete' && firstName !== 'Unknown' ? `, ${firstName}` : '';
@@ -617,7 +636,7 @@ function buildCurriculumContext(curriculum) {
   return [...depositLines, '', ...planLines].join('\n');
 }
 
-function buildInput({ message, history, athlete, memory, curriculum, sportsContext }) {
+function buildInput({ message, history, athlete, memory, curriculum, sportsContext, language = 'en' }) {
   const goals = asArray(athlete?.goals).filter(Boolean);
   const standards = asArray(athlete?.standards).filter(Boolean);
   const context = [
@@ -640,7 +659,7 @@ function buildInput({ message, history, athlete, memory, curriculum, sportsConte
   return [
     {
       role: 'developer',
-      content: `${coachInstructions}\n\nAthlete context:\n${context}\n\nApp curriculum context:\n${buildCurriculumContext(curriculum)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nPrivate coach growth memory:\n${buildMemoryContext(memory)}`
+      content: `${coachInstructions}\n\nLanguage requirement: ${language === 'es' ? 'Respond entirely in natural, age-appropriate Spanish. Keep the same concise coaching style. Do not mix in English unless the athlete asks.' : 'Respond in English.'}\n\nAthlete context:\n${context}\n\nApp curriculum context:\n${buildCurriculumContext(curriculum)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nPrivate coach growth memory:\n${buildMemoryContext(memory)}`
     },
     ...messages,
     {
@@ -712,7 +731,7 @@ async function supabaseRequest(path, token, options = {}) {
 
 async function getProfile(userId, token) {
   const { data } = await supabaseRequest(
-    `profiles?select=id,role,full_name&id=eq.${encodeURIComponent(userId)}`,
+    `profiles?select=*&id=eq.${encodeURIComponent(userId)}`,
     token,
     { method: 'GET' }
   );
@@ -785,17 +804,17 @@ function normalizeFallbackCurriculum(fallback = {}) {
   };
 }
 
-async function getCurriculumContext(token, fallbackCurriculum = {}, userId = '') {
+async function getCurriculumContext(token, fallbackCurriculum = {}, userId = '', language = 'en') {
   const fallback = normalizeFallbackCurriculum(fallbackCurriculum);
   const today = new Date().toISOString().slice(0, 10);
   const [depositResult, plansResult, planProgressResult] = await Promise.all([
     supabaseRequest(
-      `daily_deposits?select=title,body,focus_question,release_date,status&status=eq.posted&release_date=lte.${today}&order=release_date.desc&limit=1`,
+      `daily_deposits?select=title,body,focus_question,title_es,body_es,focus_question_es,release_date,status&status=eq.posted&release_date=lte.${today}&order=release_date.desc&limit=1`,
       token,
       { method: 'GET' }
     ),
     supabaseRequest(
-      `performance_plans?select=id,title,subject,steps,release_date,challenge_day,challenge_length&release_date=lte.${today}&order=release_date.asc&limit=${MAX_CURRICULUM_PLANS}`,
+      `performance_plans?select=id,title,subject,steps,title_es,subject_es,steps_es,challenge_day_es,release_date,challenge_day,challenge_length&release_date=lte.${today}&order=release_date.asc&limit=${MAX_CURRICULUM_PLANS}`,
       token,
       { method: 'GET' }
     ),
@@ -818,19 +837,19 @@ async function getCurriculumContext(token, fallbackCurriculum = {}, userId = '')
   return {
     dailyDeposit: deposit
       ? {
-          title: cleanMessage(deposit.title, 140),
-          body: cleanMessage(deposit.body, 900),
-          focusQuestion: cleanMessage(deposit.focus_question, 240),
+          title: cleanMessage(language === 'es' ? (deposit.title_es || deposit.title) : deposit.title, 140),
+          body: cleanMessage(language === 'es' ? (deposit.body_es || deposit.body) : deposit.body, 900),
+          focusQuestion: cleanMessage(language === 'es' ? (deposit.focus_question_es || deposit.focus_question) : deposit.focus_question, 240),
           releaseDate: deposit.release_date || ''
         }
       : fallback.dailyDeposit,
     performancePlans: plans.map((plan) => ({
-      title: cleanMessage(plan.title, 140),
-      seriesTitle: cleanMessage(seriesTitleFromSubject(plan.subject), 140),
-      subject: cleanMessage(plan.subject, 700),
-      steps: asArray(plan.steps).map((step) => cleanMessage(step, 240)).filter(Boolean),
+      title: cleanMessage(language === 'es' ? (plan.title_es || plan.title) : plan.title, 140),
+      seriesTitle: cleanMessage(seriesTitleFromSubject(language === 'es' ? (plan.subject_es || plan.subject) : plan.subject), 140),
+      subject: cleanMessage(language === 'es' ? (plan.subject_es || plan.subject) : plan.subject, 700),
+      steps: asArray(language === 'es' && plan.steps_es?.length ? plan.steps_es : plan.steps).map((step) => cleanMessage(step, 240)).filter(Boolean),
       releaseDate: plan.release_date || '',
-      challengeDay: cleanMessage(plan.challenge_day, 80),
+      challengeDay: cleanMessage(language === 'es' ? (plan.challenge_day_es || plan.challenge_day) : plan.challenge_day, 80),
       challengeLength: Number(plan.challenge_length) || 0,
       currentDay: planCurrentDay(plan.release_date, plan.challenge_length),
       completedAt: progressByPlanId.get(String(plan.id)) || '',
@@ -841,7 +860,7 @@ async function getCurriculumContext(token, fallbackCurriculum = {}, userId = '')
 }
 
 function seriesTitleFromSubject(subject) {
-  const match = String(subject ?? '').match(/Series:\s*([^.!]+)[.!]?/i);
+  const match = String(subject ?? '').match(/(?:Series|Serie):\s*([^.!]+)[.!]?/i);
   return match?.[1]?.trim() || 'Performance Plans';
 }
 
@@ -1058,6 +1077,7 @@ export default async function handler(req, res) {
   }
 
   const message = cleanMessage(body.message);
+  const language = String(body.language || body.locale || profile?.preferred_language || user.user_metadata?.preferred_language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
   if (!message) {
     return json(res, 400, { error: 'Message is required.' });
   }
@@ -1067,7 +1087,7 @@ export default async function handler(req, res) {
   }
 
   if (crisisPattern.test(message)) {
-    const reply = crisisResponse();
+    const reply = crisisResponse(language);
     await saveCoachSession({
       userId: user.id,
       token,
@@ -1087,7 +1107,7 @@ export default async function handler(req, res) {
 
   const moderation = await moderate(message, apiKey);
   if (moderation.categories?.['self-harm'] || moderation.categories?.['self-harm/intent']) {
-    const reply = crisisResponse();
+    const reply = crisisResponse(language);
     await saveCoachSession({
       userId: user.id,
       token,
@@ -1105,7 +1125,7 @@ export default async function handler(req, res) {
     return json(res, 200, { reply, safety: 'crisis' });
   }
   if (shouldBlockModeration(moderation)) {
-    const reply = blockedResponse();
+    const reply = blockedResponse(language);
     await saveCoachSession({
       userId: user.id,
       token,
@@ -1134,7 +1154,7 @@ export default async function handler(req, res) {
       metadata: { messageCount: usage.messageCount || limit, messageLimit: limit }
     });
     return json(res, 429, {
-      error: limitResponse(limit),
+      error: limitResponse(limit, language),
       code: 'coach_daily_limit',
       messageCount: usage.messageCount || limit,
       messageLimit: limit
@@ -1143,14 +1163,14 @@ export default async function handler(req, res) {
 
   const [athleteContext, curriculumContext, sportsContext] = await Promise.all([
     getAthleteContext(user.id, token, profile, body.athlete),
-    getCurriculumContext(token, body.curriculum, user.id),
+    getCurriculumContext(token, body.curriculum, user.id, language),
     getSportsContext(message)
   ]);
 
   const sportsKnowledgeQuestion = hasSportsKnowledgeIntent(message);
 
   if (!sportsKnowledgeQuestion && !isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
-    const reply = clarifyingResponse(message, athleteContext, body.history);
+    const reply = clarifyingResponse(message, athleteContext, body.history, language);
     await saveCoachSession({
       userId: user.id,
       token,
@@ -1184,7 +1204,8 @@ export default async function handler(req, res) {
         athlete: athleteContext,
         memory,
         curriculum: curriculumContext,
-        sportsContext
+        sportsContext,
+        language
       }),
       max_output_tokens: 220
     })

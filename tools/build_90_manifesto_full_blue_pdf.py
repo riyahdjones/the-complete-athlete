@@ -50,6 +50,39 @@ GREEN = colors.HexColor("#16A36B")
 RED = colors.HexColor("#1F2937")
 WHITE = colors.white
 
+MANIFESTO_PROBLEM = "What most youth athletes and parents don't know about the mental side of performance."
+
+CHAPTER_REFRAMES = {
+    "CHAPTER ONE": (
+        "What Most Families Don't Know About the 90%",
+        "The problem is not that families ignore the mental side. It is that most were never shown how deeply the mental side decides what physical training can become.",
+    ),
+    "CHAPTER 2": (
+        "What Most Parents Don't Know About the Person Behind Performance",
+        "Most parents see performance first. This chapter shifts the lens to the person creating that performance.",
+    ),
+    "CHAPTER 3": (
+        "What Most Athletes Don't Know About Their Operating System",
+        "Most athletes think they are reacting to the game. They are usually running the operating system their inputs have trained.",
+    ),
+    "CHAPTER 4": (
+        "What Most Families Don't Know About Belief",
+        "Most families try to change confidence at the surface. This chapter shows the builders quietly constructing belief underneath.",
+    ),
+    "CHAPTER 5": (
+        "What Most Athletes Don't Know About Repetition",
+        "Most athletes repeat skills on purpose and repeat identity by accident. Both forms of repetition become automatic.",
+    ),
+    "CHAPTER 6": (
+        "What Most Athletes Don't Know About Mental Rehearsal",
+        "Most athletes think rehearsal starts at practice. Their mind is rehearsing before the game, after the mistake, and while no one is watching.",
+    ),
+    "FINAL CHAPTER": (
+        "What Most Families Don't Know About Becoming Complete",
+        "Most families chase better performances. Complete athletes are built when the person behind the performance changes first.",
+    ),
+}
+
 
 KEY_CALLOUTS = {
     "Athletic success is 90% mental and 10% physical.": ("THE 90% PHILOSOPHY", BLUE),
@@ -742,7 +775,7 @@ def make_styles():
     base = getSampleStyleSheet()
     return {
         "cover_kicker": ParagraphStyle("cover_kicker", parent=base["Normal"], fontName="TCABodyBold", fontSize=8.5, leading=10, textColor=BLUE, spaceAfter=8),
-        "cover_title": ParagraphStyle("cover_title", parent=base["Title"], fontName="TCACondensed", fontSize=58, leading=51, textColor=WHITE, spaceAfter=8),
+        "cover_title": ParagraphStyle("cover_title", parent=base["Title"], fontName="TCACondensed", fontSize=52, leading=48, textColor=WHITE, spaceAfter=8),
         "cover_sub": ParagraphStyle("cover_sub", parent=base["Normal"], fontName="TCASerif", fontSize=14.5, leading=20, textColor=colors.HexColor("#E8EEF9"), spaceAfter=16),
         "chapter_num": ParagraphStyle("chapter_num", parent=base["Normal"], fontName="TCABodyBold", fontSize=8.5, leading=10, textColor=BLUE, spaceAfter=6),
         "chapter_title": ParagraphStyle("chapter_title", parent=base["Heading1"], fontName="TCACondensed", fontSize=36, leading=34, textColor=INK, spaceAfter=9),
@@ -753,10 +786,12 @@ def make_styles():
         "section_blue": ParagraphStyle("section_blue", parent=base["Heading2"], fontName="TCABodyBold", fontSize=12.5, leading=15, textColor=BLUE_DARK, alignment=TA_CENTER, spaceBefore=8, spaceAfter=6),
         "body": ParagraphStyle("body", parent=base["BodyText"], fontName="TCASerif", fontSize=12.0, leading=16.4, textColor=INK, alignment=TA_CENTER, spaceBefore=0, spaceAfter=4.8),
         "breath": ParagraphStyle("breath", parent=base["BodyText"], fontName="TCASerif", fontSize=12.0, leading=16.4, textColor=INK, alignment=TA_CENTER, spaceBefore=0, spaceAfter=4.8),
+        "front_body": ParagraphStyle("front_body", parent=base["BodyText"], fontName="TCASerif", fontSize=11.4, leading=15.0, textColor=INK, alignment=TA_CENTER, spaceBefore=0, spaceAfter=3.6),
         "emphasis": ParagraphStyle("emphasis", parent=base["BodyText"], fontName="TCABodyBold", fontSize=11.8, leading=15, textColor=BLUE_DARK, alignment=TA_CENTER, spaceBefore=3, spaceAfter=5),
         "quote": ParagraphStyle("quote", parent=base["BodyText"], fontName="TCASerifItalic", fontSize=14, leading=19, textColor=INK, alignment=TA_CENTER),
         "callout_title": ParagraphStyle("callout_title", parent=base["Normal"], fontName="TCABodyBold", fontSize=8.4, leading=10, textColor=colors.HexColor("#BFD0FF"), alignment=TA_CENTER, spaceAfter=5),
         "callout_body": ParagraphStyle("callout_body", parent=base["Normal"], fontName="TCABodyBold", fontSize=12.4, leading=15.8, textColor=WHITE, alignment=TA_CENTER),
+        "frame_body": ParagraphStyle("frame_body", parent=base["Normal"], fontName="TCABodyBold", fontSize=11.4, leading=15.2, textColor=WHITE, alignment=TA_CENTER),
         "question": ParagraphStyle("question", parent=base["Normal"], fontName="TCABodyBold", fontSize=10.2, leading=14.5, textColor=INK, alignment=TA_LEFT, spaceAfter=4),
         "small": ParagraphStyle("small", parent=base["Normal"], fontName="TCABody", fontSize=8, leading=10, textColor=MUTED),
         "toc": ParagraphStyle("toc", parent=base["Normal"], fontName="TCABodyBold", fontSize=11.5, leading=16, textColor=INK, spaceAfter=4),
@@ -794,6 +829,20 @@ def callout(title, text, bg, style):
         ("RIGHTPADDING", (0, 0), (-1, -1), 13),
         ("TOPPADDING", (0, 0), (-1, -1), 10),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    return KeepTogether([Spacer(1, 5), table, Spacer(1, 8)])
+
+
+def problem_card(text, style):
+    table = Table([[para("WHAT MOST FAMILIES DON'T KNOW", style["callout_title"])], [para(text, style["frame_body"])]], colWidths=[5.35 * inch], hAlign="CENTER")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), FIELD),
+        ("LINEABOVE", (0, 0), (-1, 0), 4, BLUE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 18),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 18),
+        ("TOPPADDING", (0, 0), (-1, -1), 11),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 11),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]))
     return KeepTogether([Spacer(1, 5), table, Spacer(1, 8)])
@@ -841,11 +890,11 @@ def build_cover(story, style):
         story.append(img)
         story.append(Spacer(1, 0.28 * inch))
     story.append(para("THE COMPLETE ATHLETE", style["cover_kicker"]))
-    story.append(para("THE 90%<br/>MANIFESTO", style["cover_title"]))
-    story.append(para("Why the invisible side of performance decides what shows up when the lights come on.", style["cover_sub"]))
+    story.append(para("WHAT MOST<br/>FAMILIES DON'T KNOW", style["cover_title"]))
+    story.append(para("About the mental side of youth sports performance - and why the 90% decides what shows up when pressure arrives.", style["cover_sub"]))
     story.append(TopRule(0.45, BLUE, 5))
     story.append(Spacer(1, 0.14 * inch))
-    story.append(para("For parents raising athletes who need more than reps, lessons, and motivation.", style["cover_sub"]))
+    story.append(para("A manifesto for parents and athletes who know training the body matters, but sense there is something deeper deciding consistency, confidence, and identity.", style["cover_sub"]))
 
 
 def build_intro(story, style):
@@ -856,6 +905,7 @@ def build_intro(story, style):
     story.append(para("AUTHOR", style["chapter_num"]))
     story.append(para(title, style["chapter_title"]))
     story.append(TopRule(0.34, BLUE, 5))
+    story.append(problem_card("Most families are told the mental side matters. My story taught me that almost no one is taught how to train it.", style))
     for line in body:
         if line == "The mind.":
             story.append(callout("THE MISSING SIDE", line, BLUE, style))
@@ -878,6 +928,7 @@ def build_philosophy(story, style):
     story.append(para("PHILOSOPHY", style["chapter_num"]))
     story.append(para(title, style["chapter_title"]))
     story.append(TopRule(0.34, BLUE, 5))
+    story.append(problem_card(MANIFESTO_PROBLEM, style))
     skip_next = False
     for line in body:
         if skip_next:
@@ -888,33 +939,32 @@ def build_philosophy(story, style):
         elif line == "What does that actually mean?":
             story.append(callout("THE QUESTION", line, FIELD, style))
         elif line == "The Complete Athlete is built on one simple belief:":
-            story.append(para(line, style["body"]))
+            story.append(para(line, style["front_body"]))
         elif line == "The body performs.":
             story.append(callout("THE COMPLETE ATHLETE BELIEF", "The body performs.<br/>The mind determines how consistently.", BLUE, style))
             skip_next = True
         elif line == "Welcome to The Complete Athlete.":
-            story.append(Spacer(1, 8))
-            story.append(callout("WELCOME", line, BLUE_DARK, style))
+            story.append(para(line, style["section_blue"]))
         else:
-            story.append(para(line, style["body"]))
+            story.append(para(line, style["front_body"]))
 
 
 def build_toc(story, style):
     story.append(PageBreak())
     story.append(para("FIELD GUIDE", style["chapter_num"]))
-    story.append(para("What You Will See Differently", style["chapter_title"]))
+    story.append(para("What Most Families Don't Know Yet", style["chapter_title"]))
     for row in [
-        "01  The Lie We All Believe",
-        "02  The Person Behind the Performance",
-        "03  The Athletic Operating System (aOS)",
-        "04  The Architects of Belief",
-        "05  The Law of Repetition",
-        "06  Your Mind Doesn't Know the Difference",
-        "07  The Journey to Becoming a Complete Athlete",
+        "01  What Most Families Don't Know About the 90%",
+        "02  What Most Parents Don't Know About the Person Behind Performance",
+        "03  What Most Athletes Don't Know About Their Operating System",
+        "04  What Most Families Don't Know About Belief",
+        "05  What Most Athletes Don't Know About Repetition",
+        "06  What Most Athletes Don't Know About Mental Rehearsal",
+        "07  What Most Families Don't Know About Becoming Complete",
     ]:
         story.append(para(row, style["toc"]))
     story.append(Spacer(1, 0.2 * inch))
-    story.append(callout("CORE PROMISE", "The athlete everyone sees on the field is the visible expression of what has been quietly built behind the scenes.", FIELD, style))
+    story.append(callout("CORE PROMISE", "This is the problem most families can feel but cannot name: the athlete everyone sees on the field is the visible expression of what has been quietly built behind the scenes.", FIELD, style))
 
 
 def build_soft_cta(story, style):
@@ -924,10 +974,10 @@ def build_soft_cta(story, style):
     story.append(para("Train the Operating System Daily", style["cta_title"]))
     story.append(TopRule(0.42, BLUE, 5))
     story.append(Spacer(1, 0.12 * inch))
-    story.append(para("If this chapter made you think differently about your athlete, start here:", style["cta_body"]))
+    story.append(para("If this chapter made you realize your athlete has been training an operating system all along, start here:", style["cta_body"]))
     story.append(quote_card("Do not only ask, How do we fix the performance?<br/>Start asking, What is training the operating system behind the performance?", style))
     story.append(para("That is the work The Complete Athlete was built for.", style["cta_body"]))
-    story.append(para("Inside the app, athletes learn how to reflect, reset, build confidence, strengthen identity, and repeat the right inputs daily - before pressure tests them.", style["cta_body"]))
+    story.append(para("Inside the app, athletes learn how to train the mental side on purpose: reflect, reset, build confidence, strengthen identity, and repeat the right inputs daily - before pressure tests them.", style["cta_body"]))
     story.append(callout("THE DAILY WORK", "You do not have to wait for a bad game to train the mental side. You can begin building it now.", BLUE_DARK, style))
     button = Table([[para("Continue the journey inside The Complete Athlete.", style["cta_button"])]], colWidths=[4.8 * inch], hAlign="CENTER")
     button.setStyle(TableStyle([
@@ -953,10 +1003,13 @@ def append_blocks(story, style):
                 build_soft_cta(story, style)
                 cta_inserted = True
             active_chapter = block[1].upper()
+            chapter_title, chapter_frame = CHAPTER_REFRAMES.get(active_chapter, (block[2], ""))
             story.append(PageBreak())
             story.append(para(block[1].upper(), style["chapter_num"]))
-            story.append(para(block[2], style["chapter_title"]))
+            story.append(para(chapter_title, style["chapter_title"]))
             story.append(TopRule(0.34, BLUE, 5))
+            if chapter_frame:
+                story.append(problem_card(chapter_frame, style))
             if block[3]:
                 story.append(quote_card(block[3].strip('"'), style))
             recent_reflection = False
@@ -1001,10 +1054,10 @@ def append_blocks(story, style):
 def build_closing(story, style):
     story.append(PageBreak())
     story.append(para("NEXT STEP", style["chapter_num"]))
-    story.append(para("Make The 90% Daily", style["chapter_title"]))
+    story.append(para("Train What Most Families Miss", style["chapter_title"]))
     story.append(TopRule(0.35, BLUE, 5))
-    story.append(para("The manifesto gives families the language. The Complete Athlete turns that language into a rhythm athletes can repeat.", style["body"]))
-    story.append(callout("CONTINUE THE WORK", "Daily Deposits. Mindset coaching. Reflection. Shared parent-athlete language. A place to train the invisible side of performance every day.", BLUE_DARK, style))
+    story.append(para("The manifesto gives families language for the mental side of performance. The Complete Athlete turns that language into a rhythm athletes can repeat.", style["body"]))
+    story.append(callout("CONTINUE THE WORK", "Daily Deposits. Mindset coaching. Reflection. Shared parent-athlete language. A place to train what most youth athletes and parents were never taught to train.", BLUE_DARK, style))
     if APP_ICON.exists():
         icon = Image(str(APP_ICON), width=0.78 * inch, height=0.78 * inch)
         icon.hAlign = "CENTER"

@@ -1,5 +1,7 @@
 import UIKit
 import Capacitor
+import StoreKit
+import WidgetKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -54,4 +56,102 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
+}
+
+// System authentication browser keeps Google/Apple sign-in outside WKWebView.
+import AuthenticationServices
+
+class TCAViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(TCAAuthPlugin())
+        bridge?.registerPluginInstance(TCAReviewPlugin())
+        bridge?.registerPluginInstance(TCAGoalWidgetPlugin())
+    }
+}
+
+@objc(TCAGoalWidgetPlugin)
+public class TCAGoalWidgetPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "TCAGoalWidgetPlugin"
+    public let jsName = "TCAGoalWidget"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "syncGoals", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func syncGoals(_ call: CAPPluginCall) {
+        guard let goals = call.getArray("goals", JSObject.self),
+              JSONSerialization.isValidJSONObject(goals),
+              let data = try? JSONSerialization.data(withJSONObject: goals),
+              let defaults = UserDefaults(suiteName: "group.com.riyahdjones.thecompleteathlete") else {
+            call.reject("Goal widgets could not be updated.")
+            return
+        }
+
+        defaults.set(data, forKey: "goal-widget-goals")
+        WidgetCenter.shared.reloadAllTimelines()
+        call.resolve()
+    }
+}
+
+@objc(TCAReviewPlugin)
+public class TCAReviewPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "TCAReviewPlugin"
+    public let jsName = "TCAReview"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestReview", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func requestReview(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if #available(iOS 14.0, *), let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) {
+                SKStoreReviewController.requestReview(in: scene)
+            } else {
+                SKStoreReviewController.requestReview()
+            }
+            call.resolve()
+        }
+    }
+}
+
+@objc(TCAAuthPlugin)
+public class TCAAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
+    public let identifier = "TCAAuthPlugin"
+    public let jsName = "TCAAuth"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise)
+    ]
+    private var authSession: ASWebAuthenticationSession?
+
+    @objc func authenticate(_ call: CAPPluginCall) {
+        guard let rawURL = call.getString("url"), let url = URL(string: rawURL),
+              url.scheme == "https", url.host == "nddtgwygnzjikjynrzen.supabase.co",
+              url.path == "/auth/v1/authorize" else {
+            call.reject("Invalid authentication URL.")
+            return
+        }
+        DispatchQueue.main.async {
+            guard self.authSession == nil else { call.reject("Sign-in is already open."); return }
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "com.riyahdjones.thecompleteathlete") { [weak self] callback, error in
+                self?.authSession = nil
+                if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                    call.reject("Sign-in canceled.", "CANCELLED")
+                } else if let callback = callback {
+                    call.resolve(["url": callback.absoluteString])
+                } else {
+                    call.reject("Sign-in could not be completed. Please try again.")
+                }
+            }
+            session.presentationContextProvider = self
+            self.authSession = session
+            if !session.start() {
+                self.authSession = nil
+                call.reject("Unable to open sign-in.")
+            }
+        }
+    }
+
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return bridge?.viewController?.view.window ?? ASPresentationAnchor()
+    }
 }

@@ -1,3 +1,6 @@
+import { startSocialAuth, finishSocialProfile, completeSocialRedirect } from './socialAuth';
+import { canRequestNativeAppReview, recordParentAppOpen, requestAppReview } from './appReview';
+import { syncGoalWidgets } from './goalWidget';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
@@ -12,11 +15,17 @@ import {
   Camera,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleHelp,
+  Clock,
   Copy,
   Download,
+  Dumbbell,
+  Flame,
+  GraduationCap,
   Goal,
   Home,
+  Leaf,
   LineChart,
   LockKeyhole,
   MessageCircle,
@@ -39,6 +48,31 @@ import {
 } from 'lucide-react';
 import { createCollegeRecruitingParentGuide } from './collegeRecruitingParentGuide';
 import { createPerformancePlanSeeds } from './performancePlans';
+import {
+  athleteRankProgress,
+  athleteRanks,
+  deriveDevelopmentProfile,
+  generateJourney,
+  journeyProgress,
+  journeyQuestions,
+  reconcileJourney
+} from './athleteJourney';
+import {
+  clearMembershipAccessCache,
+  loadMembershipAccessCache,
+  resolvePremiumAccess,
+  saveMembershipAccessCache,
+  shouldClearSavedSession
+} from './membershipCache';
+import spanishPlanTranslations from './performancePlans.es.json';
+import {
+  getInitialLanguage,
+  installDocumentTranslation,
+  localizePlans,
+  translateText,
+  saveLanguagePreference,
+  supportedLanguages
+} from './i18n';
 import GameDayMode, { gameDayBadgeCounts, loadGameDaySessions } from './GameDayMode';
 import {
   canUseNativePurchases,
@@ -47,7 +81,7 @@ import {
   restoreRevenueCatSubscription,
   revenueCatConfig
 } from './revenueCat';
-import { isSupabaseConfigured, supabase } from './supabaseClient';
+import { isSupabaseConfigured, supabase, oauthSupabase } from './supabaseClient';
 import './styles.css';
 
 const LEGAL_URLS = {
@@ -204,15 +238,16 @@ const coachStorageKey = 'the-ninety-percent-coach-sessions';
 const lessonStorageKey = 'the-ninety-percent-lessons';
 const athleteProfileStorageKey = 'the-ninety-percent-athlete-profile';
 const goalsStorageKey = 'the-ninety-percent-goals';
-const todayGoalSelectionStorageKey = 'the-complete-athlete-today-goal-selection';
 const plansStorageKey = 'the-ninety-percent-performance-plans';
 const planProgressStorageKey = 'the-ninety-percent-performance-plan-progress';
 const parentGuideProgressStorageKey = 'the-ninety-percent-parent-guide-progress';
 const pointsLedgerStorageKey = 'the-ninety-percent-points-ledger';
+const athleteJourneyStorageKey = 'the-complete-athlete-first-21-journey';
 const onboardingStorageKey = 'the-ninety-percent-onboarding-complete';
 const athleteStartStorageKey = 'the-complete-athlete-start-today-complete';
 const parentStartAccountsStorageKey = 'the-complete-athlete-parent-first-value-accounts';
 const parentStarterPlanStorageKey = 'the-complete-athlete-parent-starter-plan';
+const parentAssessmentStorageKey = 'the-complete-athlete-parent-assessments';
 const trialAccessStorageKey = 'the-complete-athlete-trial-access-expires';
 const authUsersStorageKey = 'the-ninety-percent-auth-users';
 const authSessionStorageKey = 'the-ninety-percent-auth-session';
@@ -266,6 +301,8 @@ const pointValues = {
   planLessonCompleted: 10,
   planSeriesCompleted: 100,
   gameDayCheckInCompleted: 15,
+  integrationDayCompleted: 20,
+  journeyCompleted: 250,
   streakBonusPerDay: 5,
   streakBonusCap: 25
 };
@@ -912,10 +949,12 @@ function loadAthleteProfile() {
       currentChallenges: Array.isArray(saved.currentChallenges)
         ? saved.currentChallenges
         : saved.currentChallenge ? [saved.currentChallenge] : [],
+      journeyAnswers: saved.journeyAnswers && typeof saved.journeyAnswers === 'object' ? saved.journeyAnswers : {},
+      developmentProfile: saved.developmentProfile && typeof saved.developmentProfile === 'object' ? saved.developmentProfile : null,
       parentAccessCode: saved.parentAccessCode ?? 'TCA-PARENT'
     };
   } catch {
-    return { name: '', sport: '', age: '', location: '', photo: '', parentContact: '', currentChallenge: '', currentChallenges: [], parentAccessCode: 'TCA-PARENT' };
+    return { name: '', sport: '', age: '', location: '', photo: '', parentContact: '', currentChallenge: '', currentChallenges: [], journeyAnswers: {}, developmentProfile: null, parentAccessCode: 'TCA-PARENT' };
   }
 }
 
@@ -971,6 +1010,16 @@ function loadOnboardingComplete() {
   }
 }
 
+function loadAthleteJourney(ownerId = loadAuthSession()?.id) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(athleteJourneyStorageKey) || 'null');
+    if (saved?.ownerId && ownerId && String(saved.ownerId) !== String(ownerId)) return null;
+    return saved?.days?.length === 21 ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 function loadAthleteStartComplete() {
   try {
     return localStorage.getItem(athleteStartStorageKey) === 'true';
@@ -1022,6 +1071,7 @@ const plansSeed = createPerformancePlanSeeds(todayKey);
 
 function normalizePlan(plan) {
   return {
+    ...plan,
     id: plan.id ?? Date.now() + Math.random(),
     title: plan.title ?? '',
     subject: plan.subject ?? plan.focus ?? '',
@@ -1083,17 +1133,6 @@ function loadGoals() {
     return Array.isArray(saved) && saved.length ? saved : goalsSeed;
   } catch {
     return goalsSeed;
-  }
-}
-
-function loadTodayGoalSelection() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(todayGoalSelectionStorageKey) || 'null');
-    return saved && Array.isArray(saved.ids)
-      ? { configured: Boolean(saved.configured), ids: saved.ids.map(String) }
-      : { configured: false, ids: [] };
-  } catch {
-    return { configured: false, ids: [] };
   }
 }
 
@@ -1255,7 +1294,10 @@ function lessonFromSupabase(row) {
     status: row.status === 'posted' ? 'Posted' : row.status === 'scheduled' ? 'Scheduled' : 'Draft',
     sendDate: row.release_date ?? todayKey(),
     focusQuestion: row.focus_question ?? '',
-    body: row.body ?? ''
+    body: row.body ?? '',
+    titleEs: row.title_es ?? '',
+    bodyEs: row.body_es ?? '',
+    focusQuestionEs: row.focus_question_es ?? ''
   };
 }
 
@@ -1267,7 +1309,11 @@ function planFromSupabase(row) {
     steps: Array.isArray(row.steps) ? row.steps : [],
     releaseDate: row.release_date,
     challengeDay: row.challenge_day,
-    challengeLength: row.challenge_length
+    challengeLength: row.challenge_length,
+    titleEs: row.title_es,
+    subjectEs: row.subject_es,
+    stepsEs: Array.isArray(row.steps_es) ? row.steps_es : [],
+    challengeDayEs: row.challenge_day_es
   });
 }
 
@@ -1278,7 +1324,11 @@ function parentMessageFromSupabase(row) {
     conversationCue: row.conversation_cue ?? parentMessageSeed.conversationCue,
     avoid: row.avoid ?? parentMessageSeed.avoid,
     sendDate: row.send_date ?? todayKey(),
-    status: row.status === 'sent' ? 'Sent' : row.status === 'scheduled' ? 'Scheduled' : 'Draft'
+    status: row.status === 'sent' ? 'Sent' : row.status === 'scheduled' ? 'Scheduled' : 'Draft',
+    titleEs: row.title_es ?? '',
+    bodyEs: row.body_es ?? '',
+    conversationCueEs: row.conversation_cue_es ?? '',
+    avoidEs: row.avoid_es ?? ''
   };
 }
 
@@ -1292,7 +1342,13 @@ function parentGuideFromSupabase(row) {
     steps: Array.isArray(row.steps) ? row.steps : [],
     releaseDate: row.release_date ?? todayKey(),
     guideDay: row.guide_day ?? '',
-    guideLength: Number(row.guide_length) || 1
+    guideLength: Number(row.guide_length) || 1,
+    seriesTitleEs: row.series_title_es ?? '',
+    titleEs: row.title_es ?? '',
+    categoryEs: row.category_es ?? '',
+    subjectEs: row.subject_es ?? '',
+    stepsEs: Array.isArray(row.steps_es) ? row.steps_es : [],
+    guideDayEs: row.guide_day_es ?? ''
   };
 }
 
@@ -3121,8 +3177,10 @@ function App() {
   }
 
   const [initialDailyState] = useState(loadDailyState);
+  const [language, setLanguage] = useState(getInitialLanguage);
   const [authUsers, setAuthUsers] = useState(loadAuthUsers);
   const [authSession, setAuthSession] = useState(loadAuthSession);
+  const parentOpenCountedSessionRef = useRef('');
   const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(hasPasswordRecoveryIntent);
   const [onboardingComplete, setOnboardingComplete] = useState(() => (
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('firstTime') === 'athlete'
@@ -3151,6 +3209,7 @@ function App() {
   const [tab, setTab] = useState('home');
   const [profileView, setProfileView] = useState('overview');
   const [requestedPlanSeriesId, setRequestedPlanSeriesId] = useState('');
+  const [requestedPlanId, setRequestedPlanId] = useState('');
   const [parentTab, setParentTab] = useState('overview');
   const [standards, setStandards] = useState(initialDailyState.standards);
   const [standardDraft, setStandardDraft] = useState('');
@@ -3176,10 +3235,15 @@ function App() {
     }
   }, [authSession?.id]);
   const [goals, setGoals] = useState(loadGoals);
-  const [todayGoalSelection, setTodayGoalSelection] = useState(loadTodayGoalSelection);
   const [goalDraft, setGoalDraft] = useState({ label: '', value: '', targetDate: '' });
   const [plans, setPlans] = useState(loadPlans);
+  const localizedPlans = useMemo(
+    () => localizePlans(plans, language, spanishPlanTranslations, plansSeed),
+    [plans, language]
+  );
   const [planProgress, setPlanProgress] = useState(loadPlanProgress);
+  const [athleteJourney, setAthleteJourney] = useState(loadAthleteJourney);
+  const [journeyRemoteReady, setJourneyRemoteReady] = useState(false);
   const [pointsLedger, setPointsLedger] = useState(loadPointsLedger);
   const [messages, setMessages] = useState([]);
   const [coachSessions, setCoachSessions] = useState(loadCoachSessions);
@@ -3198,6 +3262,7 @@ function App() {
   const [linkedAthleteSummary, setLinkedAthleteSummary] = useState(null);
   const [parentLinkRefreshKey, setParentLinkRefreshKey] = useState(0);
   const [premiumAccessRefreshKey, setPremiumAccessRefreshKey] = useState(0);
+  const [, setMembershipCacheRevision] = useState(0);
   const [privacySettings, setPrivacySettings] = useState(privacySeed);
   const [athleteProfile, setAthleteProfile] = useState(loadAthleteProfile);
   const [supabaseAthleteDataReady, setSupabaseAthleteDataReady] = useState(false);
@@ -3210,6 +3275,7 @@ function App() {
     active: false,
     activeTrial: false,
     loading: Boolean(revenueCatConfig.iosApiKey),
+    checked: false,
     package: null,
     message: revenueCatConfig.iosApiKey ? 'Checking premium access...' : 'RevenueCat key is not set yet.'
   });
@@ -3217,6 +3283,7 @@ function App() {
   const [accessCheckTime, setAccessCheckTime] = useState(() => Date.now());
   const [backendPremiumAccess, setBackendPremiumAccess] = useState({
     loading: isSupabaseConfigured,
+    checked: false,
     hasAccess: false,
     activeTrial: false,
     source: 'none',
@@ -3224,23 +3291,69 @@ function App() {
     expiresAt: ''
   });
 
-  const activeLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
+  const baseActiveLesson = lessonLibrary.find((lesson) => lesson.id === selectedLessonId) ?? lessonLibrary[0];
+  const activeLesson = useMemo(() => language === 'es' && baseActiveLesson ? {
+    ...baseActiveLesson,
+    title: baseActiveLesson.titleEs || baseActiveLesson.title,
+    body: baseActiveLesson.bodyEs || baseActiveLesson.body,
+    focusQuestion: baseActiveLesson.focusQuestionEs || baseActiveLesson.focusQuestion
+  } : baseActiveLesson, [baseActiveLesson, language]);
+  const localizedParentMessage = useMemo(() => language === 'es' ? {
+    ...parentMessage,
+    title: parentMessage.titleEs || parentMessage.title,
+    body: parentMessage.bodyEs || parentMessage.body,
+    conversationCue: parentMessage.conversationCueEs || parentMessage.conversationCue,
+    avoid: parentMessage.avoidEs || parentMessage.avoid
+  } : parentMessage, [parentMessage, language]);
+  const localizedParentGuides = useMemo(() => language === 'es' ? parentGuides.map((guide) => ({
+    ...guide,
+    seriesTitleEn: guide.seriesTitle,
+    seriesTitle: guide.seriesTitleEs || guide.seriesTitle,
+    title: guide.titleEs || guide.title,
+    category: guide.categoryEs || guide.category,
+    subject: guide.subjectEs || guide.subject,
+    steps: guide.stepsEs?.length ? guide.stepsEs : guide.steps,
+    guideDay: guide.guideDayEs || guide.guideDay
+  })) : parentGuides, [parentGuides, language]);
   const localAthletePreviewSession = useMemo(() => {
-    if (!import.meta.env.DEV || authSession || typeof window === 'undefined') return null;
+    if (!import.meta.env.DEV || typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
     const athletePreview = params.get('firstTime') === 'athlete'
       || params.get('startPreview') === 'athlete'
       || params.get('todayPreview') === 'athlete';
     if (params.get('role') !== 'athlete' || !athletePreview) return null;
     return { id: 'local-athlete-preview', role: 'athlete', name: 'Preview Athlete', email: 'preview-athlete@example.com' };
-  }, [authSession]);
+  }, []);
+  const parentFirstTimePreview = Boolean(import.meta.env.DEV && typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('firstTime') === 'parent');
   const localParentInviteSession = useMemo(() => {
-    if (!import.meta.env.DEV || authSession || typeof window === 'undefined') return null;
+    if (!import.meta.env.DEV || typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
+    if (params.get('role') === 'parent' && params.get('firstTime') === 'parent') {
+      return { id: `local-parent-preview-${params.get('previewId') || 'default'}`, role: 'parent', name: 'Preview Parent', email: 'preview-parent@example.com', parentAccessCode: 'TCA-FAMILY' };
+    }
+    if (authSession) return null;
     if (params.get('role') !== 'parent' || params.get('parentCode') !== 'TCA-PARENT') return null;
     return { id: 'local-parent-review', role: 'parent', name: 'App Review Parent', email: 'review-parent@example.com', parentAccessCode: 'TCA-FAMILY' };
   }, [authSession]);
-  const effectiveSession = authSession ?? localAthletePreviewSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
+  const effectiveSession = (parentFirstTimePreview ? localParentInviteSession : null) ?? localAthletePreviewSession ?? authSession ?? localParentInviteSession ?? (prototypeBypassLogin ? { id: 'demo-athlete', role: 'athlete', name: 'Demo Athlete', email: '' } : null);
+  const interfaceLanguage = effectiveSession ? language : 'en';
+  useEffect(() => {
+    if (effectiveSession) saveLanguagePreference(language);
+    else if (typeof document !== 'undefined') document.documentElement.lang = 'en';
+    const removeTranslation = installDocumentTranslation(interfaceLanguage);
+    return removeTranslation;
+  }, [effectiveSession?.id, interfaceLanguage, language]);
+  const changeLanguage = useCallback((nextLanguage) => {
+    const normalized = saveLanguagePreference(nextLanguage);
+    setLanguage(normalized);
+    if (isSupabaseConfigured && isSupabaseId(authSession?.id)) {
+      supabase.from('profiles').update({ preferred_language: normalized }).eq('id', authSession.id).then(({ error }) => {
+        if (error) console.warn('Account language could not be saved.');
+      });
+      supabase.auth.updateUser({ data: { preferred_language: normalized } }).catch(() => {});
+    }
+  }, [authSession?.id]);
   useEffect(() => {
     if (!isSupabaseConfigured || !authSession?.id || authSession.role === 'admin') return;
     supabase.auth.getSession().then(({ data }) => {
@@ -3249,31 +3362,20 @@ function App() {
   }, [authSession?.id, authSession?.role]);
   const isAuthed = Boolean(effectiveSession) && !passwordRecoveryActive;
   const isLocalPreviewSession = Boolean(localAthletePreviewSession || localParentInviteSession || prototypeBypassLogin);
+  const cachedPremiumAccess = loadMembershipAccessCache(effectiveSession?.id);
   const forcePaywallPreview = import.meta.env.DEV
     && typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('paywallPreview') === 'athlete';
-  const nativeExpirationTime = new Date(subscription.expirationDate || '').getTime();
-  const backendExpirationTime = new Date(backendPremiumAccess.expiresAt || '').getTime();
-  const nativeAccessCurrent = subscription.active
-    && (!Number.isFinite(nativeExpirationTime) || nativeExpirationTime > accessCheckTime);
-  const backendAccessCurrent = backendPremiumAccess.hasAccess
-    && (!Number.isFinite(backendExpirationTime) || backendExpirationTime > accessCheckTime);
+    && ['athlete', 'parent'].includes(new URLSearchParams(window.location.search).get('paywallPreview'));
+  const resolvedPremiumAccess = resolvePremiumAccess({
+    subscription,
+    backendAccess: backendPremiumAccess,
+    cachedAccess: cachedPremiumAccess,
+    localTrialAccess: localTrialAccessActive,
+    now: accessCheckTime
+  });
   const effectiveSubscription = {
     ...subscription,
-    active: nativeAccessCurrent || backendAccessCurrent,
-    activeTrial: Boolean(
-      (subscription.activeTrial && nativeAccessCurrent)
-      || (backendPremiumAccess.activeTrial && backendAccessCurrent)
-      || localTrialAccessActive
-    ),
-    accessSource: backendPremiumAccess.source,
-    sponsorUserId: backendPremiumAccess.sponsorUserId,
-    expirationDate: subscription.expirationDate || backendPremiumAccess.expiresAt,
-    message: backendPremiumAccess.hasAccess
-      ? backendPremiumAccess.source === 'parent'
-        ? 'Premium access is covered by a linked parent account.'
-        : 'Premium access is active.'
-      : subscription.message
+    ...resolvedPremiumAccess
   };
   const premiumAccessAllowed = forcePaywallPreview
     ? false
@@ -3284,6 +3386,7 @@ function App() {
       || localTrialAccessActive;
   const premiumAccessLoading = !forcePaywallPreview
     && !isLocalPreviewSession
+    && !premiumAccessAllowed
     && (effectiveSubscription.loading || backendPremiumAccess.loading);
   const trialPlanMode = !premiumAccessAllowed;
   const standardsCompleted = standards.filter((item) => item.done).length;
@@ -3430,8 +3533,9 @@ function App() {
   }, [goals]);
 
   useEffect(() => {
-    localStorage.setItem(todayGoalSelectionStorageKey, JSON.stringify(todayGoalSelection));
-  }, [todayGoalSelection]);
+    if (authSession?.role !== 'athlete') return;
+    syncGoalWidgets({ goals, standards }).catch(() => {});
+  }, [authSession?.id, authSession?.role, goals, standards]);
 
   useEffect(() => {
     localStorage.setItem(plansStorageKey, JSON.stringify(plans));
@@ -3440,6 +3544,70 @@ function App() {
   useEffect(() => {
     localStorage.setItem(planProgressStorageKey, JSON.stringify(planProgress));
   }, [planProgress]);
+
+  useEffect(() => {
+    if (!athleteJourney) return;
+    localStorage.setItem(athleteJourneyStorageKey, JSON.stringify(athleteJourney));
+  }, [athleteJourney]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !isSupabaseId(authSession.id)) {
+      setJourneyRemoteReady(false);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('athlete_journeys')
+      .select('journey')
+      .eq('athlete_user_id', authSession.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data?.journey?.days?.length === 21) {
+          setAthleteJourney({ ...data.journey, ownerId: authSession.id });
+        }
+        setJourneyRemoteReady(!error);
+      });
+    return () => { cancelled = true; };
+  }, [authSession?.id, authSession?.role]);
+
+  useEffect(() => {
+    if (!journeyRemoteReady || !athleteJourney || authSession?.role !== 'athlete' || !isSupabaseId(authSession.id)) return;
+    supabase.from('athlete_journeys').upsert({
+      athlete_user_id: authSession.id,
+      journey: athleteJourney,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'athlete_user_id' });
+  }, [athleteJourney, authSession?.id, authSession?.role, journeyRemoteReady]);
+
+  useEffect(() => {
+    if (effectiveSession?.role !== 'athlete' || !athleteJourney?.ownerId) return;
+    if (String(athleteJourney.ownerId) !== String(effectiveSession.id)) {
+      setAthleteJourney(loadAthleteJourney(effectiveSession.id));
+    }
+  }, [athleteJourney?.ownerId, effectiveSession?.id, effectiveSession?.role]);
+
+  useEffect(() => {
+    if (effectiveSession?.role !== 'athlete' || athleteJourney || (!onboardingComplete && !athleteTodayPreview) || !plans.length) return;
+    const fallbackAnswers = {
+      primaryGoal: athleteProfile.currentChallenges?.[0] || athleteProfile.currentChallenge || 'Consistency',
+      identity: 'I’m still figuring out the athlete I want to become'
+    };
+    const generated = { ...generateJourney({ answers: fallbackAnswers, plans }), ownerId: effectiveSession.id };
+    setAthleteJourney(generated);
+    trackAnalyticsEvent('journey_generated', {
+      primaryFocus: generated.developmentProfile.primaryFocus,
+      selectedSeries: generated.selectedSeries.map((series) => series.title),
+      integrationDays: generated.days.filter((day) => day.type === 'integration').length,
+      source: 'existing_athlete'
+    }, { area: 'journey' });
+  }, [athleteJourney, athleteProfile.currentChallenge, athleteProfile.currentChallenges, athleteTodayPreview, effectiveSession?.role, onboardingComplete, plans, trackAnalyticsEvent]);
+
+  useEffect(() => {
+    if (!athleteJourney) return;
+    const reconciled = reconcileJourney(athleteJourney, planProgress);
+    if (JSON.stringify(reconciled) !== JSON.stringify(athleteJourney)) setAthleteJourney(reconciled);
+  }, [athleteJourney, planProgress]);
 
   useEffect(() => {
     localStorage.setItem(pointsLedgerStorageKey, JSON.stringify(pointsLedger));
@@ -3815,28 +3983,33 @@ function App() {
     let cancelled = false;
 
     async function loadSharedContent() {
-      const [lessonsResult, plansResult, parentMessageResult, parentGuidesResult] = await Promise.all([
+      let [lessonsResult, plansResult, parentMessageResult, parentGuidesResult] = await Promise.all([
         supabase
           .from('daily_deposits')
-          .select('id, title, body, focus_question, release_date, status')
+          .select('id, title, body, focus_question, title_es, body_es, focus_question_es, release_date, status')
           .order('release_date', { ascending: false }),
         supabase
           .from('performance_plans')
-          .select('id, title, subject, steps, release_date, challenge_day, challenge_length')
+          .select('id, title, subject, steps, title_es, subject_es, steps_es, challenge_day_es, release_date, challenge_day, challenge_length')
           .order('release_date', { ascending: true }),
         supabase
           .from('parent_messages')
-          .select('title, body, conversation_cue, avoid, send_date, status')
+          .select('title, body, conversation_cue, avoid, title_es, body_es, conversation_cue_es, avoid_es, send_date, status')
           .order('send_date', { ascending: false })
           .limit(1)
           .maybeSingle(),
         supabase
           .from('parent_guides')
-          .select('id, series_title, title, category, subject, steps, release_date, guide_day, guide_length, status')
+          .select('id, series_title, title, category, subject, steps, series_title_es, title_es, category_es, subject_es, steps_es, guide_day_es, release_date, guide_day, guide_length, status')
           .eq('status', 'published')
           .lte('release_date', dailyDate)
           .order('release_date', { ascending: true })
       ]);
+
+      if (lessonsResult.error) lessonsResult = await supabase.from('daily_deposits').select('id, title, body, focus_question, release_date, status').order('release_date', { ascending: false });
+      if (plansResult.error) plansResult = await supabase.from('performance_plans').select('id, title, subject, steps, release_date, challenge_day, challenge_length').order('release_date', { ascending: true });
+      if (parentMessageResult.error) parentMessageResult = await supabase.from('parent_messages').select('title, body, conversation_cue, avoid, send_date, status').order('send_date', { ascending: false }).limit(1).maybeSingle();
+      if (parentGuidesResult.error) parentGuidesResult = await supabase.from('parent_guides').select('id, series_title, title, category, subject, steps, release_date, guide_day, guide_length, status').eq('status', 'published').lte('release_date', dailyDate).order('release_date', { ascending: true });
 
       if (cancelled) return;
 
@@ -4341,7 +4514,8 @@ function App() {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: name.trim(),
-            role
+            role,
+            preferred_language: 'en'
           }
         }
       });
@@ -4444,7 +4618,7 @@ function App() {
         profileResult = await withTimeout(
           supabase
             .from('profiles')
-            .select('id, role, full_name, parent_access_code')
+            .select('*')
             .eq('id', data.user.id)
             .maybeSingle(),
           12000,
@@ -4483,6 +4657,7 @@ function App() {
         email: cleanEmail,
         parentAccessCode: profile.parent_access_code ?? ''
       });
+      if (profile.preferred_language) setLanguage(profile.preferred_language);
       setView(role === 'parent' ? 'parent' : 'athlete');
       window.history.replaceState({}, '', window.location.pathname);
       trackAnalyticsEvent('login_completed', { role: profile.role }, { area: 'auth' });
@@ -4585,19 +4760,43 @@ function App() {
   }
 
   async function logoutUser() {
-    if (isSupabaseConfigured) {
-      await supabase.auth.signOut();
+    const previewSessionActive = isLocalPreviewSession;
+    const loginPath = window.location.pathname;
+    try {
+      localStorage.removeItem(authSessionStorageKey);
+    } catch {
+      // React state still clears the session when local storage is unavailable.
     }
     setAuthSession(null);
     setNotificationsOpen(false);
     setView('athlete');
     setTab('home');
+    setParentTab('overview');
+    setProfileView('overview');
     setParentAccessDraft('');
     setParentLinkFeedback('');
     setParentLinkChecked(false);
     setLinkedAthletes([]);
     setLinkedAthleteId(null);
     setLinkedAthleteSummary(null);
+    window.history.replaceState({}, '', loginPath);
+
+    if (previewSessionActive) {
+      window.location.replace(loginPath);
+      return;
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        await withTimeout(
+          supabase.auth.signOut({ scope: 'local' }),
+          8000,
+          'Sign out took too long.'
+        );
+      } catch {
+        // Keep the user signed out locally even if the remote session request is unavailable.
+      }
+    }
   }
 
   function selectParentAthlete(athleteUserId) {
@@ -4682,36 +4881,43 @@ function App() {
     const accessCode = athleteParentAccessDraft.trim();
     if (!accessCode) {
       setAthleteParentLinkFeedback('Enter the family access code from your parent.');
-      return;
+      return false;
     }
     if (!isSupabaseConfigured || authSession?.role !== 'athlete') {
       setAthleteParentLinkFeedback('Log in as an athlete before linking a parent membership.');
-      return;
+      return false;
     }
 
     const { error } = await supabase.rpc('link_athlete_to_parent', { parent_code: accessCode });
     if (error) {
       trackAnalyticsEvent('family_link_failed', { source: 'athlete_profile', reason: error.message }, { area: 'family', severity: 'warning' });
       setAthleteParentLinkFeedback('That code did not link. Check the code and try again.');
-      return;
+      return false;
     }
 
     trackAnalyticsEvent('family_linked', { source: 'athlete_profile' }, { area: 'family' });
     setAthleteParentAccessDraft('');
     setAthleteParentLinkFeedback('Parent membership linked. Premium access is updating...');
     setPremiumAccessRefreshKey((value) => value + 1);
+    return true;
   }
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      const user = data.session?.user;
+    let disposed = false;
+    async function restoreSession(session) {
+      const user = session?.user;
       if (!user) return;
+      try { await finishSocialProfile(supabase, user); } catch {
+        window.dispatchEvent(new CustomEvent('tca-auth-error', { detail: 'Account setup could not finish. Please try signing in again.' }));
+        return;
+      }
+      if (disposed) return;
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, role, full_name, parent_access_code')
+        .select('*')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -4728,7 +4934,17 @@ function App() {
         email: user.email ?? '',
         parentAccessCode: profile.parent_access_code ?? ''
       });
+      if (profile.preferred_language) setLanguage(profile.preferred_language);
       setView(profile.role === 'parent' ? 'parent' : 'athlete');
+      const linkWarning = localStorage.getItem('tca-social-link-warning');
+      if (linkWarning) {
+        setParentLinkFeedback(linkWarning);
+        setAthleteParentLinkFeedback(linkWarning);
+        localStorage.removeItem('tca-social-link-warning');
+      }
+    }
+    completeSocialRedirect(supabase, oauthSupabase).then(() => supabase.auth.getSession()).then(({ data }) => restoreSession(data.session)).catch(() => {
+      window.dispatchEvent(new CustomEvent('tca-auth-error', { detail: 'Sign-in could not be completed. Please try again.' }));
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -4736,10 +4952,14 @@ function App() {
         setPasswordRecoveryActive(true);
         return;
       }
-      if (!session) setAuthSession(null);
+      if (shouldClearSavedSession(event, session)) setAuthSession(null);
+      // Defer Supabase requests outside the auth callback to avoid its session lock.
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setTimeout(() => { if (!disposed) restoreSession(session); }, 0);
+      }
     });
 
-    return () => authListener.subscription.unsubscribe();
+    return () => { disposed = true; authListener.subscription.unsubscribe(); };
   }, []);
 
   function notifyUser(title, body, tone = 'info', options = {}) {
@@ -4909,7 +5129,7 @@ function App() {
       uniqueKey: cleanKey,
       metadataKeys: Object.keys(metadata || {})
     }, { area: 'engagement' });
-    notifyUser('Points earned', `+${cleanPoints} points · ${label}`, 'success', {
+    notifyUser('Performance Points earned', `+${cleanPoints} PP · ${label}`, 'success', {
       type: 'points',
       id: `points-${cleanKey}`
     });
@@ -4945,21 +5165,88 @@ function App() {
     }, { area: 'plans' });
   }
 
+  function requestMilestoneReview(milestone) {
+    if (!['athlete', 'parent'].includes(authSession?.role) || !authSession.id) return;
+    requestAppReview({ userId: authSession.id, milestone }).catch(() => {});
+  }
+
+  useEffect(() => {
+    if (authSession?.role !== 'parent' || !authSession.id || !canRequestNativeAppReview()) return undefined;
+    let wasHidden = false;
+    let reviewTimer;
+
+    const recordOpen = () => {
+      const openCount = recordParentAppOpen({ userId: authSession.id });
+      if (openCount >= 5) {
+        window.clearTimeout(reviewTimer);
+        reviewTimer = window.setTimeout(() => requestMilestoneReview('parent_fifth_app_open'), 1500);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHidden = true;
+      } else if (document.visibilityState === 'visible' && wasHidden) {
+        wasHidden = false;
+        recordOpen();
+      }
+    };
+
+    if (parentOpenCountedSessionRef.current !== authSession.id) {
+      parentOpenCountedSessionRef.current = authSession.id;
+      recordOpen();
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearTimeout(reviewTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [authSession?.id, authSession?.role]);
+
   function celebrate(message) {
     setCelebration(message);
     window.setTimeout(() => setCelebration(''), 2800);
   }
 
-  function completeParentOnboarding() {
+  async function completeParentOnboarding(setup = {}) {
     if (!effectiveSession?.id) return;
+    const assessmentCompletedAt = setup.parentAssessmentCompletedAt || new Date().toISOString();
+    const assessmentRecord = setup.parentAssessment ? {
+      ...setup.parentAssessment,
+      derived_parent_tags: setup.derivedParentTags || [],
+      recommended_parent_plans: setup.recommendedParentPlans || [],
+      parent_assessment_completed_at: assessmentCompletedAt
+    } : null;
+    if (assessmentRecord) {
+      try {
+        const savedAssessments = JSON.parse(localStorage.getItem(parentAssessmentStorageKey) || '{}');
+        localStorage.setItem(parentAssessmentStorageKey, JSON.stringify({ ...savedAssessments, [effectiveSession.id]: assessmentRecord }));
+      } catch {
+        localStorage.setItem(parentAssessmentStorageKey, JSON.stringify({ [effectiveSession.id]: assessmentRecord }));
+      }
+      if (setup.recommendedParentPlans?.[0]?.id) {
+        localStorage.setItem(parentStarterPlanStorageKey, String(setup.recommendedParentPlans[0].id));
+      }
+      if (isSupabaseConfigured && authSession?.role === 'parent' && isSupabaseId(authSession?.id)) {
+        await supabase.auth.updateUser({ data: assessmentRecord }).catch(() => null);
+      }
+    }
     const nextAccounts = { ...parentOnboardingAccounts, [effectiveSession.id]: true };
     setParentOnboardingAccounts(nextAccounts);
     localStorage.setItem('tca-parent-onboarding-accounts', JSON.stringify(nextAccounts));
+    const nextStartAccounts = { ...parentStartAccounts, [effectiveSession.id]: true };
+    setParentStartAccounts(nextStartAccounts);
+    localStorage.setItem(parentStartAccountsStorageKey, JSON.stringify(nextStartAccounts));
     setView('parent');
     setParentTab('overview');
     setOnboardingComplete(true);
     localStorage.setItem(onboardingStorageKey, 'true');
-    trackAnalyticsEvent('onboarding_completed', { role: 'parent' }, { area: 'activation' });
+    trackAnalyticsEvent('onboarding_completed', {
+      role: 'parent',
+      assessmentCompleted: Boolean(assessmentRecord),
+      primaryParentGoal: assessmentRecord?.primary_parent_goal || '',
+      derivedTags: assessmentRecord?.derived_parent_tags || [],
+      recommendedPlans: (assessmentRecord?.recommended_parent_plans || []).map((plan) => plan.title)
+    }, { area: 'activation' });
   }
 
   function completeParentFirstValue(action = 'complete') {
@@ -4972,7 +5259,7 @@ function App() {
 
   async function completeOnboarding(setup) {
     if (effectiveSession?.role === 'parent') {
-      completeParentOnboarding();
+      await completeParentOnboarding(setup);
       return;
     }
     const selectedChallenges = athleteChallengesByIds(setup.currentChallenges, setup.currentChallenge);
@@ -4987,7 +5274,9 @@ function App() {
       location: setup.location,
       parentContact: setup.parentContact,
       currentChallenge: selectedChallenge.id,
-      currentChallenges: selectedChallenges.map((challenge) => challenge.id)
+      currentChallenges: selectedChallenges.map((challenge) => challenge.id),
+      journeyAnswers: setup.journeyAnswers || {},
+      developmentProfile: setup.developmentProfile || null
     };
     const nextGoals = (setup.goals?.length ? setup.goals : selectedChallenges.map((challenge) => challenge.goal))
       .map((goal, index) => ({
@@ -5010,12 +5299,17 @@ function App() {
     await persistAthleteProfile(nextProfile);
     if (nextGoals.length) setGoals(nextGoals);
     if (nextStandards.length) setStandards(nextStandards);
+    const generatedJourney = { ...(setup.generatedJourney || generateJourney({
+      answers: setup.journeyAnswers || { primaryGoal: selectedChallenge.shortLabel || selectedChallenge.label },
+      plans
+    })), ownerId: effectiveSession.id };
+    setAthleteJourney(generatedJourney);
     setTab('home');
     setView('athlete');
-    setAthleteStartComplete(false);
+    setAthleteStartComplete(true);
     setOnboardingComplete(true);
     localStorage.setItem(onboardingStorageKey, 'true');
-    localStorage.setItem(athleteStartStorageKey, 'false');
+    localStorage.setItem(athleteStartStorageKey, 'true');
     trackAnalyticsEvent('onboarding_completed', {
       challengeId: selectedChallenge.id,
       challengeIds: selectedChallenges.map((challenge) => challenge.id),
@@ -5028,6 +5322,12 @@ function App() {
       goalsCount: nextGoals.length,
       standardsCount: nextStandards.length
     }, { area: 'activation' });
+    trackAnalyticsEvent('journey_generated', {
+      primaryFocus: generatedJourney.developmentProfile.primaryFocus,
+      selectedSeries: generatedJourney.selectedSeries.map((series) => series.title),
+      integrationDays: generatedJourney.days.filter((day) => day.type === 'integration').length,
+      source: 'onboarding'
+    }, { area: 'journey' });
     celebrate('Setup complete. Start with today.');
   }
 
@@ -5095,14 +5395,14 @@ function App() {
     let active = true;
 
     const loadSubscription = async () => {
-      setSubscription((current) => ({ ...current, loading: true }));
+      setSubscription((current) => ({ ...current, loading: true, checked: false }));
       try {
         const status = await loadRevenueCatSubscription({
           userId: effectiveSession.id,
           email: effectiveSession.email,
           name: effectiveSession.name
         });
-        if (active) setSubscription((current) => ({ ...current, ...status, loading: false }));
+        if (active) setSubscription((current) => ({ ...current, ...status, loading: false, checked: true }));
       } catch (error) {
         if (active) {
           setSubscription((current) => ({
@@ -5110,6 +5410,7 @@ function App() {
             configured: Boolean(revenueCatConfig.iosApiKey),
             native: canUseNativePurchases(),
             loading: false,
+            checked: false,
             message: error?.message || 'Premium access could not be checked yet.'
           }));
         }
@@ -5121,12 +5422,28 @@ function App() {
     return () => {
       active = false;
     };
-  }, [effectiveSession?.email, effectiveSession?.id, effectiveSession?.name]);
+  }, [effectiveSession?.email, effectiveSession?.id, effectiveSession?.name, premiumAccessRefreshKey]);
+
+  useEffect(() => {
+    if (!effectiveSession?.id || typeof document === 'undefined') return undefined;
+    let wasHidden = false;
+    const refreshMembershipOnResume = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHidden = true;
+      } else if (wasHidden) {
+        wasHidden = false;
+        setPremiumAccessRefreshKey((value) => value + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', refreshMembershipOnResume);
+    return () => document.removeEventListener('visibilitychange', refreshMembershipOnResume);
+  }, [effectiveSession?.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !effectiveSession?.id || isLocalPreviewSession) {
       setBackendPremiumAccess({
         loading: false,
+        checked: true,
         hasAccess: false,
         activeTrial: false,
         source: 'none',
@@ -5137,7 +5454,7 @@ function App() {
     }
 
     let active = true;
-    setBackendPremiumAccess((current) => ({ ...current, loading: true }));
+    setBackendPremiumAccess((current) => ({ ...current, loading: true, checked: false }));
 
     async function loadBackendPremiumAccess() {
       const [{ data, error }, subscriptionResult] = await Promise.all([
@@ -5152,13 +5469,15 @@ function App() {
       if (!active) return;
       const access = Array.isArray(data) ? data[0] : data;
       const subscriptionRow = Array.isArray(subscriptionResult.data) ? subscriptionResult.data[0] : null;
+      const checked = !error && !subscriptionResult.error;
       setBackendPremiumAccess({
         loading: false,
-        hasAccess: !error && Boolean(access?.has_access),
-        activeTrial: subscriptionRow?.status === 'trialing',
-        source: access?.access_source || 'none',
-        sponsorUserId: access?.sponsor_user_id || null,
-        expiresAt: access?.expires_at || ''
+        checked,
+        hasAccess: checked && Boolean(access?.has_access),
+        activeTrial: checked && subscriptionRow?.status === 'trialing',
+        source: checked ? access?.access_source || 'none' : 'none',
+        sponsorUserId: checked ? access?.sponsor_user_id || null : null,
+        expiresAt: checked ? access?.expires_at || '' : ''
       });
     }
 
@@ -5168,6 +5487,41 @@ function App() {
       active = false;
     };
   }, [effectiveSession?.id, isLocalPreviewSession, premiumAccessRefreshKey]);
+
+  useEffect(() => {
+    if (!effectiveSession?.id || isLocalPreviewSession) return;
+    if (!subscription.checked || !backendPremiumAccess.checked) return;
+
+    const nativeActive = Boolean(subscription.active);
+    const backendActive = Boolean(backendPremiumAccess.hasAccess);
+    if (!nativeActive && !backendActive) {
+      clearMembershipAccessCache(effectiveSession.id);
+      setMembershipCacheRevision((value) => value + 1);
+      return;
+    }
+
+    saveMembershipAccessCache(effectiveSession.id, {
+      hasAccess: true,
+      activeTrial: nativeActive ? subscription.activeTrial : backendPremiumAccess.activeTrial,
+      source: backendActive ? backendPremiumAccess.source : 'revenuecat',
+      sponsorUserId: backendActive ? backendPremiumAccess.sponsorUserId : null,
+      expiresAt: backendActive ? backendPremiumAccess.expiresAt : subscription.expirationDate
+    });
+    setMembershipCacheRevision((value) => value + 1);
+  }, [
+    backendPremiumAccess.activeTrial,
+    backendPremiumAccess.checked,
+    backendPremiumAccess.expiresAt,
+    backendPremiumAccess.hasAccess,
+    backendPremiumAccess.source,
+    backendPremiumAccess.sponsorUserId,
+    effectiveSession?.id,
+    isLocalPreviewSession,
+    subscription.active,
+    subscription.activeTrial,
+    subscription.checked,
+    subscription.expirationDate
+  ]);
 
   async function startPremiumSubscription() {
     setSubscription((current) => ({ ...current, loading: true, message: 'Opening App Store checkout...' }));
@@ -5295,15 +5649,17 @@ function App() {
           parentAccessDraft={parentAccessDraft}
           parentLinkChecked={parentLinkChecked}
           parentLinkFeedback={parentLinkFeedback}
-          parentGuides={parentGuides}
-          parentMessage={parentMessage}
+          parentGuides={localizedParentGuides}
+          parentMessage={localizedParentMessage}
+          language={language}
           premiumAccessAllowed={premiumAccessAllowed}
           planProgress={planProgress}
-          plans={plans}
+          plans={localizedPlans}
           pointsLedger={pointsLedger}
           readinessHistory={readinessHistory}
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
+          setLanguage={changeLanguage}
           selectLinkedAthlete={selectParentAthlete}
           unlinkParentAthlete={unlinkParentAthlete}
           setPlanProgress={setPlanProgress}
@@ -5322,6 +5678,7 @@ function App() {
           updateNotificationPreference={updateNotificationPreference}
           setProfileView={setProfileView}
           standardsHistory={standardsHistory}
+          requestMilestoneReview={requestMilestoneReview}
         />
       );
     }
@@ -5330,13 +5687,13 @@ function App() {
         <HomeScreen
           athleteScore={athleteScore}
           athleteProfile={athleteProfile}
+          athleteJourney={athleteJourney}
           athleteStartComplete={athleteTodayPreview || (!athleteStartPreview && athleteStartComplete)}
           awardPoints={awardPoints}
           completion={completion}
           confidenceAverage={confidenceAverage}
           scores={scores}
           goals={goals}
-          todayGoalSelection={todayGoalSelection}
           standards={standards}
           standardDraft={standardDraft}
           standardGoalId={standardGoalId}
@@ -5355,12 +5712,14 @@ function App() {
           setTab={setTab}
           openJournal={() => openAthleteProfileView('journal')}
           setRequestedPlanSeriesId={setRequestedPlanSeriesId}
+          setRequestedPlanId={setRequestedPlanId}
+          setAthleteJourney={setAthleteJourney}
           notifyUser={notifyUser}
           celebrate={celebrate}
           lastSubmittedDate={lastSubmittedDate}
           lesson={activeLesson}
           planProgress={planProgress}
-          plans={plans}
+          plans={localizedPlans}
           recentPointEvents={recentPointEvents}
           standardsHistory={standardsHistory}
           streakCount={streakCount}
@@ -5368,19 +5727,24 @@ function App() {
           todayPoints={todayPoints}
           trackAnalyticsEvent={trackAnalyticsEvent}
           userId={authSession?.id}
+          requestMilestoneReview={requestMilestoneReview}
         />
       ),
       plans: (
         <PlansScreen
-          plans={plans}
+          language={language}
+          plans={localizedPlans}
           planProgress={planProgress}
           trialPlanMode={trialPlanMode}
           requestedPlanSeriesId={requestedPlanSeriesId}
+          requestedPlanId={requestedPlanId}
           setRequestedPlanSeriesId={setRequestedPlanSeriesId}
+          setRequestedPlanId={setRequestedPlanId}
           setPlanProgress={setPlanProgress}
           awardPoints={awardPoints}
           notifyUser={notifyUser}
           persistPlanCompletion={persistPlanCompletion}
+          requestMilestoneReview={requestMilestoneReview}
           trackAnalyticsEvent={trackAnalyticsEvent}
         />
       ),
@@ -5390,8 +5754,6 @@ function App() {
           celebrate={celebrate}
           goalDraft={goalDraft}
           goals={goals}
-          todayGoalSelection={todayGoalSelection}
-          setTodayGoalSelection={setTodayGoalSelection}
           setGoalDraft={setGoalDraft}
           setGoals={setGoals}
           standards={standards}
@@ -5405,10 +5767,11 @@ function App() {
           authSession={authSession}
           coachSessions={coachSessions}
           lesson={activeLesson}
+          language={language}
           goals={goals}
           messages={messages}
           planProgress={planProgress}
-          plans={plans}
+          plans={localizedPlans}
           standards={standards}
           setActiveCoachSessionId={setActiveCoachSessionId}
           setCoachSessions={setCoachSessions}
@@ -5443,6 +5806,7 @@ function App() {
           athleteParentLinkFeedback={athleteParentLinkFeedback}
           deleteAccount={deleteAccount}
           linkAthleteParentAccessCode={linkAthleteParentAccessCode}
+          language={language}
           notificationPreferences={notificationPreferences}
           privacySettings={privacySettings}
           persistAthleteProfile={persistAthleteProfile}
@@ -5451,6 +5815,7 @@ function App() {
           setAthleteParentAccessDraft={setAthleteParentAccessDraft}
           setAthleteParentLinkFeedback={setAthleteParentLinkFeedback}
           setAthleteProfile={setAthleteProfile}
+          setLanguage={changeLanguage}
           setNotificationPreferences={setNotificationPreferences}
           setPrivacySettings={setPrivacySettings}
           setProfileView={setProfileView}
@@ -5486,9 +5851,10 @@ function App() {
           <ProfileScreen
             athleteProfile={athleteProfile}
             athleteScore={athleteScore}
+            athleteJourney={athleteJourney}
             authSession={authSession}
             goals={goals}
-            plans={plans}
+            plans={localizedPlans}
             planProgress={planProgress}
             setProfileView={setProfileView}
             streakCount={streakCount}
@@ -5505,17 +5871,18 @@ function App() {
     confidenceAverage,
     goalDraft,
     goals,
-    todayGoalSelection,
     journal,
     journalEntries,
     journalGoalId,
     journalType,
+    language,
     lessonLibrary,
     localTrialAccessActive,
     lastSubmittedDate,
     activeCoachSessionId,
     athleteStartComplete,
     athleteProfile,
+    athleteJourney,
     athleteParentAccessDraft,
     athleteParentLinkFeedback,
     backendPremiumAccess,
@@ -5525,8 +5892,10 @@ function App() {
     messages,
     notificationPreferences,
     parentGuides,
+    localizedParentGuides,
     parentTab,
     parentMessage,
+    localizedParentMessage,
     linkedAthletes,
     linkedAthleteId,
     linkedAthleteSummary,
@@ -5534,11 +5903,14 @@ function App() {
     trialPlanMode,
     planProgress,
     plans,
+    localizedPlans,
+    changeLanguage,
     profileView,
     recentPointEvents,
     privacySettings,
     readinessHistory,
     requestedPlanSeriesId,
+    requestedPlanId,
     scores,
     selectedLessonId,
     standardDraft,
@@ -5562,6 +5934,7 @@ function App() {
     return (
       <AuthScreen
         completePasswordRecovery={completePasswordRecovery}
+        language={interfaceLanguage}
         loginUser={loginUser}
         enterReviewerAccess={enterReviewerAccess}
         passwordRecoveryActive={passwordRecoveryActive}
@@ -5572,20 +5945,28 @@ function App() {
     );
   }
 
-  if (!prototypeBypassLogin && !localParentInviteSession && !athleteTodayPreview && (effectiveSession?.role === 'parent'
-    ? parentLinkChecked && !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
+  if (!prototypeBypassLogin && (!localParentInviteSession || parentFirstTimePreview) && !athleteTodayPreview && (effectiveSession?.role === 'parent'
+    ? (parentFirstTimePreview || parentLinkChecked) && !String(effectiveSession.id).startsWith('app-review-') && !parentOnboardingAccounts[effectiveSession.id]
     : !onboardingComplete)) {
     if (effectiveSession?.role === 'parent') {
-      return <ParentOnboardingScreen completeOnboarding={completeOnboarding}
-        linkParentAccessCode={linkParentAccessCode} parentAccessDraft={parentAccessDraft}
-        setParentAccessDraft={setParentAccessDraft} parentLinkFeedback={parentLinkFeedback}
-        setParentLinkFeedback={setParentLinkFeedback} linkedAthleteId={linkedAthleteId}
-        linkedAthletes={linkedAthletes} notificationPreferences={notificationPreferences}
-        requestBrowserNotifications={requestBrowserNotifications}
-        setNotificationPreferences={setNotificationPreferences}
-        updateNotificationPreference={updateNotificationPreference} />;
+      return <ParentOnboardingScreen
+        authSession={effectiveSession}
+        completeOnboarding={completeOnboarding}
+        parentGuides={localizedParentGuides}
+        trackAnalyticsEvent={trackAnalyticsEvent}
+      />;
     }
-    return <OnboardingScreen authSession={effectiveSession} completeOnboarding={completeOnboarding} />;
+    return <OnboardingScreen
+      athleteParentAccessDraft={athleteParentAccessDraft}
+      athleteParentLinkFeedback={athleteParentLinkFeedback}
+      authSession={effectiveSession}
+      completeOnboarding={completeOnboarding}
+      linkAthleteParentAccessCode={linkAthleteParentAccessCode}
+      plans={localizedPlans}
+      setAthleteParentAccessDraft={setAthleteParentAccessDraft}
+      setAthleteParentLinkFeedback={setAthleteParentLinkFeedback}
+      trackAnalyticsEvent={trackAnalyticsEvent}
+    />;
   }
 
   if (premiumAccessLoading) {
@@ -5603,7 +5984,7 @@ function App() {
           athleteProfile={athleteProfile}
           celebrate={celebrate}
           lesson={activeLesson}
-          plans={plans}
+          plans={localizedPlans}
           planProgress={planProgress}
           setAthleteStartComplete={setAthleteStartComplete}
           setJournal={setJournal}
@@ -5617,27 +5998,11 @@ function App() {
     );
   }
 
-  if (
-    !premiumAccessAllowed
-    && effectiveSession.role === 'parent'
-    && !parentStartAccounts[effectiveSession.id]
-  ) {
-    return (
-      <main className="activation-rep-shell parent-activation-shell">
-        <ParentStartToday
-          authSession={effectiveSession}
-          completeParentFirstValue={completeParentFirstValue}
-          trackAnalyticsEvent={trackAnalyticsEvent}
-        />
-      </main>
-    );
-  }
-
   if (!premiumAccessAllowed) {
     return (
       <TrialPaywallScreen
         athleteProfile={athleteProfile}
-        plans={plans}
+        plans={localizedPlans}
         planProgress={planProgress}
         role={effectiveSession.role}
         restorePremiumSubscription={restorePremiumSubscription}
@@ -5659,7 +6024,7 @@ function App() {
 
   return (
     <div
-      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} previous-design ${view}-experience${coachTypingMode ? ' coach-typing-mode' : ''}`}
+      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} previous-design ${view}-experience${coachTypingMode ? ' coach-typing-mode' : ''}${isParentOverview ? ' parent-dashboard-active' : ''}`}
       data-viewport-revision={viewportRevision}
     >
       {!useMobileAppShell && (
@@ -5693,7 +6058,9 @@ function App() {
         <header className="topbar">
           <div>
             {(isAthleteHome || isParentOverview) && (
-              <p className={`top-greeting${isAthleteHome ? ' athlete-home-greeting' : ' parent-home-greeting'}`}>{firstNameGreeting(effectiveSession.name)}</p>
+              <div className="home-greeting-block">
+                <p className={`top-greeting${isAthleteHome ? ' athlete-home-greeting' : ' parent-home-greeting'}`}>{firstNameGreeting(effectiveSession.name)}</p>
+              </div>
             )}
             {!isAthleteHome && !isParentOverview && (
               <h1>{view === 'athlete' ? (tab === 'profile' ? ({ overview: 'My Profile', journal: 'My Journal', achievements: 'My Badges', stats: 'My Stats', settings: 'Settings', support: 'Help & Support' }[profileView]) : screenTitles[tab]) : ({ overview: 'Parent Dashboard', 'parent-corner': 'Parent Corner', settings: 'Parent Settings' }[parentTab])}</h1>
@@ -5728,7 +6095,25 @@ const screenTitles = {
   profile: 'My Profile'
 };
 
-function AuthScreen({ completePasswordRecovery, enterReviewerAccess, loginUser, passwordRecoveryActive, requestPasswordReset, signupUser, parentAccessCode }) {
+function LanguageSwitcher({ language, onChange, compact = false }) {
+  return (
+    <div className={`language-switcher${compact ? ' compact' : ''}`} aria-label="App language">
+      {supportedLanguages.map((option) => (
+        <button
+          aria-pressed={language === option.code}
+          className={language === option.code ? 'active' : ''}
+          key={option.code}
+          onClick={() => onChange(option.code)}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AuthScreen({ completePasswordRecovery, enterReviewerAccess, language, loginUser, passwordRecoveryActive, requestPasswordReset, signupUser, parentAccessCode }) {
   const inviteParams = new URLSearchParams(window.location.search);
   const invitedRole = inviteParams.get('role');
   const invitedCode = inviteParams.get('parentCode') ?? '';
@@ -5826,6 +6211,22 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, loginUser, 
     setMessage('');
   }
 
+  useEffect(() => {
+    const showError = (event) => { setMessage(event.detail); setAuthSheetOpen(true); setIsSubmitting(false); };
+    window.addEventListener('tca-auth-error', showError);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('error')) { setMessage('Sign-in was not completed. Please try again.'); setAuthSheetOpen(true); }
+    return () => window.removeEventListener('tca-auth-error', showError);
+  }, []);
+
+  async function socialSignIn(provider) {
+    setIsSubmitting(true);
+    setMessage('');
+    try { await startSocialAuth(supabase, oauthSupabase, provider, { ...form, role, mode, language }); }
+    catch (error) { setMessage(error?.message || 'Sign-in could not be completed. Please try again.'); }
+    finally { setIsSubmitting(false); }
+  }
+
   async function submitAuth(event) {
     event.preventDefault();
     if (!role) {
@@ -5900,7 +6301,6 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, loginUser, 
             loop
             playsInline
             preload="metadata"
-            poster="/assets/onboarding-athlete-hero.png"
             aria-hidden="true"
             tabIndex={-1}
             onError={() => setVideoFailed(true)}
@@ -5966,6 +6366,11 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, loginUser, 
                 ))}
               </div>
 
+              <div className="auth-social-options" aria-label="Other ways to sign in">
+                <button className="auth-social-button auth-social-apple" disabled={isSubmitting} onClick={() => socialSignIn('apple')} type="button">Continue with Apple</button>
+                <button className="auth-social-button auth-social-google" disabled={isSubmitting} onClick={() => socialSignIn('google')} type="button">Continue with Google</button>
+                <span className="auth-social-divider">or use email</span>
+              </div>
               <form className="auth-form" onSubmit={submitAuth}>
                 {mode === 'signup' && (
                   <label>
@@ -6052,117 +6457,427 @@ function AuthScreen({ completePasswordRecovery, enterReviewerAccess, loginUser, 
   );
 }
 
-function ParentOnboardingScreen({
-  completeOnboarding,
-  linkParentAccessCode,
-  linkedAthleteId,
-  linkedAthletes,
-  notificationPreferences,
-  parentAccessDraft,
-  parentLinkFeedback,
-  requestBrowserNotifications,
-  setNotificationPreferences,
-  setParentAccessDraft,
-  setParentLinkFeedback,
-  updateNotificationPreference
-}) {
-  const [step, setStep] = useState(1);
-  const [linking, setLinking] = useState(false);
-
-  async function connectAthlete(event) {
-    setLinking(true);
-    const linked = await linkParentAccessCode(event);
-    setLinking(false);
-    if (linked) setStep(3);
+const parentAssessmentQuestions = [
+  {
+    id: 'primary_parent_goal',
+    question: 'What do you want to help your athlete with most right now?',
+    helper: 'Choose the one that feels most important right now.',
+    options: ['Building confidence', 'Handling pressure', 'Staying motivated', 'Becoming more disciplined', 'Responding better to mistakes', 'Setting and working toward goals', 'Handling coaching and feedback', 'Preparing for the next level']
+  },
+  {
+    id: 'observed_athlete_challenge',
+    question: 'What do you notice most when things aren’t going well?',
+    helper: 'Choose the one that best matches what you usually see.',
+    options: ['They get down on themselves', 'They overthink', 'They get frustrated or emotional', 'They lose motivation', 'They struggle to stay consistent', 'They worry about what others are doing', 'They feel pressure to perform', 'I’m not always sure what’s going on']
+  },
+  {
+    id: 'parent_response_style',
+    question: 'When your athlete has a bad game or practice, what do you usually do first?',
+    helper: 'Choose the response that sounds most like you.',
+    options: ['Give them space', 'Ask what happened', 'Try to fix the problem', 'Encourage them', 'Talk about what they could improve', 'Wait for them to bring it up', 'It depends']
+  },
+  {
+    id: 'parent_strength',
+    question: 'What do you think you already do well as a sports parent?',
+    helper: 'Choose the strength you’re most proud of.',
+    affirmation: 'That matters. Great support starts with awareness.',
+    options: ['I show up consistently', 'I encourage my athlete', 'I keep sports in perspective', 'I listen', 'I help them stay disciplined', 'I give them space to grow', 'I advocate for them', 'I’m still learning']
+  },
+  {
+    id: 'desired_parent_value',
+    question: 'What would be most valuable to you inside The Complete Athlete?',
+    helper: 'Choose the one that would help you most right now.',
+    options: ['Knowing how to support my athlete mentally', 'Understanding what they’re working on', 'Helping them stay accountable', 'Better conversations after games', 'Helping them build confidence', 'Tracking progress toward goals', 'Learning more about recruiting and exposure', 'A little bit of everything']
   }
+];
 
-  function togglePush(checked) {
-    if (checked) {
-      requestBrowserNotifications();
-      return;
+const parentAssessmentAnswerTags = {
+  'Building confidence': [['confidence', 4]],
+  'Handling pressure': [['pressure', 4]],
+  'Staying motivated': [['motivation', 4]],
+  'Becoming more disciplined': [['discipline', 4], ['accountability', 2]],
+  'Responding better to mistakes': [['mistakes', 4], ['resilience', 2]],
+  'Setting and working toward goals': [['goals', 4], ['accountability', 1]],
+  'Handling coaching and feedback': [['coachability', 4], ['communication', 1]],
+  'Preparing for the next level': [['recruiting', 4]],
+  'They get down on themselves': [['confidence', 3], ['mistakes', 2]],
+  'They overthink': [['pressure', 2], ['mistakes', 2]],
+  'They get frustrated or emotional': [['mistakes', 3], ['communication', 1]],
+  'They lose motivation': [['motivation', 3]],
+  'They struggle to stay consistent': [['discipline', 3], ['accountability', 1]],
+  'They worry about what others are doing': [['comparison', 4], ['confidence', 1]],
+  'They feel pressure to perform': [['pressure', 4]],
+  'I’m not always sure what’s going on': [['support', 2], ['communication', 2]],
+  'Give them space': [['support', 1]],
+  'Ask what happened': [['communication', 2]],
+  'Try to fix the problem': [['accountability', 1], ['communication', 1]],
+  'Encourage them': [['confidence', 2]],
+  'Talk about what they could improve': [['coachability', 1], ['accountability', 1]],
+  'Wait for them to bring it up': [['communication', 1], ['support', 1]],
+  'It depends': [['support', 1]],
+  'I show up consistently': [['support', 2]],
+  'I encourage my athlete': [['confidence', 1], ['support', 1]],
+  'I keep sports in perspective': [['support', 2]],
+  'I listen': [['communication', 2], ['support', 1]],
+  'I help them stay disciplined': [['discipline', 1], ['accountability', 1]],
+  'I give them space to grow': [['support', 2]],
+  'I advocate for them': [['support', 2]],
+  'I’m still learning': [['support', 1]],
+  'Knowing how to support my athlete mentally': [['support', 3], ['confidence', 1]],
+  'Understanding what they’re working on': [['communication', 3]],
+  'Helping them stay accountable': [['accountability', 4], ['discipline', 2]],
+  'Better conversations after games': [['communication', 4], ['mistakes', 1]],
+  'Helping them build confidence': [['confidence', 4]],
+  'Tracking progress toward goals': [['goals', 4], ['accountability', 1]],
+  'Learning more about recruiting and exposure': [['recruiting', 4]],
+  'A little bit of everything': [['support', 2], ['confidence', 1], ['discipline', 1]]
+};
+
+const parentFocusCopy = {
+  confidence: { label: 'Confidence', title: 'Build confidence without adding pressure', statement: 'Help your athlete build belief while giving them room to grow.' },
+  pressure: { label: 'Pressure', title: 'Help them handle pressure with more control', statement: 'Support calm preparation without trying to remove every difficult moment.' },
+  motivation: { label: 'Motivation', title: 'Build motivation that lasts beyond the moment', statement: 'Create the environment that helps effort and ownership keep growing.' },
+  discipline: { label: 'Discipline', title: 'Build consistency without constant pushing', statement: 'Help daily standards become something your athlete learns to own.' },
+  accountability: { label: 'Accountability', title: 'Create accountability that builds ownership', statement: 'Support follow-through while keeping responsibility with your athlete.' },
+  mistakes: { label: 'Resilience', title: 'Help them reset after hard moments', statement: 'Give mistakes less power and help the next response become stronger.' },
+  resilience: { label: 'Resilience', title: 'Help them respond and recover', statement: 'Build a healthier response to adversity, pressure, and imperfect performances.' },
+  goals: { label: 'Goals', title: 'Turn big goals into clear daily action', statement: 'Help your athlete connect what they want with what they can do today.' },
+  coachability: { label: 'Coachability', title: 'Support growth through coaching', statement: 'Help feedback become fuel for development instead of a threat.' },
+  comparison: { label: 'Comparison', title: 'Help them trust their own path', statement: 'Keep attention on their growth instead of someone else’s timeline.' },
+  communication: { label: 'Communication', title: 'Create better conversations around sport', statement: 'Know when to listen, when to encourage, and when to help them think.' },
+  recruiting: { label: 'Next Level', title: 'Prepare for the next level with clarity', statement: 'Make recruiting and exposure decisions from a stronger foundation.' },
+  support: { label: 'Support', title: 'Support the whole athlete', statement: 'Create the environment, language, and perspective that help development last.' }
+};
+
+const parentPlanRecommendationCopy = {
+  'Borrowed Confidence': 'Learn how your reactions can strengthen your athlete’s confidence.',
+  "Pressure Isn't the Enemy": 'Help your athlete handle expectations without trying to remove every difficult moment.',
+  'Home Court Advantage': 'Create a home environment that supports growth instead of adding pressure.',
+  'The Comparison Trap': 'Help your athlete trust their own development instead of measuring it against someone else’s path.',
+  'Elite Athletes Need Elite Parents': 'Lead with vision, environment, and example instead of pressure or panic.',
+  'College Recruiting 101': 'Understand recruiting and help your athlete approach the next level with clarity.',
+  'Raising a Complete Athlete': 'Build confidence, discipline, and character beyond the scoreboard.'
+};
+
+function deriveParentRecommendations(answers, parentGuides) {
+  const tagScores = new Map();
+  Object.values(answers).forEach((answer) => {
+    (parentAssessmentAnswerTags[answer] || []).forEach(([tag, weight]) => {
+      tagScores.set(tag, (tagScores.get(tag) || 0) + weight);
+    });
+  });
+
+  const weightedPlans = {
+    'Borrowed Confidence': { confidence: 6, mistakes: 2, communication: 2 },
+    "Pressure Isn't the Enemy": { pressure: 6, mistakes: 4, resilience: 4, confidence: 2, communication: 1 },
+    'Home Court Advantage': { support: 5, communication: 5, confidence: 3, pressure: 2, mistakes: 2, discipline: 4, accountability: 4, goals: 1, motivation: 1 },
+    'The Comparison Trap': { comparison: 7 },
+    'Elite Athletes Need Elite Parents': { discipline: 5, accountability: 5, coachability: 5, recruiting: 2, motivation: 3, pressure: 1, goals: 2 },
+    'College Recruiting 101': { recruiting: 8 },
+    'Raising a Complete Athlete': { support: 3, goals: 4, discipline: 3, motivation: 2, accountability: 2 }
+  };
+
+  const explicitPriorityGroups = [
+    {
+      answers: ['Building confidence', 'They get down on themselves', 'Helping them build confidence'],
+      plans: ['Borrowed Confidence', 'Home Court Advantage', "Pressure Isn't the Enemy"]
+    },
+    {
+      answers: ['Handling pressure', 'They feel pressure to perform'],
+      plans: ["Pressure Isn't the Enemy", 'Home Court Advantage', 'Elite Athletes Need Elite Parents']
+    },
+    {
+      answers: ['They worry about what others are doing'],
+      plans: ['The Comparison Trap', 'Borrowed Confidence']
+    },
+    {
+      answers: ['Handling coaching and feedback'],
+      plans: ['Elite Athletes Need Elite Parents', 'Home Court Advantage']
+    },
+    {
+      answers: ['Preparing for the next level', 'Learning more about recruiting and exposure'],
+      plans: ['College Recruiting 101', 'Elite Athletes Need Elite Parents']
+    },
+    {
+      answers: ['Better conversations after games'],
+      plans: ['Home Court Advantage', 'Borrowed Confidence', "Pressure Isn't the Enemy"]
+    },
+    {
+      answers: ['Helping them stay accountable', 'Becoming more disciplined'],
+      plans: ['Elite Athletes Need Elite Parents', 'Home Court Advantage']
     }
-    setNotificationPreferences((current) => ({ ...current, browserPush: false }));
+  ];
+  const selectedAnswers = new Set(Object.values(answers));
+  const explicitPlanBoosts = new Map();
+  explicitPriorityGroups.forEach((group) => {
+    const matchCount = group.answers.filter((answer) => selectedAnswers.has(answer)).length;
+    if (!matchCount) return;
+    group.plans.forEach((plan, index) => {
+      explicitPlanBoosts.set(plan, (explicitPlanBoosts.get(plan) || 0) + matchCount * (100 - index * 10));
+    });
+  });
+
+  const guidesBySeries = new Map();
+  (parentGuides || []).forEach((guide) => {
+    const englishTitle = guide.seriesTitleEn || guide.seriesTitle;
+    if (!guidesBySeries.has(englishTitle)) guidesBySeries.set(englishTitle, { ...guide, englishTitle });
+  });
+
+  const rankedTags = Array.from(tagScores.entries()).sort((first, second) => second[1] - first[1] || first[0].localeCompare(second[0]));
+  const primaryTag = rankedTags[0]?.[0] || 'support';
+  const strength = answers.parent_strength;
+  const recommendations = Array.from(guidesBySeries.values()).map((guide, index) => {
+    const weights = weightedPlans[guide.englishTitle] || {};
+    let score = Object.entries(weights).reduce((total, [tag, weight]) => total + (tagScores.get(tag) || 0) * weight, 0);
+    score += explicitPlanBoosts.get(guide.englishTitle) || 0;
+    if (strength === 'I give them space to grow' && !tagScores.get('discipline') && guide.englishTitle === 'Elite Athletes Need Elite Parents') score -= 8;
+    if (strength === 'I listen' && (tagScores.get('communication') || 0) < 4 && guide.englishTitle === 'Home Court Advantage') score -= 4;
+    if (strength === 'I keep sports in perspective' && ((tagScores.get('pressure') || 0) + (tagScores.get('mistakes') || 0) < 4) && guide.englishTitle === "Pressure Isn't the Enemy") score -= 6;
+    return {
+      id: guide.id,
+      title: guide.seriesTitle,
+      englishTitle: guide.englishTitle,
+      description: parentPlanRecommendationCopy[guide.englishTitle] || guide.subject,
+      score,
+      order: index
+    };
+  }).sort((first, second) => second.score - first.score || first.order - second.order).slice(0, 3);
+
+  const focus = parentFocusCopy[primaryTag] || parentFocusCopy.support;
+  const supportingTags = rankedTags.map(([tag]) => tag).filter((tag) => tag !== primaryTag).slice(0, 2);
+  return {
+    primaryTag,
+    focus,
+    supportingTags,
+    tags: rankedTags.map(([tag]) => tag),
+    recommendations,
+    why: `You told us ${focus.label.toLowerCase()} is one of the biggest areas you want to help with${supportingTags.length ? `, with ${supportingTags.map((tag) => (parentFocusCopy[tag] || parentFocusCopy.support).label.toLowerCase()).join(' and ')} also shaping what you see` : ''}. These plans were selected to give you practical support without adding more weight to the moment.`
+  };
+}
+
+function ParentOnboardingScreen({ authSession, completeOnboarding, parentGuides, trackAnalyticsEvent }) {
+  const [stage, setStage] = useState('intro');
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [showWhy, setShowWhy] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const revealTrackedRef = useRef(false);
+  const recommendations = useMemo(() => deriveParentRecommendations(answers, parentGuides), [answers, parentGuides]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [stage, questionIndex]);
+
+  useEffect(() => {
+    if (stage !== 'reveal' || revealTrackedRef.current) return;
+    revealTrackedRef.current = true;
+    trackAnalyticsEvent?.('parent_assessment_completed', { responses: answers }, { area: 'activation' });
+    trackAnalyticsEvent?.('parent_recommendations_generated', {
+      primaryFocus: recommendations.primaryTag,
+      derivedTags: recommendations.tags,
+      recommendedPlans: recommendations.recommendations.map((plan) => plan.englishTitle)
+    }, { area: 'activation' });
+    trackAnalyticsEvent?.('parent_recommendation_reveal_viewed', {
+      primaryFocus: recommendations.primaryTag,
+      recommendationCount: recommendations.recommendations.length
+    }, { area: 'activation' });
+    recommendations.recommendations.forEach((plan, index) => {
+      trackAnalyticsEvent?.('parent_plan_viewed', { planId: plan.id, planTitle: plan.englishTitle, source: 'onboarding_recommendation', position: index + 1 }, { area: 'plans' });
+    });
+  }, [stage, answers, recommendations, trackAnalyticsEvent]);
+
+  function beginAssessment() {
+    trackAnalyticsEvent?.('parent_assessment_started', { questionCount: parentAssessmentQuestions.length }, { area: 'activation' });
+    setQuestionIndex(0);
+    setStage('questions');
   }
 
+  function answerQuestion(answer) {
+    const question = parentAssessmentQuestions[questionIndex];
+    setAnswers((current) => ({ ...current, [question.id]: answer }));
+    const delay = question.affirmation ? 650 : 140;
+    window.setTimeout(() => {
+      if (questionIndex < parentAssessmentQuestions.length - 1) setQuestionIndex((current) => current + 1);
+      else setStage('reveal');
+    }, delay);
+  }
+
+  async function continueToPaywall() {
+    setSubmitting(true);
+    await completeOnboarding({
+      parentAssessment: answers,
+      derivedParentTags: recommendations.tags,
+      recommendedParentPlans: recommendations.recommendations.map((plan) => ({ id: plan.id, title: plan.englishTitle })),
+      parentAssessmentCompletedAt: new Date().toISOString()
+    });
+    setSubmitting(false);
+  }
+
+  const question = parentAssessmentQuestions[questionIndex];
   return (
-    <main className="onboarding-shell parent-onboarding" aria-label="Parent onboarding">
-      <section className="onboarding-hero">
-        <h1>Support without hovering.</h1>
-        <p>Help your athlete build confidence, discipline, and consistency.</p>
-      </section>
-      <div className="onboarding-form">
-        <div className="parent-onboarding-progress" aria-label={`Step ${step} of 3`}>
-          {[1, 2, 3].map((number) => <span className={number <= step ? 'active' : ''} key={number} />)}
-          <strong>Step {step} of 3</strong>
-        </div>
+    <main className={`onboarding-shell parent-assessment-screen parent-assessment-${stage}`} aria-label="Parent onboarding">
+      {stage === 'intro' && (
+        <section className="parent-assessment-intro">
+          <header>
+            <p className="eyebrow">THE COMPLETE ATHLETE</p>
+            <h1><span>Let’s personalize</span><span>your parent experience.</span></h1>
+            <p>Every athlete needs something different from the people supporting them. Answer a few quick questions so we can recommend the best resources for you and your athlete.</p>
+          </header>
+          <div className="parent-assessment-count" aria-hidden="true"><strong>5</strong><span>QUESTIONS</span></div>
+          <p className="parent-assessment-duration">5 QUESTIONS <i>•</i> ABOUT 45 SECONDS</p>
+          <button className="primary-action full parent-assessment-cta" onClick={beginAssessment} type="button">Get Started <ArrowRight size={18}/></button>
+        </section>
+      )}
 
-        {step === 1 && (
-          <section className="panel onboarding-panel parent-onboarding-card">
-            <PanelTitle icon={<Sparkles size={18} />} title="What your parent space gives you" />
-            <div className="parent-onboarding-benefits">
-              <span><BarChart3 size={19} /><b>See their progress</b><small>Follow goals, streaks, and completed work.</small></span>
-              <span><MessageCircle size={19} /><b>Support their mindset</b><small>Use simple guidance for better conversations.</small></span>
-              <span><Bell size={19} /><b>Celebrate the work</b><small>Know when they lock in their day.</small></span>
-              <span><BookOpen size={19} /><b>Lead with a plan</b><small>Use performance plans that help you raise a confident, disciplined athlete.</small></span>
-            </div>
-            <button className="primary-action full" onClick={() => setStep(2)} type="button">
-              Set Up My Parent Space <ArrowRight size={18} />
-            </button>
-          </section>
-        )}
+      {stage === 'questions' && (
+        <section className="parent-question-stage">
+          <div className="parent-question-progress" aria-label={`Question ${questionIndex + 1} of ${parentAssessmentQuestions.length}`}>
+            <span>{String(questionIndex + 1).padStart(2, '0')} / 05</span>
+            <div><i style={{ width: `${((questionIndex + 1) / parentAssessmentQuestions.length) * 100}%` }}/></div>
+          </div>
+          <div className="parent-question-copy">
+            <p>YOU’RE HERE TO HELP.</p>
+            <h1>{question.question}</h1>
+            <span>{question.helper}</span>
+          </div>
+          <div className="parent-answer-grid" role="radiogroup" aria-label={question.question}>
+            {question.options.map((option) => (
+              <button
+                aria-checked={answers[question.id] === option}
+                className={answers[question.id] === option ? 'active' : ''}
+                key={option}
+                onClick={() => answerQuestion(option)}
+                role="radio"
+                type="button"
+              >
+                <span>{option}</span><ChevronRight size={18}/>
+              </button>
+            ))}
+          </div>
+          {question.affirmation && answers[question.id] && <p className="parent-question-affirmation" role="status">{question.affirmation}</p>}
+          {questionIndex > 0 && <button className="parent-question-back" onClick={() => setQuestionIndex((current) => current - 1)} type="button">← Back</button>}
+        </section>
+      )}
 
-        {step === 2 && (
-          <section className="panel onboarding-panel parent-onboarding-card">
-            <PanelTitle icon={<Users size={18} />} title="Connect your athlete" action="Optional" />
-            {linkedAthleteId ? (
-              <div className="parent-link-success">
-                <BadgeCheck size={22} />
-                <span><strong>Athlete connected</strong><small>{linkedAthletes.length} athlete{linkedAthletes.length === 1 ? '' : 's'} linked to this parent account.</small></span>
-              </div>
-            ) : (
-              <>
-                <p>Ask your athlete for the access code inside their Settings. Each athlete has their own code.</p>
-                <form className="standard-form parent-code-form" onSubmit={connectAthlete}>
-                  <label>
-                    <span>Athlete access code</span>
-                    <input className="text-field" autoCapitalize="characters" aria-label="Athlete access code" placeholder="TCA-XXXXXXXX"
-                      value={parentAccessDraft} onChange={(event) => { setParentAccessDraft(event.target.value.toUpperCase()); setParentLinkFeedback(''); }} />
-                  </label>
-                  <button className="primary-action" disabled={linking} type="submit">{linking ? 'Connecting...' : 'Connect Athlete'}</button>
-                </form>
-              </>
-            )}
-            {parentLinkFeedback && <p className="inline-note" role="status">{parentLinkFeedback}</p>}
-            <div className="parent-onboarding-actions">
-              <button className="ghost-action" onClick={() => setStep(1)} type="button">Back</button>
-              <button className="primary-action" onClick={() => setStep(3)} type="button">{linkedAthleteId ? 'Continue' : 'Connect Later'} <ArrowRight size={17} /></button>
-            </div>
-          </section>
-        )}
+      {stage === 'reveal' && (
+        <section className="parent-recommendation-reveal">
+          <header className="parent-reveal-header">
+            <p className="eyebrow">THE COMPLETE ATHLETE</p>
+            <h1><span>Your parent focus</span><span>is ready.</span></h1>
+            <p>Based on what you told us, we picked the areas that can help you support your athlete most right now.</p>
+          </header>
 
-        {step === 3 && (
-          <section className="panel onboarding-panel parent-onboarding-card">
-            <PanelTitle icon={<Bell size={18} />} title="Choose what gets surfaced" />
-            <p>Start with the moments that help you support without checking the app all day.</p>
-            <div className="parent-onboarding-toggles">
-              <label><span><strong>iPhone alerts</strong><small>Show approved parent updates on your lock screen.</small></span><input type="checkbox" checked={notificationPreferences.browserPush} onChange={(event) => togglePush(event.target.checked)} /></label>
-              <label><span><strong>Day locked in</strong><small>Know when your athlete completes and locks their day.</small></span><input type="checkbox" checked={notificationPreferences.parentUpdates} onChange={(event) => updateNotificationPreference('parentUpdates', event.target.checked)} /></label>
-              <label><span><strong>Streak and progress moments</strong><small>Celebrate consistency and meaningful milestones.</small></span><input type="checkbox" checked={notificationPreferences.streaks} onChange={(event) => updateNotificationPreference('streaks', event.target.checked)} /></label>
-              <label><span><strong>New performance plans</strong><small>See when fresh mental performance work becomes available.</small></span><input type="checkbox" checked={notificationPreferences.performancePlans} onChange={(event) => updateNotificationPreference('performancePlans', event.target.checked)} /></label>
+          <section className="parent-primary-focus" aria-labelledby="parent-focus-title">
+            <span>Your primary focus</span>
+            <h2 id="parent-focus-title">{recommendations.focus.title}</h2>
+            <p>{recommendations.focus.statement}</p>
+          </section>
+
+          {recommendations.supportingTags.length > 0 && (
+            <section className="parent-supporting-focuses" aria-label="Also supporting">
+              <span>Also supporting</span>
+              <div>{recommendations.supportingTags.map((tag) => <strong key={tag}>{(parentFocusCopy[tag] || parentFocusCopy.support).label}</strong>)}</div>
+            </section>
+          )}
+
+          <section className="parent-recommended-plans" aria-labelledby="parent-recommended-title">
+            <div className="parent-reveal-section-heading">
+              <span>Recommended for you</span>
+              <h2 id="parent-recommended-title">Your starting plans</h2>
             </div>
-            <p className="privacy-note"><LockKeyhole size={15} />You control these anytime in Parent Settings.</p>
-            <div className="parent-onboarding-actions">
-              <button className="ghost-action" onClick={() => setStep(2)} type="button">Back</button>
-              <button className="primary-action" type="button" onClick={() => completeOnboarding({})}>Open Parent Overview <ArrowRight size={17} /></button>
+            <div className="parent-recommendation-sequence">
+              {recommendations.recommendations.map((plan, index) => (
+                <article key={plan.id}>
+                  <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                  <div><h3>{plan.title}</h3><p>{plan.description}</p></div>
+                </article>
+              ))}
             </div>
           </section>
-        )}
-      </div>
+
+          <section className="parent-recommendation-why">
+            <button aria-expanded={showWhy} onClick={() => setShowWhy((current) => !current)} type="button"><span>Why these?</span><ChevronDown size={18}/></button>
+            {showWhy && <p>{recommendations.why}</p>}
+          </section>
+
+          <button className="primary-action full parent-assessment-cta" disabled={submitting} onClick={continueToPaywall} type="button">
+            {submitting ? 'Preparing Your Parent Space...' : 'Continue'} <ArrowRight size={18}/>
+          </button>
+        </section>
+      )}
     </main>
   );
 }
 
-function OnboardingScreen({ authSession, completeOnboarding }) {
+const journeyFocusRevealCopy = {
+  confidence: 'Build belief from evidence instead of emotion.',
+  discipline: 'Become more consistent when motivation disappears.',
+  focus: 'Train your attention and stay present when it matters.',
+  consistency: 'Turn good intentions into repeatable daily actions.',
+  pressure: 'Perform with more control when the moment gets bigger.',
+  'emotional-control': 'Respond instead of reacting when competition gets intense.',
+  coachability: 'Turn feedback into faster growth.',
+  'goal-setting': 'Connect what you want to the work required every day.',
+  resilience: 'Recover faster and respond with confidence after adversity.',
+  identity: 'Build a stronger connection between who you are and how you compete.',
+  habits: 'Create routines that make disciplined action easier.'
+};
+
+const journeyFocusRevealLabels = {
+  confidence: 'Confidence',
+  discipline: 'Discipline',
+  focus: 'Focus',
+  consistency: 'Consistency',
+  pressure: 'Handling Pressure',
+  'emotional-control': 'Emotional Control',
+  coachability: 'Coachability',
+  'goal-setting': 'Goal-Setting',
+  resilience: 'Resilience',
+  identity: 'Identity',
+  habits: 'Habits'
+};
+
+const journeyPlanRevealDescriptions = [
+  [['control the controllables', 'controllable'], 'Focus your energy on what you can control.'],
+  [['slump'], 'Learn how to respond when performance dips.'],
+  [['positive self image', 'self-image', 'mirror'], 'Strengthen how you see yourself as an athlete.'],
+  [['confidence code', 'confidence'], 'Build confidence from evidence, preparation, and action.'],
+  [['boring wins'], 'Discover why consistency creates separation.'],
+  [['champion habits', 'habits'], 'Build routines that make consistency easier.'],
+  [['coachable athlete', 'coachable'], 'Use feedback and tough coaching to grow faster.'],
+  [['imagination', 'visualization'], 'Train your mind to see performance before it happens.'],
+  [['emotional control', 'next play'], 'Stay in control when emotions run high.'],
+  [['goal blueprint', 'goals'], 'Turn what you want into a clear plan of action.'],
+  [['lock in', 'focus'], 'Train your attention and stay present.'],
+  [['discipline'], 'Learn to execute even when you don’t feel like it.'],
+  [['90%', 'athletic operating system'], 'Build the mental habits that support complete performance.'],
+  [['compete differently'], 'Compete from a stronger foundation of purpose and identity.']
+];
+
+function journeyRevealLabel(tag) {
+  return journeyFocusRevealLabels[tag] || String(tag || 'Mental Performance').replace('-', ' ');
+}
+
+function journeyRevealPlanDescription(seriesTitle, availablePlans = []) {
+  const normalized = String(seriesTitle || '').toLowerCase();
+  const mapped = journeyPlanRevealDescriptions.find(([needles]) => needles.some((needle) => normalized.includes(needle)));
+  if (mapped) return mapped[1];
+  const matchingPlan = availablePlans.find((plan) => planSeriesTitle(plan).toLowerCase() === normalized);
+  const existing = matchingPlan ? planSeriesTagline(matchingPlan) : '';
+  return existing || 'Build a stronger mental game through focused daily work.';
+}
+
+function OnboardingScreen({
+  athleteParentAccessDraft,
+  athleteParentLinkFeedback,
+  authSession,
+  completeOnboarding,
+  linkAthleteParentAccessCode,
+  plans,
+  setAthleteParentAccessDraft,
+  setAthleteParentLinkFeedback,
+  trackAnalyticsEvent
+}) {
   const [setup, setSetup] = useState({
     sport: '',
     age: '',
@@ -6174,27 +6889,33 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
     goals: [],
     standards: []
   });
+  const [stage, setStage] = useState('intro');
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [journeyAnswers, setJourneyAnswers] = useState({});
   const [message, setMessage] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showJourneyWhy, setShowJourneyWhy] = useState(false);
+  const [commitmentConfirmed, setCommitmentConfirmed] = useState(false);
+  const [commitmentContinueReady, setCommitmentContinueReady] = useState(false);
+  const [familyAccessExpanded, setFamilyAccessExpanded] = useState(false);
+  const [familyAccessConnected, setFamilyAccessConnected] = useState(false);
+  const [familyAccessConnecting, setFamilyAccessConnecting] = useState(false);
+  const commitmentTimerRef = useRef(null);
+  const commitmentContinueRef = useRef(null);
+
+  useEffect(() => () => window.clearTimeout(commitmentTimerRef.current), []);
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [stage]);
+  useEffect(() => {
+    if (!commitmentContinueReady || !commitmentContinueRef.current) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    commitmentContinueRef.current.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'end' });
+  }, [commitmentContinueReady]);
 
   function updateField(field, value) {
     setSetup((current) => ({ ...current, [field]: value }));
-    setMessage('');
-  }
-
-  function toggleChallenge(challengeId) {
-    setSetup((current) => {
-      const selected = current.currentChallenges.includes(challengeId);
-      const currentChallenges = selected
-        ? current.currentChallenges.filter((id) => id !== challengeId)
-        : [...current.currentChallenges, challengeId];
-      return {
-        ...current,
-        currentChallenge: currentChallenges[0] || '',
-        currentChallenges
-      };
-    });
     setMessage('');
   }
 
@@ -6247,8 +6968,45 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
     return data.publicUrl || setup.photo;
   }
 
-  async function startOnboarding(event) {
+  function challengeIdForAnswer(answer) {
+    const normalized = String(answer || '').toLowerCase();
+    if (normalized.includes('confidence')) return 'confidence';
+    if (normalized.includes('discipline') || normalized.includes('consistency') || normalized.includes('focus')) return 'discipline';
+    if (normalized.includes('pressure') || normalized.includes('emotional')) return 'pressure';
+    if (normalized.includes('coach')) return 'coach';
+    return 'something-else';
+  }
+
+  const developmentProfile = useMemo(() => deriveDevelopmentProfile(journeyAnswers), [journeyAnswers]);
+  const generatedJourney = useMemo(
+    () => generateJourney({ answers: journeyAnswers, plans }),
+    [journeyAnswers, plans]
+  );
+
+  function beginQuestions(event) {
     event.preventDefault();
+    if (!setup.sport.trim()) {
+      setMessage('Add your sport to continue.');
+      return;
+    }
+    setMessage('');
+    setStage('questions');
+    setQuestionIndex(0);
+    trackAnalyticsEvent?.('onboarding_started', { role: 'athlete' }, { area: 'activation' });
+  }
+
+  function answerQuestion(answer) {
+    const question = journeyQuestions[questionIndex];
+    const nextAnswers = { ...journeyAnswers, [question.id]: answer };
+    setJourneyAnswers(nextAnswers);
+    if (questionIndex < journeyQuestions.length - 1) {
+      window.setTimeout(() => setQuestionIndex((current) => current + 1), 120);
+    } else {
+      window.setTimeout(() => setStage('reveal'), 120);
+    }
+  }
+
+  async function startOnboarding() {
     const cleanSetup = {
       ...setup,
       sport: setup.sport.trim(),
@@ -6256,15 +7014,12 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
       standards: setup.standards.map((standard) => standard.trim()).filter(Boolean)
     };
 
-    if (!cleanSetup.sport.trim()) {
-      setMessage('Add the athlete sport to start.');
-      return;
-    }
-
-    if (!cleanSetup.currentChallenges.length) {
-      setMessage('Choose at least one area you want help with.');
-      return;
-    }
+    const challengeId = challengeIdForAnswer(journeyAnswers.primaryGoal);
+    cleanSetup.currentChallenge = challengeId;
+    cleanSetup.currentChallenges = [challengeId];
+    cleanSetup.journeyAnswers = journeyAnswers;
+    cleanSetup.developmentProfile = developmentProfile;
+    cleanSetup.generatedJourney = generatedJourney;
 
     setSubmitting(true);
     setMessage(photoFile ? 'Adding your profile photo...' : '');
@@ -6278,24 +7033,99 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
     }
   }
 
-  return (
-    <main className="onboarding-shell simple-athlete-onboarding" aria-label="The Complete Athlete onboarding">
-      <section className="onboarding-hero">
-        <p className="eyebrow">The Complete Athlete</p>
-        <h1>Start with today.</h1>
-        <p>Answer a few quick things. We will recommend the right plan and keep the rest out of the way.</p>
-      </section>
+  function openCommitment() {
+    window.clearTimeout(commitmentTimerRef.current);
+    setCommitmentConfirmed(false);
+    setCommitmentContinueReady(false);
+    setStage('commitment');
+  }
 
-      <form className="onboarding-form" onSubmit={startOnboarding}>
-        <section className="panel onboarding-panel">
-          <PanelTitle icon={<UserRound size={18} />} title="Athlete" action="Step 1" />
-          <div className="onboarding-photo-field">
+  function confirmCommitment() {
+    if (commitmentConfirmed) return;
+    localStorage.setItem('commitment_completed', 'true');
+    localStorage.setItem('commitment_completed_at', new Date().toISOString());
+    setCommitmentConfirmed(true);
+    commitmentTimerRef.current = window.setTimeout(() => setCommitmentContinueReady(true), 900);
+  }
+
+  async function connectFamilyAccess(event) {
+    event?.preventDefault();
+    if (familyAccessConnecting) return;
+    setFamilyAccessConnecting(true);
+    const connected = await linkAthleteParentAccessCode?.(event);
+    setFamilyAccessConnecting(false);
+    if (!connected) return;
+    setFamilyAccessConnected(true);
+    setFamilyAccessExpanded(false);
+  }
+
+  function openFamilyAccess() {
+    setAthleteParentLinkFeedback?.('');
+    setFamilyAccessExpanded(true);
+  }
+
+  function closeFamilyAccess() {
+    setAthleteParentLinkFeedback?.('');
+    setFamilyAccessExpanded(false);
+  }
+
+  return (
+    <main className={`onboarding-shell simple-athlete-onboarding${stage === 'intro' ? ' journey-intro-screen' : ''}${stage === 'profile' ? ' journey-profile-screen' : ''}${stage === 'questions' ? ' journey-question-screen' : ''}${stage === 'reveal' ? ' journey-reveal-screen' : ''}${stage === 'commitment' ? ' athlete-commitment-screen' : ''}`} aria-label="The Complete Athlete onboarding">
+      {stage !== 'commitment' && stage !== 'profile' && <section className="onboarding-hero">
+        <p className="eyebrow">THE COMPLETE ATHLETE</p>
+        {stage === 'intro' ? (
+          <>
+            <h1 className="journey-intro-heading"><span>Let’s build</span><span>your journey</span></h1>
+            <strong className="journey-intro-promise">21 days. Built around you.</strong>
+            <p>Answer 8 quick questions and we’ll build a personalized mental-performance journey around your goals, strengths, and what you want to improve most.</p>
+          </>
+        ) : (
+          <>
+            {stage === 'reveal' ? (
+              <h1 className="journey-reveal-heading"><span>Your journey</span><span>is ready.</span></h1>
+            ) : <h1>Build from where you are.</h1>}
+            <p>{stage === 'reveal'
+              ? 'Built from what you told us about your goals, strengths, and where you want to grow.'
+              : 'Choose the one that most strongly aligns with you right now.'}</p>
+            {stage === 'reveal' && <span className="journey-personalized-label"><Sparkles size={14}/> Personalized for you</span>}
+          </>
+        )}
+      </section>}
+
+      {stage === 'intro' && (
+        <section className="journey-onboarding-intro">
+          <div className="journey-days-visual" role="img" aria-label="A personalized 21-day journey built for you">
+            <div className="journey-days-ring" aria-hidden="true">
+              <span>21</span>
+              <strong>DAYS</strong>
+            </div>
+            <small>BUILT FOR YOU</small>
+          </div>
+          <p className="journey-intro-duration">8 QUESTIONS <i>•</i> ABOUT 60 SECONDS</p>
+          <button className="primary-action full onboarding-start" type="button" aria-label="Build my personalized 21-day journey" onClick={() => setStage('profile')}>Build My Journey <ArrowRight size={18}/></button>
+        </section>
+      )}
+
+      {stage === 'profile' && <form className="onboarding-form journey-profile-form" onSubmit={beginQuestions}>
+        <header className="journey-profile-header">
+          <p className="eyebrow">THE COMPLETE ATHLETE</p>
+          <h1><span>Let’s start</span><span>with you.</span></h1>
+          <p>Give us a few basics so we can make your experience feel more personal.</p>
+          <div className="journey-profile-progress" aria-label="Onboarding step 1 of 9">
+            <span>01 / 09</span>
+            <div><i /></div>
+          </div>
+        </header>
+
+        <section className="journey-profile-details" aria-labelledby="journey-profile-title">
+          <h2 id="journey-profile-title">YOUR PROFILE</h2>
+          <div className="onboarding-photo-field journey-profile-photo">
             <div className={setup.photo ? 'onboarding-photo-preview has-photo' : 'onboarding-photo-preview'}>
-              {setup.photo ? <img src={setup.photo} alt="Selected athlete profile" /> : <UserRound size={28} />}
+              {setup.photo ? <img src={setup.photo} alt="Selected athlete profile" /> : <Camera size={26} />}
             </div>
             <div className="onboarding-photo-copy">
-              <strong>Profile photo</strong>
-              <span>Optional. Add one now or later in Settings.</span>
+              <strong>PROFILE PHOTO</strong>
+              <span>Optional · You can always add one later.</span>
               <div className="onboarding-photo-actions">
                 <label className="photo-upload">
                   <Camera size={17} />
@@ -6310,94 +7140,626 @@ function OnboardingScreen({ authSession, completeOnboarding }) {
               </div>
             </div>
           </div>
-          <div className="form-grid">
-            <label>
-              <span>Sport</span>
+          <div className="form-grid journey-profile-field-row">
+            <label className="journey-field journey-sport-field">
+              <span>SPORT</span>
               <input
                 className="text-field"
-                placeholder="Sport"
+                placeholder="Basketball"
+                autoComplete="off"
                 value={setup.sport}
                 onChange={(event) => updateField('sport', event.target.value)}
               />
             </label>
-            <label>
-              <span>Age</span>
+            <label className="journey-field journey-age-field">
+              <span>AGE <em>· OPTIONAL</em></span>
               <input
                 className="text-field"
                 inputMode="numeric"
                 maxLength="2"
-                placeholder="Optional"
+                placeholder="14"
                 value={setup.age}
                 onChange={(event) => updateField('age', event.target.value.replace(/\D/g, '').slice(0, 2))}
               />
             </label>
           </div>
-          <label>
-            <span>State or country</span>
+          <label className="journey-field">
+            <span>LOCATION <em>· OPTIONAL</em></span>
             <input
               className="text-field"
               autoComplete="address-level1"
-              placeholder="Optional"
+              placeholder="State or country"
               value={setup.location}
               onChange={(event) => updateField('location', event.target.value)}
             />
           </label>
         </section>
 
-        <section className="panel onboarding-panel">
-          <PanelTitle icon={<Target size={18} />} title="What do you need help with?" action={`${setup.currentChallenges.length} selected`} />
-          <p className="challenge-choice-helper">Choose every area you want to work on. We’ll recommend one plan for each choice.</p>
-          <div className="challenge-choice-grid" aria-label="Athlete challenge options">
-            {athleteChallengeOptions.map((challenge) => (
-              <button
-                aria-pressed={setup.currentChallenges.includes(challenge.id)}
-                className={setup.currentChallenges.includes(challenge.id) ? 'challenge-choice active' : 'challenge-choice'}
-                key={challenge.id}
-                onClick={() => toggleChallenge(challenge.id)}
-                type="button"
-              >
-                <strong>{challenge.shortLabel}</strong>
-                <span>{challenge.description}</span>
-              </button>
-            ))}
+        <section className={familyAccessExpanded ? 'journey-family-access is-expanded' : 'journey-family-access'} aria-labelledby="family-access-title">
+          <div className="journey-family-summary">
+            <div>
+              <span id="family-access-title">FAMILY ACCESS</span>
+              <strong>{familyAccessConnected ? 'Parent Connected' : 'Have a parent code?'}</strong>
+              <p>{familyAccessConnected ? 'You’re connected.' : 'Optional — connect a parent now or later in Settings.'}</p>
+            </div>
+            {familyAccessConnected ? (
+              <span className="family-connected-mark" aria-label="Parent connected"><Check size={17}/></span>
+            ) : !familyAccessExpanded && (
+              <button type="button" onClick={openFamilyAccess}>Add Parent Code</button>
+            )}
           </div>
-        </section>
 
-        <section className="panel onboarding-panel optional-onboarding-panel">
-          <PanelTitle icon={<Users size={18} />} title="Family access" action="Optional" />
-          <div className="optional-link-copy">
-            <strong>Already have a parent code?</strong>
-            <span>You can add it now or later in Settings.</span>
-          </div>
-          <input
-            id="onboarding-parent"
-            className="text-field"
-            placeholder="Optional family code"
-            value={setup.parentContact}
-            onChange={(event) => updateField('parentContact', event.target.value)}
-          />
+          {familyAccessExpanded && !familyAccessConnected && (
+            <div className="journey-family-expanded">
+              <label className="journey-field" htmlFor="onboarding-parent-code">
+                <span>PARENT CODE</span>
+                <input
+                  id="onboarding-parent-code"
+                  className="text-field"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  aria-label="Parent code"
+                  placeholder="Enter parent code"
+                  value={athleteParentAccessDraft}
+                  onChange={(event) => {
+                    setAthleteParentAccessDraft?.(event.target.value);
+                    setAthleteParentLinkFeedback?.('');
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') connectFamilyAccess(event);
+                  }}
+                />
+              </label>
+              <div className="journey-family-actions">
+                <button className="journey-family-cancel" type="button" onClick={closeFamilyAccess}>Cancel</button>
+                <button className="journey-family-connect" type="button" onClick={connectFamilyAccess} disabled={!athleteParentAccessDraft?.trim() || familyAccessConnecting}>
+                  {familyAccessConnecting ? 'Connecting...' : 'Connect'}
+                </button>
+              </div>
+              {athleteParentLinkFeedback && <p className="journey-family-feedback" role="status">{athleteParentLinkFeedback}</p>}
+            </div>
+          )}
         </section>
 
         {message && <p className="inline-warning">{message}</p>}
-        <button className="primary-action full onboarding-start" type="submit" disabled={submitting}>
-          <Check size={18} />
-          {submitting ? 'Setting Up Account...' : 'Start Today'}
+        <button className="primary-action full onboarding-start journey-profile-continue" type="submit" disabled={submitting || !setup.sport.trim()}>
+          Continue <ArrowRight size={18}/>
         </button>
-      </form>
+      </form>}
+
+      {stage === 'questions' && (() => {
+        const question = journeyQuestions[questionIndex];
+        return (
+          <section className="journey-question-stage">
+            <div className="journey-question-progress">
+              <span>{questionIndex + 1} of {journeyQuestions.length}</span>
+              <div><i style={{ width: `${((questionIndex + 1) / journeyQuestions.length) * 100}%` }}/></div>
+            </div>
+            <div className="journey-question-copy">
+              <h2>{question.question}</h2>
+              <p>{question.helper}</p>
+            </div>
+            <div className="journey-answer-grid">
+              {question.options.map((option) => (
+                <button
+                  className={journeyAnswers[question.id] === option ? 'active' : ''}
+                  key={option}
+                  onClick={() => answerQuestion(option)}
+                  type="button"
+                >
+                  <span>{option}</span><ChevronRight size={18}/>
+                </button>
+              ))}
+            </div>
+            {question.affirmation && journeyAnswers[question.id] && <p className="journey-affirmation">{question.affirmation}</p>}
+            {questionIndex > 0 && <button className="journey-back-link" type="button" onClick={() => setQuestionIndex((current) => current - 1)}>← Back</button>}
+          </section>
+        );
+      })()}
+
+      {stage === 'reveal' && (
+        <section className="journey-reveal-program">
+          <section className="journey-primary-focus" aria-labelledby="journey-primary-focus-title">
+            <span>Your primary focus</span>
+            <h2 id="journey-primary-focus-title">{developmentProfile.primaryFocusLabel}</h2>
+            <p>{journeyFocusRevealCopy[developmentProfile.primaryFocus] || 'Build the mental skills that help your performance hold up when it matters.'}</p>
+          </section>
+
+          {developmentProfile.tags.slice(1, 3).length > 0 && (
+            <section className="journey-supporting-focuses" aria-label="Supporting development areas">
+              <span>Also building</span>
+              <div>{developmentProfile.tags.slice(1, 3).map((tag) => <strong key={tag}>{journeyRevealLabel(tag)}</strong>)}</div>
+            </section>
+          )}
+
+          <section className="journey-path-section" aria-labelledby="journey-path-title">
+            <div className="journey-section-heading">
+              <span>Personalized program</span>
+              <h3 id="journey-path-title">Your 21-Day Path</h3>
+            </div>
+            <div className="journey-plan-path">
+              {generatedJourney.selectedSeries.map((series, index) => (
+                <article className="journey-plan-step" key={series.title}>
+                  <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h4>{series.title}</h4>
+                    <p>{journeyRevealPlanDescription(series.title, plans)}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="journey-integration-days">
+            <span><Plus size={15}/> Integration Days</span>
+            <p>Reflection, application, visualization, and progress checkpoints connect everything across your 21 days.</p>
+            <div aria-label="Learn, apply, reflect, and execute"><strong>Learn</strong><i>+</i><strong>Apply</strong><i>+</i><strong>Reflect</strong><i>+</i><strong>Execute</strong></div>
+          </section>
+
+          <section className="journey-why-section">
+            <button aria-expanded={showJourneyWhy} onClick={() => setShowJourneyWhy((current) => !current)} type="button">
+              <span>Why this journey?</span><ChevronDown size={18}/>
+            </button>
+            {showJourneyWhy && (
+              <p>You told us {developmentProfile.primaryFocusLabel.toLowerCase()} is your biggest focus{developmentProfile.tags.slice(1, 3).length ? ` and that ${developmentProfile.tags.slice(1, 3).map(journeyRevealLabel).join(' and ').toLowerCase()} also matter` : ''}. This path was built to help you grow with focused work, application, and reflection.</p>
+            )}
+          </section>
+
+          <section className="journey-length-summary" aria-label="21-day program summary">
+            <strong>21 <span>Days</span></strong>
+            <div><p>One personalized development path.</p><small>Your first step starts today.</small></div>
+          </section>
+
+          {message && <p className="inline-warning">{message}</p>}
+          <button className="primary-action full onboarding-start journey-start-button" aria-label="Start my personalized 21-day journey" type="button" onClick={openCommitment}>
+            Start My Journey <ArrowRight size={18}/>
+          </button>
+        </section>
+      )}
+
+      {stage === 'commitment' && (
+        <section className={commitmentConfirmed ? 'athlete-commitment is-confirmed' : 'athlete-commitment'}>
+          <header className="commitment-intro">
+            <p className="commitment-brand">THE COMPLETE ATHLETE</p>
+            <h1><span>You know what you want.</span><span>Now commit to the work.</span></h1>
+            <p>You just told us where you want to go.</p>
+            <p>The next 21 days are about proving it to yourself — one decision, one action, one day at a time.</p>
+            <strong>This isn’t a promise to us.<br/>It’s a promise to you.</strong>
+          </header>
+
+          <section className="commitment-pledge" aria-labelledby="commitment-pledge-title">
+            <h2 id="commitment-pledge-title">MY COMMITMENT</h2>
+            <p>For the next 21 days, I’m choosing to show up.</p>
+            <p>I’ll do the work when it’s easy — and when it isn’t.</p>
+            <p>I’ll learn from mistakes instead of letting them define me.</p>
+            <p>I’ll keep the promises I make to myself.</p>
+            <p>I’ll train the part of my game no one sees.</p>
+            <p>I’m ready to become the athlete my goals require.</p>
+          </section>
+
+          <div className="commitment-action-zone" aria-live="polite">
+            <button
+              className="commitment-fingerprint-button"
+              type="button"
+              aria-label={commitmentConfirmed ? 'Commitment made' : 'Make my 21-day commitment'}
+              aria-pressed={commitmentConfirmed}
+              onClick={confirmCommitment}
+              disabled={commitmentConfirmed}
+            >
+              <span className="commitment-pulse" aria-hidden="true" />
+              <svg className="commitment-fingerprint" viewBox="0 0 180 180" aria-hidden="true">
+                <path d="M90 22c-37 0-67 30-67 67 0 13 2 25 6 37" />
+                <path d="M90 36c-29 0-53 24-53 53 0 19 5 39 14 56" />
+                <path d="M90 50c-22 0-39 17-39 39 0 24 8 47 22 66" />
+                <path d="M90 64c-14 0-25 11-25 25 0 28 10 53 27 72" />
+                <path d="M90 78c-6 0-11 5-11 11 0 26 10 49 28 65" />
+                <path d="M90 22c37 0 67 30 67 67 0 29-8 57-23 80" />
+                <path d="M90 36c29 0 53 24 53 53 0 27-7 51-20 72" />
+                <path d="M90 50c22 0 39 17 39 39 0 23-6 45-18 63" />
+                <path d="M90 64c14 0 25 11 25 25 0 17-4 34-12 48" />
+                <path d="M90 78c6 0 11 5 11 11 0 11-2 22-7 32" />
+                <path d="M32 74c4-18 15-34 30-44" />
+                <path d="M148 74c-4-18-15-34-30-44" />
+              </svg>
+              {commitmentConfirmed && <span className="commitment-check" aria-hidden="true"><Check size={30} strokeWidth={3}/></span>}
+            </button>
+
+            <div className="commitment-state-copy">
+              <strong>{commitmentConfirmed ? 'COMMITMENT MADE' : 'PRESS TO COMMIT'}</strong>
+              {!commitmentConfirmed ? (
+                <span>Make the promise to yourself.</span>
+              ) : (
+                <div className="commitment-confirmation-copy">
+                  <h2>YOU’RE IN.</h2>
+                  <p>Your next 21 days start with the decision you just made.</p>
+                </div>
+              )}
+            </div>
+
+            {commitmentContinueReady && (
+              <div className="commitment-continue-wrap" ref={commitmentContinueRef}>
+                <span>YOUR JOURNEY IS READY.</span>
+                <button className="primary-action full commitment-continue" type="button" onClick={startOnboarding} disabled={submitting}>
+                  {submitting ? 'Preparing Your Journey...' : 'Continue'} <ArrowRight size={18}/>
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </main>
+  );
+}
+
+const defaultDailyActivityQuickAdds = [
+  { id: 'training', label: 'Training', value: 'Complete training with intent', iconKey: 'training' },
+  { id: 'recovery', label: 'Recovery', value: 'Handle recovery routine', iconKey: 'recovery' },
+  { id: 'schoolwork', label: 'Schoolwork', value: 'Finish schoolwork', iconKey: 'schoolwork' },
+  { id: 'extra-reps', label: 'Extra reps', value: 'Get extra quality reps', iconKey: 'extra-reps' }
+];
+
+const dailyQuickAddIcons = {
+  training: Dumbbell,
+  recovery: Leaf,
+  schoolwork: GraduationCap,
+  'extra-reps': Plus,
+  custom: Plus
+};
+
+function dailyQuickAddStorageKey(userId) {
+  return `tca-daily-quick-adds:${String(userId || 'local-athlete')}`;
+}
+
+function loadDailyActivityQuickAdds(userId) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(dailyQuickAddStorageKey(userId)) || 'null');
+    if (!Array.isArray(stored) || !stored.length) return defaultDailyActivityQuickAdds;
+    const cleaned = stored.slice(0, 8).map((item, index) => ({
+      id: String(item?.id || `custom-${index}`),
+      label: String(item?.label || '').trim(),
+      value: String(item?.value || '').trim(),
+      iconKey: dailyQuickAddIcons[item?.iconKey] ? item.iconKey : 'custom'
+    })).filter((item) => item.label && item.value);
+    return cleaned.length ? cleaned : defaultDailyActivityQuickAdds;
+  } catch {
+    return defaultDailyActivityQuickAdds;
+  }
+}
+
+function saveDailyActivityQuickAdds(userId, items) {
+  localStorage.setItem(dailyQuickAddStorageKey(userId), JSON.stringify(items));
+}
+
+function ProgressStat({ icon, label, value, warm = false }) {
+  return (
+    <span className={`activity-stat${warm ? ' warm' : ''}`}>
+      <i>{icon}</i>
+      <b>{value}</b>
+      <em>{label}</em>
+    </span>
+  );
+}
+
+function ActivityTrackerHero({ completed, percent, streak, total }) {
+  return (
+    <div className="activity-tracker-hero">
+      <div className="activity-tracker-heading">
+        <span className="activity-tracker-mark"><BarChart3 size={20} /></span>
+        <div>
+          <h2 id="activity-tracker-title">Daily Activity Tracker</h2>
+          <p>Add what you need to handle today. Update it as you go, then lock in the day once everything is complete.</p>
+        </div>
+      </div>
+      <div className="activity-stat-grid" aria-label="Daily activity tracker summary">
+        <ProgressStat icon={<Check size={18} />} label="Done" value={completed} />
+        <ProgressStat icon={<Clock size={18} />} label="Left" value={Math.max(total - completed, 0)} />
+        <ProgressStat icon={<Flame size={18} />} label="Streak" value={streak} warm />
+      </div>
+      <div className="activity-progress-row" aria-label={`${percent}% of daily activities complete`}>
+        <span className="activity-progress-track" aria-hidden="true">
+          <i style={{ width: `${percent}%` }} />
+        </span>
+        <strong>{percent}%</strong>
+      </div>
+    </div>
+  );
+}
+
+function QuickAddSection({ draft, onSelect, userId }) {
+  const [quickAdds, setQuickAdds] = useState(() => loadDailyActivityQuickAdds(userId));
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorDraft, setEditorDraft] = useState([]);
+
+  useEffect(() => {
+    setQuickAdds(loadDailyActivityQuickAdds(userId));
+  }, [userId]);
+
+  function openEditor() {
+    setEditorDraft(quickAdds.map((item) => ({ ...item })));
+    setEditorOpen(true);
+  }
+
+  function updateEditorItem(id, field, value) {
+    setEditorDraft((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item));
+  }
+
+  function addEditorItem() {
+    setEditorDraft((items) => items.length >= 8 ? items : [
+      ...items,
+      { id: `custom-${Date.now()}`, label: 'New option', value: '', iconKey: 'custom' }
+    ]);
+  }
+
+  function saveEditor() {
+    const cleaned = editorDraft
+      .map((item) => ({ ...item, label: item.label.trim(), value: item.value.trim() }))
+      .filter((item) => item.label && item.value)
+      .slice(0, 8);
+    const next = cleaned.length ? cleaned : defaultDailyActivityQuickAdds;
+    setQuickAdds(next);
+    saveDailyActivityQuickAdds(userId, next);
+    setEditorOpen(false);
+  }
+
+  return (
+    <>
+      <div className="activity-quick-add">
+        <div className="activity-section-heading">
+          <div><strong>Quick add</strong><span>Add common items with one tap</span></div>
+          <button className="quick-add-edit-button" onClick={openEditor} type="button">Edit</button>
+        </div>
+        <div className="activity-quick-grid" aria-label="Quick add daily activities">
+          {quickAdds.map((item) => {
+            const Icon = dailyQuickAddIcons[item.iconKey] || Plus;
+            return (
+              <button
+                className={draft === item.value ? 'active' : ''}
+                key={item.id}
+                onClick={() => onSelect(item.value)}
+                type="button"
+              >
+                <Icon size={16} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {editorOpen && (
+        <div className="quick-add-editor-overlay" onClick={() => setEditorOpen(false)} role="presentation">
+          <section
+            aria-labelledby="quick-add-editor-title"
+            aria-modal="true"
+            className="quick-add-editor-sheet"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <header>
+              <div>
+                <span>Daily Activity Tracker</span>
+                <h2 id="quick-add-editor-title">Edit Quick Add</h2>
+                <p>Choose the shortcuts that make building your day faster.</p>
+              </div>
+              <button aria-label="Close Quick Add editor" className="icon-button" onClick={() => setEditorOpen(false)} type="button"><X size={18}/></button>
+            </header>
+
+            <div className="quick-add-editor-list">
+              {editorDraft.map((item) => {
+                const Icon = dailyQuickAddIcons[item.iconKey] || Plus;
+                return (
+                  <div className="quick-add-editor-row" key={item.id}>
+                    <i><Icon size={17}/></i>
+                    <label>
+                      <span>Button name</span>
+                      <input
+                        aria-label={`${item.label || 'Quick Add'} button name`}
+                        maxLength={22}
+                        onChange={(event) => updateEditorItem(item.id, 'label', event.target.value)}
+                        value={item.label}
+                      />
+                    </label>
+                    <label>
+                      <span>Activity added</span>
+                      <input
+                        aria-label={`${item.label || 'Quick Add'} activity text`}
+                        maxLength={100}
+                        onChange={(event) => updateEditorItem(item.id, 'value', event.target.value)}
+                        placeholder="What should be added?"
+                        value={item.value}
+                      />
+                    </label>
+                    <button
+                      aria-label={`Remove ${item.label || 'Quick Add option'}`}
+                      className="quick-add-remove-button"
+                      disabled={editorDraft.length <= 1}
+                      onClick={() => setEditorDraft((items) => items.filter((entry) => entry.id !== item.id))}
+                      type="button"
+                    >
+                      <Trash2 size={16}/>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button className="quick-add-new-button" disabled={editorDraft.length >= 8} onClick={addEditorItem} type="button"><Plus size={16}/> Add another option</button>
+            <div className="quick-add-editor-actions">
+              <button className="secondary-action" onClick={() => setEditorOpen(false)} type="button">Cancel</button>
+              <button className="primary-action" onClick={saveEditor} type="button">Save Quick Add</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ActivityComposer({ draft, goalId, goals, onDraftChange, onGoalChange, onSubmit }) {
+  const selectedGoal = goals.find((goal) => String(goal.id) === String(goalId));
+  return (
+    <form className="activity-composer" onSubmit={onSubmit}>
+      <label className="activity-composer-input">
+        <Plus size={20} />
+        <input
+          aria-label="Add a daily activity item"
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder="Add something you need to do today…"
+          value={draft}
+        />
+      </label>
+      <div className="activity-composer-actions">
+        <label className="activity-goal-picker">
+          <span>Goal link</span>
+          <strong>{selectedGoal?.label || 'No goal selected'}</strong>
+          <select
+            aria-label="Connect daily activity item to a goal"
+            onChange={(event) => onGoalChange(event.target.value)}
+            value={goalId}
+          >
+            <option value="">No goal selected</option>
+            {goals.map((goal) => (
+              <option key={goal.id} value={goal.id}>{goal.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={16} />
+        </label>
+        <button className="activity-add-button" disabled={!draft.trim()} type="submit">
+          Add Task
+          <ArrowRight size={17} />
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ActivityCard({
+  editing,
+  editingDraft,
+  goals,
+  item,
+  onCancel,
+  onDelete,
+  onEdit,
+  onEditingDraftChange,
+  onGoalChange,
+  onSave,
+  onToggle
+}) {
+  const linkedGoal = goals.find((goal) => String(goal.id) === String(item.goalId));
+  return (
+    <article className={`activity-card${item.done ? ' completed' : ''}${editing ? ' editing' : ''}`}>
+      <button
+        aria-label={item.done ? `Mark ${item.label} incomplete` : `Mark ${item.label} complete`}
+        aria-pressed={item.done}
+        className="activity-checkbox"
+        onClick={() => onToggle(item.id)}
+        type="button"
+      >
+        {item.done && <Check size={17} />}
+      </button>
+
+      <div className="activity-card-copy">
+        {editing ? (
+          <>
+            <input
+              aria-label={`Edit ${item.label}`}
+              autoFocus
+              className="activity-edit-input"
+              onChange={(event) => onEditingDraftChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') onSave(item.id);
+                if (event.key === 'Escape') onCancel();
+              }}
+              value={editingDraft}
+            />
+            <label className="activity-edit-goal">
+              <Target size={14} />
+              <select
+                aria-label={`Link ${item.label} to goal`}
+                onChange={(event) => onGoalChange(item.id, event.target.value)}
+                value={item.goalId ?? ''}
+              >
+                <option value="">No goal linked</option>
+                {goals.map((goal) => (
+                  <option key={goal.id} value={goal.id}>{goal.label}</option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : (
+          <>
+            <strong>{item.label}</strong>
+            <span><Target size={13} /> {linkedGoal?.label || 'No goal linked'}</span>
+          </>
+        )}
+      </div>
+
+      <div className="activity-card-actions">
+        {editing ? (
+          <>
+            <button className="save" onClick={() => onSave(item.id)} type="button" aria-label={`Save ${item.label}`}><Check size={16} /></button>
+            <button onClick={onCancel} type="button" aria-label={`Cancel editing ${item.label}`}><X size={16} /></button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => onEdit(item)} type="button" aria-label={`Edit ${item.label}`}><PenLine size={15} /></button>
+            <button className="delete" onClick={() => onDelete(item.id)} type="button" aria-label={`Remove ${item.label}`}><Trash2 size={15} /></button>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function AthleteJourneyCard({ journey, onContinue }) {
+  if (!journey) return null;
+  const progress = journeyProgress(journey);
+  if (progress.complete) {
+    return (
+      <section className="journey-next-focus-card">
+        <span>Your next focus</span>
+        <strong>{journey.developmentProfile?.primaryFocusLabel || 'Mental Performance'}</strong>
+        <p>Keep building on the work from your first 21 days.</p>
+        <button type="button" onClick={() => onContinue(null)}>Choose My Next Plan <ArrowRight size={17}/></button>
+      </section>
+    );
+  }
+  const day = progress.nextDay;
+  return (
+    <section className="athlete-journey-card" aria-labelledby="journey-card-title">
+      <div className="journey-card-topline"><span>Your 21-Day Journey</span><strong>Day {day?.day || 1} of 21</strong></div>
+      <div className="journey-card-heading">
+        <span>Current focus</span>
+        <h2 id="journey-card-title">{day?.focus || journey.developmentProfile?.primaryFocusLabel || 'Mental Performance'}</h2>
+      </div>
+      <div className="journey-progress-row">
+        <div aria-label={`${progress.percent}% of journey complete`}><i style={{ width: `${progress.percent}%` }}/></div>
+        <span>{progress.percent}%</span>
+      </div>
+      <div className="journey-today-work">
+        <span>{day?.type === 'plan' ? 'Today’s read' : 'Today’s action'}</span>
+        <strong>{day?.title}</strong>
+        {day?.type === 'plan' && <em>{day.seriesTitle} · Day {day.planDay}</em>}
+        <p>{day?.action}</p>
+      </div>
+      <button className="journey-continue-button" type="button" onClick={() => onContinue(day)}>
+        {journey.startedAt ? 'Continue Journey' : 'Start My Journey'} <ArrowRight size={18}/>
+      </button>
+    </section>
   );
 }
 
 function HomeScreen({
   athleteScore,
   athleteProfile,
+  athleteJourney,
   athleteStartComplete,
   awardPoints,
   celebrate,
   completion,
   confidenceAverage,
   goals,
-  todayGoalSelection,
   scores,
   standards,
   standardDraft,
@@ -6417,6 +7779,8 @@ function HomeScreen({
   setTab,
   openJournal,
   setRequestedPlanSeriesId,
+  setRequestedPlanId,
+  setAthleteJourney,
   notifyUser,
   lastSubmittedDate,
   lesson,
@@ -6428,7 +7792,8 @@ function HomeScreen({
   submittedToday,
   todayPoints,
   trackAnalyticsEvent,
-  userId
+  userId,
+  requestMilestoneReview
 }) {
   const [standardsFeedback, setStandardsFeedback] = useState('');
   const [standardsHistoryOpen, setStandardsHistoryOpen] = useState(false);
@@ -6436,18 +7801,77 @@ function HomeScreen({
   const [editingStandardId, setEditingStandardId] = useState(null);
   const [editingStandardDraft, setEditingStandardDraft] = useState('');
   const [dayCompletion, setDayCompletion] = useState(null);
+  const [integrationDayOpen, setIntegrationDayOpen] = useState(null);
+  const [integrationReflection, setIntegrationReflection] = useState('');
   const completedStandards = standards.filter((standard) => standard.done);
   const allStandardsCompleted = standards.length > 0 && completedStandards.length === standards.length;
+  const activityCompletionPercent = standards.length
+    ? Math.round((completedStandards.length / standards.length) * 100)
+    : 0;
   const recentStandardsHistory = [...standardsHistory].reverse().slice(0, 7);
   const averageGoalProgress = goals.length
     ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress), 0) / goals.length)
     : 0;
   const planSeriesStats = planSeriesCompletion(plans, planProgress);
-  const activeGoals = goals.filter((goal) => Number(goal.progress) < 100);
-  const selectedTodayGoals = todayGoalSelection?.configured
-    ? activeGoals.filter((goal) => todayGoalSelection.ids.includes(String(goal.id)))
-    : activeGoals.slice(0, 1);
   const todaysFocus = lessonFocusQuestion(lesson);
+
+  function openJourneyDay(day) {
+    if (!day) {
+      setTab('plans');
+      return;
+    }
+    if (!athleteJourney?.startedAt) {
+      setAthleteJourney((current) => current ? { ...current, startedAt: new Date().toISOString() } : current);
+      trackAnalyticsEvent?.('journey_started', { journeyId: athleteJourney?.id }, { area: 'journey' });
+    }
+    trackAnalyticsEvent?.('journey_day_started', { journeyId: athleteJourney?.id, day: day.day, dayType: day.type }, { area: 'journey' });
+    if (day.type === 'plan') {
+      const seriesId = String(day.seriesTitle || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      setRequestedPlanSeriesId(seriesId);
+      setRequestedPlanId(String(day.planId));
+      setTab('plans');
+      return;
+    }
+    setIntegrationReflection('');
+    setIntegrationDayOpen(day);
+  }
+
+  function completeIntegrationDay() {
+    if (!integrationDayOpen || !athleteJourney) return;
+    const completedAt = new Date().toISOString();
+    const nextDays = athleteJourney.days.map((day) => day.day === integrationDayOpen.day
+      ? { ...day, completedAt, reflection: integrationReflection.trim() }
+      : day);
+    const journeyComplete = nextDays.every((day) => Boolean(day.completedAt));
+    setAthleteJourney({
+      ...athleteJourney,
+      startedAt: athleteJourney.startedAt || completedAt,
+      days: nextDays,
+      completedAt: journeyComplete ? completedAt : athleteJourney.completedAt
+    });
+    awardPoints?.({
+      type: 'integration_day_completed',
+      points: pointValues.integrationDayCompleted,
+      label: `Journey Day ${integrationDayOpen.day} completed`,
+      uniqueKey: `journey-integration-${athleteJourney.id}-${integrationDayOpen.day}`,
+      metadata: { journeyId: athleteJourney.id, day: integrationDayOpen.day, integrationKind: integrationDayOpen.integrationKind }
+    });
+    trackAnalyticsEvent?.('integration_day_completed', { journeyId: athleteJourney.id, day: integrationDayOpen.day, integrationKind: integrationDayOpen.integrationKind }, { area: 'journey' });
+    trackAnalyticsEvent?.('journey_day_completed', { journeyId: athleteJourney.id, day: integrationDayOpen.day, dayType: 'integration' }, { area: 'journey' });
+    if (journeyComplete) {
+      awardPoints?.({
+        type: 'journey_completed',
+        points: pointValues.journeyCompleted,
+        label: 'First 21-Day Journey completed',
+        uniqueKey: `journey-completed-${athleteJourney.id}`,
+        metadata: { journeyId: athleteJourney.id }
+      });
+      trackAnalyticsEvent?.('journey_completed', { journeyId: athleteJourney.id }, { area: 'journey' });
+    }
+    setIntegrationDayOpen(null);
+    setIntegrationReflection('');
+    celebrate(journeyComplete ? 'Your first 21 is complete. The climb isn’t.' : `Journey Day ${integrationDayOpen.day} complete. +${pointValues.integrationDayCompleted} PP.`);
+  }
 
   function addStandard(event) {
     event.preventDefault();
@@ -6523,6 +7947,7 @@ function HomeScreen({
     }
 
     const submissionDate = todayKey();
+    const isFirstLockedDay = new Set(standardsHistory.map((entry) => entry.date)).size === 0;
     const nextStreak = lastSubmittedDate === addDays(submissionDate, -1) ? streakCount + 1 : 1;
     const completedGoalIds = [...new Set(completedStandards.map((standard) => standard.goalId).filter(Boolean))];
     setStreakCount(nextStreak);
@@ -6565,7 +7990,8 @@ function HomeScreen({
       streakBefore: streakCount,
       streakAfter: nextStreak,
       completed: completedStandards.length,
-      total: standards.length
+      total: standards.length,
+      requestReview: isFirstLockedDay
     });
     setStandardsFeedback('');
     trackAnalyticsEvent?.('daily_productivity_submitted', {
@@ -6662,7 +8088,7 @@ function HomeScreen({
         <div className="day-complete-overlay" role="dialog" aria-modal="true" aria-label="Day complete">
           <div className="day-complete-check"><Check size={46}/></div>
           <h2>Day Complete</h2>
-          <strong className="day-complete-points">+{dayCompletion.points} Points</strong>
+          <strong className="day-complete-points">+{dayCompletion.points} PP</strong>
           <p>Discipline today. A stronger tomorrow.</p>
           <div className="day-complete-results">
             <span><em>Score</em><strong>{dayCompletion.scoreBefore} → {dayCompletion.scoreAfter}</strong></span>
@@ -6670,7 +8096,19 @@ function HomeScreen({
             <span><em>Streak</em><strong>{dayCompletion.streakBefore} → {dayCompletion.streakAfter}</strong></span>
           </div>
           <blockquote>“You showed up. That’s who you are becoming.”</blockquote>
-          <button className="secondary-action full day-complete-secondary" onClick={() => setDayCompletion(null)} type="button">View Today</button>
+          <button
+            className="secondary-action full day-complete-secondary"
+            onClick={() => {
+              const shouldRequestReview = dayCompletion.requestReview;
+              setDayCompletion(null);
+              if (shouldRequestReview) {
+                window.setTimeout(() => requestMilestoneReview?.('first_locked_day'), 350);
+              }
+            }}
+            type="button"
+          >
+            View Today
+          </button>
         </div>
       )}
       <section className="panel daily-deposit-panel today-page-hero">
@@ -6684,178 +8122,111 @@ function HomeScreen({
         </div>
         <div className="today-command-grid" aria-label="Today’s snapshot">
           <span>
+            <i><Check size={17} /></i>
             <strong>{completedStandards.length}/{standards.length}</strong>
-            Productivity
+            <em>Productivity</em>
           </span>
           <span>
+            <i><Star size={17} /></i>
             <strong>{athleteScore}</strong>
-            Score
+            <em>Points</em>
           </span>
           <span>
+            <i><Flame size={17} /></i>
             <strong>{streakCount}</strong>
-            Streak
+            <em>Streak</em>
           </span>
         </div>
       </section>
 
-      <section className="panel today-current-goals">
-        <PanelTitle
-          icon={<Target size={18} />}
-          title={selectedTodayGoals.length === 1 ? 'Current Goal' : 'Current Goals'}
-        />
-        {selectedTodayGoals.length ? (
-          <div className="today-goal-list">
-            {selectedTodayGoals.map((goal) => (
-              <div className="goal-progress-callout" key={goal.id}>
-                <span>{goal.label}</span>
-                <strong>{goal.value}</strong>
-                <Progress value={goal.progress} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="empty-note">Choose which goals appear here from the Goals tab.</p>
-        )}
-      </section>
+      <AthleteJourneyCard journey={athleteJourney} onContinue={openJourneyDay} />
 
-      <section className="panel daily-standards-panel">
-        <PanelTitle icon={<BadgeCheck size={18} />} title="Daily Activity Tracker" />
-        <div className="daily-standards-card">
-          <p className="info-note">Add what you need to handle today. Update it as you go, then lock in the day once everything is complete.</p>
-          <div className="productivity-summary" aria-label="Daily activity tracker summary">
-            <span>
-              <strong>{completedStandards.length}</strong>
-              Done
-            </span>
-            <span>
-              <strong>{Math.max(standards.length - completedStandards.length, 0)}</strong>
-              Left
-            </span>
-            <span>
-              <strong>{streakCount}</strong>
-              Streak
-            </span>
-          </div>
-          <div className="standard-examples" aria-label="Productivity examples">
-            <span>Quick add</span>
-            <button type="button" onClick={() => setStandardDraft('Complete training with intent')}>
-              Training
-            </button>
-            <button type="button" onClick={() => setStandardDraft('Handle recovery routine')}>
-              Recovery
-            </button>
-            <button type="button" onClick={() => setStandardDraft('Finish schoolwork')}>
-              Schoolwork
-            </button>
-            <button type="button" onClick={() => setStandardDraft('Get extra quality reps')}>
-              Extra reps
+      <section className="activity-tracker" aria-labelledby="activity-tracker-title">
+        <ActivityTrackerHero
+          completed={completedStandards.length}
+          percent={activityCompletionPercent}
+          streak={streakCount}
+          total={standards.length}
+        />
+
+        <QuickAddSection draft={standardDraft} onSelect={setStandardDraft} userId={userId} />
+
+        <ActivityComposer
+          draft={standardDraft}
+          goalId={standardGoalId}
+          goals={goals}
+          onDraftChange={setStandardDraft}
+          onGoalChange={setStandardGoalId}
+          onSubmit={addStandard}
+        />
+
+        <div className="activity-list-section">
+          <div className="activity-list-heading">
+            <div>
+              <span>Today’s activities</span>
+              <strong>{standards.length ? `${completedStandards.length} of ${standards.length} complete` : 'Build today’s work'}</strong>
+            </div>
+            <button className="activity-history-link" onClick={() => setStandardsHistoryOpen(true)} type="button">
+              <BarChart3 size={15} />
+              History
             </button>
           </div>
-          <form className="standard-form" onSubmit={addStandard}>
-            <input
-              value={standardDraft}
-              onChange={(event) => setStandardDraft(event.target.value)}
-              placeholder="Add something you need to do today"
-              aria-label="Add a daily activity item"
-            />
-            <select
-              aria-label="Connect daily activity item to a goal"
-              value={standardGoalId}
-              onChange={(event) => setStandardGoalId(event.target.value)}
-            >
-              <option value="">Goal link</option>
-              {goals.map((goal) => (
-                <option key={goal.id} value={goal.id}>
-                  {goal.label}
-                </option>
-              ))}
-            </select>
-            <button className="icon-button dark" type="submit" aria-label="Add daily activity item">
-              <Plus size={18} />
-            </button>
-          </form>
-          <div className="checklist">
+
+          <div className="activity-card-list">
             {standards.map((item) => (
-              <div
-                className={item.done ? 'check-row checked' : 'check-row'}
+              <ActivityCard
+                editing={editingStandardId === item.id}
+                editingDraft={editingStandardDraft}
+                goals={goals}
+                item={item}
                 key={item.id}
-              >
-                <button
-                  className="standard-toggle"
-                  onClick={() =>
-                    setStandards((current) =>
-                      current.map((standard) =>
-                        standard.id === item.id ? { ...standard, done: !standard.done } : standard
-                      )
+                onCancel={cancelEditingStandard}
+                onDelete={removeStandard}
+                onEdit={startEditingStandard}
+                onEditingDraftChange={setEditingStandardDraft}
+                onGoalChange={updateStandardGoal}
+                onSave={saveEditingStandard}
+                onToggle={(id) => {
+                  setStandards((current) =>
+                    current.map((standard) =>
+                      standard.id === id ? { ...standard, done: !standard.done } : standard
                     )
-                  }
-                  type="button"
-                >
-                  <span className="check-box">{item.done && <Check size={14} />}</span>
-                </button>
-                <span className="standard-task-copy">
-                  {editingStandardId === item.id ? (
-                    <input
-                      className="standard-edit-input"
-                      value={editingStandardDraft}
-                      onChange={(event) => setEditingStandardDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') saveEditingStandard(item.id);
-                        if (event.key === 'Escape') cancelEditingStandard();
-                      }}
-                      aria-label={`Edit ${item.label}`}
-                      autoFocus
-                    />
-                  ) : (
-                    <strong>{item.label}</strong>
-                  )}
-                  <em>{goals.find((goal) => goal.id === item.goalId)?.label ?? 'No goal linked'}</em>
-                </span>
-                <select
-                  aria-label={`Link ${item.label} to goal`}
-                  value={item.goalId ?? ''}
-                  onChange={(event) => updateStandardGoal(item.id, event.target.value)}
-                >
-                  <option value="">No goal</option>
-                  {goals.map((goal) => (
-                    <option key={goal.id} value={goal.id}>
-                      {goal.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="standard-row-actions">
-                  {editingStandardId === item.id ? (
-                    <>
-                      <button className="standard-action-button" onClick={() => saveEditingStandard(item.id)} type="button" aria-label={`Save ${item.label}`}>
-                        <Check size={16} />
-                      </button>
-                      <button className="standard-action-button" onClick={cancelEditingStandard} type="button" aria-label={`Cancel editing ${item.label}`}>
-                        <X size={16} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="standard-action-button" onClick={() => startEditingStandard(item)} type="button" aria-label={`Edit ${item.label}`}>
-                        <PenLine size={16} />
-                      </button>
-                      <button className="remove-standard" onClick={() => removeStandard(item.id)} type="button" aria-label={`Remove ${item.label}`}>
-                        <Trash2 size={16} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                  );
+                }}
+              />
             ))}
           </div>
-          {standards.length === 0 && <p className="empty-note">Start by adding one thing you need to handle today.</p>}
-          {standardsFeedback && <p className="inline-warning">{standardsFeedback}</p>}
-          <button className={submittedToday ? 'secondary-action submitted' : 'secondary-action'} onClick={submitStandards}>
-            {submittedToday ? 'Locked In For Today' : 'Lock In My Day'}
+
+          {standards.length === 0 && (
+            <div className="activity-empty-state">
+              <Check size={20} />
+              <div>
+                <strong>Your work starts here.</strong>
+                <span>Add the actions that will move you forward today.</span>
+              </div>
+            </div>
+          )}
+          {standardsFeedback && <p className="inline-warning activity-feedback">{standardsFeedback}</p>}
+
+          {allStandardsCompleted && !submittedToday && (
+            <div className="activity-ready-banner">
+              <span><Check size={16} /> Today’s work is complete.</span>
+              <strong>100%</strong>
+            </div>
+          )}
+
+          <button
+            className={`activity-lock-button${allStandardsCompleted ? ' ready' : ''}${submittedToday ? ' submitted' : ''}`}
+            onClick={submitStandards}
+            type="button"
+          >
+            {submittedToday ? (
+              <><Check size={18} /> Locked In For Today</>
+            ) : (
+              <>Lock In My Day <ArrowRight size={18} /></>
+            )}
           </button>
-          <button className="history-sheet-trigger" onClick={() => setStandardsHistoryOpen(true)} type="button">
-            <BarChart3 size={16} />
-            View activity history
-          </button>
+
           {submittedToday && (
             <button className="reflection-cta" onClick={openDailyReflection}>
               <PenLine size={17} />
@@ -6874,11 +8245,28 @@ function HomeScreen({
         trackAnalyticsEvent={trackAnalyticsEvent}
       />
 
+      {integrationDayOpen && (
+        <div className="bottom-sheet-backdrop journey-integration-backdrop" role="presentation" onClick={() => setIntegrationDayOpen(null)}>
+          <section className="journey-integration-sheet" role="dialog" aria-modal="true" aria-label={`Journey Day ${integrationDayOpen.day}`} onClick={(event) => event.stopPropagation()}>
+            <button className="sheet-close-button" type="button" onClick={() => setIntegrationDayOpen(null)} aria-label="Close Journey day"><X size={18}/></button>
+            <span>Day {integrationDayOpen.day} of 21 · Integration Day</span>
+            <h2>{integrationDayOpen.title}</h2>
+            <div className="journey-integration-action"><strong>Today’s action</strong><p>{integrationDayOpen.action}</p></div>
+            <label>
+              <span>Today’s reflection</span>
+              <strong>{integrationDayOpen.reflection}</strong>
+              <textarea value={integrationReflection} onChange={(event) => setIntegrationReflection(event.target.value)} placeholder="Write what you noticed…" />
+            </label>
+            <button className="primary-action full" type="button" onClick={completeIntegrationDay}>Complete Today’s Work <Check size={17}/></button>
+          </section>
+        </div>
+      )}
+
       <section className="panel athlete-score-panel">
-        <PanelTitle icon={<Star size={18} />} title="Complete Athlete Score" action={`Today +${todayPoints}`} />
+        <PanelTitle icon={<Star size={18} />} title="Performance Points" action={`Today +${todayPoints} PP`} />
         <div className="score-hero">
           <strong>{athleteScore}</strong>
-          <span>Total points earned through daily activity, goals, plans, and reflection.</span>
+          <span>Evidence of work earned through daily activity, goals, plans, and reflection.</span>
           <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
             <CircleHelp size={15} />
             How points work
@@ -6910,7 +8298,7 @@ function HomeScreen({
             <div className="sheet-handle" aria-hidden="true" />
             <div className="sheet-head">
               <div>
-                <span>Complete Athlete Score</span>
+                <span>Performance Points</span>
                 <strong>How points work</strong>
               </div>
               <button className="icon-button sheet-close" onClick={() => setScoreInfoOpen(false)} type="button" aria-label="Close points explanation">
@@ -7178,8 +8566,6 @@ function GoalsScreen({
   celebrate,
   goalDraft,
   goals,
-  todayGoalSelection,
-  setTodayGoalSelection,
   setGoalDraft,
   setGoals,
   standards,
@@ -7194,7 +8580,6 @@ function GoalsScreen({
   const completedGoals = goals.filter((goal) => Number(goal.progress) >= 100);
   const linkedStandards = standards.filter((standard) => standard.goalId);
   const completedLinkedStandards = linkedStandards.filter((standard) => standard.done);
-  const defaultTodayGoalId = goals.find((goal) => Number(goal.progress) < 100)?.id;
   const filteredGoals = goals.filter((goal) => {
     const archived = archivedGoalIds.includes(goal.id);
     if (goalFilter === 'archived') return archived;
@@ -7207,21 +8592,6 @@ function GoalsScreen({
       const next = current.includes(id) ? current.filter((goalId) => goalId !== id) : [...current, id];
       localStorage.setItem('the-complete-athlete-archived-goals', JSON.stringify(next));
       return next;
-    });
-  }
-
-  function toggleGoalOnToday(id) {
-    setTodayGoalSelection((current) => {
-      const baselineIds = current.configured
-        ? current.ids
-        : defaultTodayGoalId == null ? [] : [String(defaultTodayGoalId)];
-      const goalId = String(id);
-      return {
-        configured: true,
-        ids: baselineIds.includes(goalId)
-          ? baselineIds.filter((item) => item !== goalId)
-          : [...baselineIds, goalId]
-      };
     });
   }
 
@@ -7303,7 +8673,7 @@ function GoalsScreen({
         <Plus size={18} /> {goalComposerOpen ? 'Close Goal Form' : 'Add Goal'}
       </button>
       {goalComposerOpen && <section className="panel goal-composer-panel">
-        <PanelTitle icon={<Plus size={18} />} title="Add Goal" action="Athlete controlled" />
+        <PanelTitle icon={<Plus size={18} />} title="Add Goal" />
         <form className="goal-form" onSubmit={addGoal}>
           <input
             className="text-field"
@@ -7339,9 +8709,6 @@ function GoalsScreen({
           const completedGoalStandards = goalStandards.filter((standard) => standard.done);
           const goalProgress = Math.max(0, Math.min(100, Number(goal.progress) || 0));
           const progressInputId = `goal-progress-${goal.id}`;
-          const shownOnToday = todayGoalSelection.configured
-            ? todayGoalSelection.ids.includes(String(goal.id))
-            : String(goal.id) === String(defaultTodayGoalId);
           return (
             <section className="goal-card editable" key={goal.id}>
               <label>
@@ -7400,18 +8767,6 @@ function GoalsScreen({
                   aria-label={`Completion date for ${goal.label || 'goal'}`}
                 />
               </label>
-              <label className="goal-today-toggle">
-                <span>
-                  <strong>Show on Today</strong>
-                  <small>Keep this goal visible above your Daily Activity Tracker.</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={shownOnToday}
-                  onChange={() => toggleGoalOnToday(goal.id)}
-                  aria-label={`Show ${goal.label || 'goal'} on Today`}
-                />
-              </label>
               <div className="goal-linked-standards">
                 <strong>Daily activity helping this goal</strong>
                 {goalStandards.length === 0 ? (
@@ -7450,7 +8805,7 @@ function GoalsScreen({
   );
 }
 
-function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', setRequestedPlanSeriesId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, trackAnalyticsEvent }) {
+function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', requestedPlanId = '', setRequestedPlanSeriesId, setRequestedPlanId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, requestMilestoneReview, trackAnalyticsEvent }) {
   const readOnly = !setPlanProgress;
   const today = todayKey();
   const sequencedPlans = trialPlanMode
@@ -7459,7 +8814,6 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   const planLibrary = buildPlanLibrary(sequencedPlans);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [planSearch, setPlanSearch] = useState('');
   const [planDetailTab, setPlanDetailTab] = useState('summary');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
@@ -7468,10 +8822,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
   const categoryLibrary = activeCategory === 'All'
     ? planLibrary
     : planLibrary.filter((series) => series.category === activeCategory);
-  const filteredLibrary = categoryLibrary.filter((series) => {
-    const query = planSearch.trim().toLowerCase();
-    return !query || `${series.title} ${series.tagline} ${series.category}`.toLowerCase().includes(query);
-  });
+  const filteredLibrary = categoryLibrary;
   const visiblePlans = selectedSeries?.plans ?? [];
   const defaultVisiblePlan = visiblePlans.find((plan) => plan.unlocked && !plan.completedAt)
     ?? [...visiblePlans].reverse().find((plan) => plan.unlocked)
@@ -7488,9 +8839,14 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
     if (!requestedPlanSeriesId) return;
     if (planLibrary.some((series) => series.id === requestedPlanSeriesId)) {
       setSelectedSeriesId(requestedPlanSeriesId);
+      if (requestedPlanId) {
+        setPlanDetailTab('lessons');
+        setSelectedPlanId(String(requestedPlanId));
+      }
     }
     setRequestedPlanSeriesId?.('');
-  }, [planLibrary, requestedPlanSeriesId, setRequestedPlanSeriesId]);
+    setRequestedPlanId?.('');
+  }, [planLibrary, requestedPlanId, requestedPlanSeriesId, setRequestedPlanId, setRequestedPlanSeriesId]);
 
   function openSeries(series, source) {
     setSelectedSeriesId(series.id);
@@ -7517,6 +8873,9 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
       [String(planId)]: today
     };
     const seriesAwarded = seriesPlans.length > 0 && seriesPlans.every((item) => Boolean(nextProgress[String(item.id)]));
+    const firstSeriesCompleted = seriesAwarded
+      && planSeriesCompletion(plans, planProgress).completed === 0
+      && planSeriesCompletion(plans, nextProgress).completed === 1;
 
     trackAnalyticsEvent?.('plan_lesson_complete_clicked', {
       planId: String(planId),
@@ -7549,6 +8908,9 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
         type: 'planUnlocks',
         id: `plan-series-notification-${seriesTitle}`
       });
+      if (firstSeriesCompleted) {
+        window.setTimeout(() => requestMilestoneReview?.('first_completed_plan'), 500);
+      }
     } else {
       const nextPlan = seriesPlans
         .sort((first, second) => planDayNumber(first) - planDayNumber(second))
@@ -7603,7 +8965,7 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
                 <p>{planDisplaySubject(selectedVisiblePlan)}</p>
               </div>
               {selectedVisiblePlan.unlocked && selectedVisiblePlan.steps.length > 0 && (
-                <PlanEpisode steps={selectedVisiblePlan.steps} planId={selectedVisiblePlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedVisiblePlan.id)} />
+                <PlanEpisode language={language} steps={selectedVisiblePlan.steps} planId={selectedVisiblePlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedVisiblePlan.id)} />
               )}
               {!selectedVisiblePlan.unlocked && (
                 <div className="locked-message">
@@ -7657,10 +9019,6 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
           <p className="empty-note">No performance plans are open yet. Check back on the next release day.</p>
         ) : (
           <>
-            <label className="plan-search">
-              <span aria-hidden="true">⌕</span>
-              <input aria-label="Search performance plans" placeholder="Search plans..." value={planSearch} onChange={(event) => setPlanSearch(event.target.value)} />
-            </label>
             <div className="plan-category-strip" aria-label="Plan categories">
               {categories.map((category) => (
                 <button
@@ -7692,14 +9050,14 @@ function PlansScreen({ plans, planProgress, trialPlanMode = false, requestedPlan
 }
 
 function planSeriesTitle(plan) {
-  const subject = String(plan?.subject ?? '');
+  const subject = String(plan?.subjectEn ?? plan?.subject ?? '');
   const match = subject.match(/Series:\s*([^.!]+)[.!]?/i);
   return match?.[1]?.trim() || 'Performance Plans';
 }
 
 function planSeriesTagline(plan) {
   const subject = String(plan?.subject ?? '');
-  const withoutSeries = subject.replace(/Series:\s*[^.!]+[.!]?\s*/i, '').trim();
+  const withoutSeries = subject.replace(/(?:Series|Serie):\s*[^.!]+[.!]?\s*/i, '').trim();
   return withoutSeries || 'Mental performance lessons for practice, games, and pressure moments.';
 }
 
@@ -7708,7 +9066,7 @@ function planDisplaySubject(plan) {
 }
 
 function planCategory(plan) {
-  const text = `${planSeriesTitle(plan)} ${plan?.subject ?? ''}`.toLowerCase();
+  const text = `${planSeriesTitle(plan)} ${plan?.subjectEn ?? plan?.subject ?? ''}`.toLowerCase();
   if (text.includes('goal blueprint') || text.includes('90-day target')) return 'Goals';
   if (text.includes('faith') || text.includes('god') || text.includes('scripture') || text.includes('compete differently')) return 'Faith';
   if (text.includes('90%') || text.includes('ninety') || text.includes('identity')) return 'Mindset';
@@ -7860,7 +9218,7 @@ function buildPlanLibrary(plans) {
     if (!groups.has(id)) {
       groups.set(id, {
         id,
-        title,
+        title: String(plan.subject || '').match(/(?:Series|Serie):\s*([^.!]+)[.!]?/i)?.[1]?.trim() || title,
         category: planCategory(plan),
         coverImage: planCoverImage(title),
         thumbnailImage: planThumbnailImage(title),
@@ -8044,6 +9402,20 @@ function buildPlanReaderSections(blocks, planId) {
 }
 
 const explicitPlanSectionHeadings = new Set([
+  'Modelo mental',
+  'Este capítulo le ayudará',
+  'Este capítulo te ayudará',
+  'Apertura',
+  'Retirar el telón',
+  'Historia',
+  'historia',
+  'La historia',
+  'Por qué esto importa',
+  'Actualización del sistema',
+  'Instalación de práctica',
+  'Sala de reflexión',
+  'Principio de Complete Athlete',
+  'Siguiente capítulo',
   'Mental Model',
   'This Chapter Will Help You',
   'Opening',
@@ -8282,13 +9654,14 @@ function isPreservedHeadingLine(line) {
 }
 
 function explicitPlanReaderSections(body, preserveHeadings = false) {
+  const headingSet = new Set([...explicitPlanSectionHeadings].flatMap((heading) => [heading, translateText(heading, 'es')]));
   const lines = planReaderBody(body)
     .split(/\n+/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
   if (!lines.some((line) =>
-    explicitPlanSectionHeadings.has(line) ||
+    headingSet.has(line) ||
     /^Day\s+\d+:/i.test(line) ||
     /^DAY\s+\d+\s+-/i.test(line) ||
     /^Next Chapter:/i.test(line) ||
@@ -8300,7 +9673,7 @@ function explicitPlanReaderSections(body, preserveHeadings = false) {
 
   lines.forEach((line) => {
     if (
-      explicitPlanSectionHeadings.has(line) ||
+      headingSet.has(line) ||
       /^Day\s+\d+:/i.test(line) ||
       /^DAY\s+\d+\s+-/i.test(line) ||
       /^Next Chapter:/i.test(line) ||
@@ -8395,7 +9768,7 @@ function sectionAudioText(section) {
   return cleanAudioText(`${title}${body}`);
 }
 
-function PlanAudioControls({ sections, planId }) {
+function PlanAudioControls({ language = 'en', sections, planId }) {
   const speechRef = useRef({
     sectionIndex: 0,
     mode: 'section',
@@ -8466,7 +9839,7 @@ function PlanAudioControls({ sections, planId }) {
   }
 
   function audioCacheKey(sectionIndex, text) {
-    return `${planId}:${sectionIndex}:${text.length}:${text.slice(0, 48)}`;
+    return `${language}:${planId}:${sectionIndex}:${text.length}:${text.slice(0, 48)}`;
   }
 
   async function getNarratedAudio(sectionIndex, text) {
@@ -8510,7 +9883,7 @@ function PlanAudioControls({ sections, planId }) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ planId, text })
+      body: JSON.stringify({ language, planId, text })
     });
 
     if (!response.ok) throw new Error('Narrated audio unavailable.');
@@ -8696,7 +10069,7 @@ function PlanAudioControls({ sections, planId }) {
   );
 }
 
-function PlanEpisode({ steps, planId, preserveHeadings = false }) {
+function PlanEpisode({ language = 'en', steps, planId, preserveHeadings = false }) {
   const body = steps.join('\n\n');
   const sections = explicitPlanReaderSections(body, preserveHeadings);
   const readerSections = sections.length ? sections : buildPlanReaderSections(planReaderBlocks(body), planId);
@@ -8704,7 +10077,7 @@ function PlanEpisode({ steps, planId, preserveHeadings = false }) {
   return (
     <div className="episode-flow episode-page-flow">
       <article className="episode-section episode-page" key={`${planId}-page`}>
-        <PlanAudioControls sections={readerSections} planId={planId} />
+        <PlanAudioControls language={language} sections={readerSections} planId={planId} />
         {readerSections.map((section, sectionIndex) => (
           <section className={`reader-section reader-section-${section.tone}`} key={`${planId}-section-${sectionIndex}`}>
             <div className="reader-section-header">
@@ -8866,7 +10239,7 @@ function JournalScreen({
               <span>{entry.type}</span>
               <strong>{entry.date} at {entry.time}</strong>
               {linkedGoal && <em>Connected to {linkedGoal.label}</em>}
-              <p>{entry.body}</p>
+              <p translate="no">{entry.body}</p>
             </div>
             <button
               aria-label={`Delete journal entry from ${entry.date}`}
@@ -8974,6 +10347,7 @@ function CoachScreen({
   authSession,
   coachSessions,
   lesson,
+  language,
   goals,
   messages,
   messageDraft,
@@ -9085,6 +10459,8 @@ function CoachScreen({
       method: 'POST',
       headers,
       body: JSON.stringify({
+        language,
+        locale: language === 'es' ? 'es-US' : 'en-US',
         message: clean,
         sessionId: String(sessionId),
         sessionTitle,
@@ -9274,7 +10650,7 @@ function CoachScreen({
             </div>
           )}
           {messages.map((message, index) => (
-            <div className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'} key={`${message.role}-${index}`}>
+            <div translate="no" className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'} key={`${message.role}-${index}`}>
               {message.text}
             </div>
           ))}
@@ -9409,8 +10785,8 @@ function MembershipCheckScreen() {
     <main className="trial-gate-shell">
       <section className="trial-gate-card membership-check-card" aria-live="polite">
         <span className="trial-kicker">The Complete Athlete</span>
-        <h1>Checking membership...</h1>
-        <p>Getting your account ready.</p>
+        <h1>Welcome back</h1>
+        <p>Opening your account...</p>
       </section>
     </main>
   );
@@ -9443,9 +10819,12 @@ function TrialPaywallScreen({
       return primaryChallenge.planKeywords.some((keyword) => text.includes(keyword));
     })
     ?? planLibrary[0];
-  const goalLabels = challenges.slice(0, 2).map((challenge) => challenge.shortLabel);
   const personalizedAthletePaywall = role === 'athlete' && !trialEnded;
   const personalizedParentPaywall = role === 'parent' && !trialEnded;
+  const athleteFirstName = String(athleteProfile?.name || '').trim().split(/\s+/)[0];
+  const displayAthleteFirstName = athleteFirstName
+    ? `${athleteFirstName.charAt(0).toLocaleUpperCase()}${athleteFirstName.slice(1)}`
+    : '';
 
   useEffect(() => {
     if (paywallViewed.current) return;
@@ -9455,7 +10834,12 @@ function TrialPaywallScreen({
       challengeIds: challenges.map((challenge) => challenge.id),
       recommendedPlan: recommendedPlan?.title || ''
     }, { area: 'monetization' });
-  }, [personalizedAthletePaywall, personalizedParentPaywall, trialEnded]);
+    if (role === 'parent') {
+      trackAnalyticsEvent?.('parent_paywall_viewed', {
+        context: personalizedParentPaywall ? 'after_parent_recommendations' : trialEnded ? 'trial_expired' : 'membership_required'
+      }, { area: 'monetization' });
+    }
+  }, [personalizedAthletePaywall, personalizedParentPaywall, role, trialEnded]);
 
   const title = trialEnded
     ? 'Your free trial has ended'
@@ -9469,7 +10853,7 @@ function TrialPaywallScreen({
       ? 'Give your athlete daily mindset training and structure, with clear progress and parent guidance for you.'
       : 'Support your athlete with clear progress, parent guidance, and the full plan library.'
     : personalizedAthletePaywall
-      ? `Your first rep is complete${athleteProfile?.name ? `, ${String(athleteProfile.name).split(' ')[0]}` : ''}. Keep building with a plan made for what you want to improve.`
+      ? `Your first rep is complete${displayAthleteFirstName ? `, ${displayAthleteFirstName}` : ''}. Now keep building the habits, mindset, and support system that move you forward.`
       : 'Keep your mindset training, daily discipline, and personalized plan moving forward.';
 
   function beginTrial() {
@@ -9498,7 +10882,7 @@ function TrialPaywallScreen({
               />
             )}
             <div>
-              <span>Recommended for {goalLabels.join(' + ')}</span>
+              <span>Your next recommended plan</span>
               <strong>{recommendedPlan?.title || primaryChallenge.recommendedPlanTitle}</strong>
               <em>10 focused minutes a day</em>
             </div>
@@ -9513,14 +10897,14 @@ function TrialPaywallScreen({
             <span><BookOpen size={18} />Get simple parent guidance when needed</span>
           </div>
         ) : (
-          <div className="trial-benefit-list outcome-list">
-            <span><BadgeCheck size={18} />Build confidence through daily evidence</span>
-            <span><RotateCcw size={18} />Reset faster after mistakes</span>
-            <span><Target size={18} />Stay disciplined when motivation changes</span>
-            <span><Goal size={18} />Set meaningful goals and track the daily actions that move them forward</span>
-            <span><BookOpen size={18} />Follow focused performance plans built around what you want to improve</span>
-            <span><MessageCircle size={18} />Get personal guidance from your AI performance coach</span>
-            <span><Users size={18} />Give your family a clear way to support progress</span>
+          <div className="trial-benefit-list outcome-list athlete-development-list" aria-label="Your athlete development progression">
+            <span><BadgeCheck size={18} /><b>Build confidence through daily evidence</b></span>
+            <span><RotateCcw size={18} /><b>Reset faster after mistakes and tough performances</b></span>
+            <span><Target size={18} /><b>Stay disciplined when motivation fades</b></span>
+            <span><Goal size={18} /><b>Set meaningful goals and turn them into daily action</b></span>
+            <span><BookOpen size={18} /><b>Follow focused performance plans built around what you need most</b></span>
+            <span><MessageCircle size={18} /><b>Get personal guidance from your AI performance coach</b></span>
+            <span><Users size={18} /><b>Give your family a clear way to support your progress</b></span>
           </div>
         )}
         {!trialEnded && (
@@ -9644,7 +11028,7 @@ function LegalLink({ href, children }) {
   </>;
 }
 
-function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
+function LegalAccountPanel({ deleteAccount, logoutUser, showAction = true, subscription }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [accountMessage, setAccountMessage] = useState('');
   const canRestore = subscription?.configured && subscription?.native;
@@ -9667,7 +11051,7 @@ function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
 
   return (
     <section className="panel legal-account-panel">
-      <PanelTitle icon={<Shield size={18} />} title="Legal & Account" action="Review" />
+      <PanelTitle icon={<Shield size={18} />} title="Legal & Account" action={showAction ? 'Review' : undefined} />
       <div className="legal-link-grid">
         <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
         <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
@@ -9691,8 +11075,10 @@ function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
   );
 }
 
-function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans, planProgress, setProfileView, streakCount }) {
+function ProfileScreen({ athleteProfile, athleteScore, athleteJourney, authSession, goals, plans, planProgress, setProfileView, streakCount }) {
   const planStats = planSeriesCompletion(plans, planProgress);
+  const rank = athleteRankProgress(athleteScore);
+  const first21 = journeyProgress(athleteJourney);
   const averageGoalProgress = goals.length
     ? Math.round(goals.reduce((total, goal) => total + Number(goal.progress || 0), 0) / goals.length)
     : 0;
@@ -9719,12 +11105,23 @@ function ProfileScreen({ athleteProfile, athleteScore, authSession, goals, plans
           <span>{ageAndState}</span>
         </div>
       </section>
-      <section className="profile-score-card">
-        <div><Trophy size={28} /><strong>{athleteScore}</strong><span>Complete Athlete Score</span></div>
+      <section className="profile-score-card athlete-rank-card">
+        <div className="rank-badge-mark"><Trophy size={28} /></div>
+        <div className="rank-current-copy"><span>Current rank</span><strong>{rank.current.name}</strong><p>{rank.current.identity}</p></div>
+        <div className="rank-points-row"><strong>{athleteScore.toLocaleString()} PP</strong><span>{rank.next ? `${rank.remaining.toLocaleString()} PP to ${rank.next.name}` : 'Highest rank achieved'}</span></div>
+        <div className="rank-progress-track"><i style={{ width: `${rank.percent}%` }}/></div>
         <div className="profile-score-meta">
           <span><strong>{streakCount}</strong>Day streak</span>
           <span><strong>{averageGoalProgress}%</strong>Goal progress</span>
           <span><strong>{planStats.completed}/{planStats.total}</strong>Plans complete</span>
+          <span><strong>{first21.completed}/{first21.total || 21}</strong>Journey days</span>
+        </div>
+        <div className="rank-roadmap" aria-label="Major rank progression">
+          {athleteRanks.map((item, index) => (
+            <span className={index < rank.currentIndex ? 'earned' : index === rank.currentIndex ? 'current' : 'locked'} key={item.name}>
+              {index <= rank.currentIndex ? <Check size={12}/> : <LockKeyhole size={11}/>} {item.name}
+            </span>
+          ))}
         </div>
       </section>
       <section className="profile-menu" aria-label="Profile navigation">
@@ -9765,7 +11162,7 @@ function AthleteStatsScreen({ athleteScore, goals, plans, planProgress, standard
   const averageGoalProgress = goals.length ? Math.round(goals.reduce((sum, goal) => sum + Number(goal.progress || 0), 0) / goals.length) : 0;
   return (
     <section className="stats-dashboard">
-      <div className="stats-hero"><span>Complete Athlete Score</span><strong>{athleteScore}</strong><p>Built through daily activity, goals, plans, and reflection.</p></div>
+      <div className="stats-hero"><span>Performance Points</span><strong>{athleteScore} PP</strong><p>Evidence of work built through daily activity, goals, plans, and reflection.</p></div>
       <div className="stats-grid">
         <article><BadgeCheck size={22}/><strong>{completedActivities}</strong><span>Activities completed</span></article>
         <article><Target size={22}/><strong>{averageGoalProgress}%</strong><span>Average goal progress</span></article>
@@ -9904,6 +11301,7 @@ function AthleteSettingsScreen({
   athleteParentLinkFeedback,
   deleteAccount,
   linkAthleteParentAccessCode,
+  language,
   logoutUser,
   notificationPreferences,
   persistAthleteProfile,
@@ -9913,6 +11311,7 @@ function AthleteSettingsScreen({
   setAthleteParentAccessDraft,
   setAthleteParentLinkFeedback,
   setAthleteProfile,
+  setLanguage,
   setNotificationPreferences,
   setPrivacySettings,
   startPremiumSubscription,
@@ -10322,6 +11721,7 @@ function ParentSettingsScreen({
   linkedAthletes,
   linkedAthleteSummary,
   linkParentAccessCode,
+  language,
   logoutUser,
   notificationPreferences,
   parentAccessDraft,
@@ -10331,44 +11731,17 @@ function ParentSettingsScreen({
   requestBrowserNotifications,
   setParentAccessDraft,
   setParentLinkFeedback,
+  setLanguage,
   subscription,
   unlinkParentAthlete,
-  updateNotificationPreference
+  updateNotificationPreference,
+  requestMilestoneReview
 }) {
   const [parentNotificationsOpen, setParentNotificationsOpen] = useState(true);
   const [familyAccessFeedback, setFamilyAccessFeedback] = useState('');
   const parentName = authSession?.name || 'Parent';
   const parentEmail = authSession?.email || 'No email found';
   const familyAccessCode = authSession?.parentAccessCode || 'TCA-FAMILY';
-  const parentPhotoStorageKey = `the-ninety-percent-parent-photo-${authSession?.id || authSession?.email || 'local-parent'}`;
-  const [parentPhoto, setParentPhoto] = useState(() => {
-    try {
-      return localStorage.getItem(parentPhotoStorageKey) || '';
-    } catch {
-      return '';
-    }
-  });
-  useEffect(() => {
-    try {
-      if (parentPhoto) {
-        localStorage.setItem(parentPhotoStorageKey, parentPhoto);
-      } else {
-        localStorage.removeItem(parentPhotoStorageKey);
-      }
-    } catch {
-      // Local photo saving is a convenience; the account still works if storage is unavailable.
-    }
-  }, [parentPhoto, parentPhotoStorageKey]);
-
-  function updateParentPhoto(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setParentPhoto(reader.result);
-    reader.onerror = () => setFamilyAccessFeedback('Photo could not be added. Choose a different image.');
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  }
 
   function toggleBrowserPush(checked) {
     if (checked) {
@@ -10389,13 +11762,9 @@ function ParentSettingsScreen({
 
   return (
     <>
-      <section className="profile-head parent-settings-head">
+      <section className="profile-head refreshed-profile-head parent-settings-head">
         <div className="profile-avatar parent-profile-avatar">
-          {parentPhoto ? (
-            <img src={parentPhoto} alt="Parent profile" />
-          ) : (
-            <Users size={30} />
-          )}
+          <span>{String(parentName).charAt(0).toUpperCase()}</span>
         </div>
         <div>
           <p className="eyebrow">Parent Profile</p>
@@ -10405,60 +11774,56 @@ function ParentSettingsScreen({
       </section>
 
       <section className="panel parent-account-panel">
-        <PanelTitle icon={<UserRound size={18} />} title="Account" action="Parent" />
+        <PanelTitle icon={<UserRound size={18} />} title="Account" />
         <div className="account-email-card parent-account-card">
           <span>Registered email</span>
           <strong>{parentEmail}</strong>
         </div>
-        <div className="photo-actions parent-photo-actions">
-          <label className="photo-upload">
-            <Camera size={18} />
-            Choose Photo
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={updateParentPhoto} />
-          </label>
-          {parentPhoto && (
-            <button className="secondary-action inline" onClick={() => setParentPhoto('')} type="button">
-              Remove Photo
-            </button>
-          )}
-        </div>
-        <div className="parent-access-code-card">
-          <div>
-            <span>Family access</span>
-            <strong>{linkedAthleteSummary ? `Linked to ${athleteName}` : 'Not linked yet'}</strong>
+        <div className="parent-access-code-card parent-family-access-card">
+          <div className="parent-family-access-head">
+            <span className="parent-family-access-icon"><Users size={20} /></span>
+            <div>
+              <span>Family access</span>
+              <strong>{linkedAthleteSummary ? `Connected to ${athleteName}` : 'Connect your athlete'}</strong>
+            </div>
+            <em className={linkedAthleteSummary ? 'connected' : ''}>{linkedAthleteSummary ? 'Connected' : 'Ready'}</em>
           </div>
-          <div className="family-access-option">
-            <span>Parent has athlete code</span>
-            <p>Enter the code from your athlete’s profile to connect their account.</p>
+          <div className="parent-family-access-route">
+            <div className="family-access-option">
+              <span>Link with an athlete code</span>
+              <p>Enter the code from your athlete’s profile to see their progress here.</p>
+            </div>
+            <form className="standard-form parent-access-code-form" onSubmit={linkParentAccessCode}>
+              <input
+                aria-label="Parent access code"
+                placeholder="Enter athlete code"
+                value={parentAccessDraft}
+                onChange={(event) => {
+                  setParentAccessDraft(event.target.value);
+                  setParentLinkFeedback('');
+                  setFamilyAccessFeedback('');
+                }}
+              />
+              <button className="primary-action" type="submit">
+                {linkedAthleteSummary ? 'Add Athlete' : 'Connect'}
+              </button>
+            </form>
           </div>
-          <form className="standard-form parent-access-code-form" onSubmit={linkParentAccessCode}>
-            <input
-              aria-label="Parent access code"
-              placeholder="Enter athlete code"
-              value={parentAccessDraft}
-              onChange={(event) => {
-                setParentAccessDraft(event.target.value);
-                setParentLinkFeedback('');
-                setFamilyAccessFeedback('');
-              }}
-            />
-            <button className="primary-action" type="submit">
-              {linkedAthleteSummary ? 'Add Athlete' : 'Link Athlete'}
-            </button>
-          </form>
-          <div className="family-access-divider" aria-hidden="true">
-            <span>or</span>
+          <div className="family-access-divider parent-family-access-divider" aria-hidden="true">
+            <span>or share your family code</span>
           </div>
-          <div className="family-access-option">
-            <span>Athlete uses parent code</span>
-            <p>Give this code to your athlete. They can enter it when creating their account to join your membership.</p>
-          </div>
-          <div className="family-access-code-display">
-            <strong>{familyAccessCode}</strong>
-            <button className="secondary-action inline family-invite-button" onClick={copyFamilyAccessCode} type="button">
-              <Copy size={18} />
-              Copy Code
-            </button>
+          <div className="parent-family-access-route share-code-route">
+            <div className="family-access-option">
+              <span>Invite through your membership</span>
+              <p>Your athlete can enter this code while creating their account.</p>
+            </div>
+            <div className="family-access-code-display">
+              <strong>{familyAccessCode}</strong>
+              <button className="secondary-action inline family-invite-button" onClick={copyFamilyAccessCode} type="button">
+                <Copy size={18} />
+                Copy Code
+              </button>
+            </div>
           </div>
           {(parentLinkFeedback || familyAccessFeedback) && <p className="inline-note">{parentLinkFeedback || familyAccessFeedback}</p>}
           {linkedAthletes.some((athlete) => !String(athlete.athlete_user_id).startsWith('local-')) && (
@@ -10477,23 +11842,7 @@ function ParentSettingsScreen({
             </div>
           )}
         </div>
-        <div className="parent-settings-stats">
-          <span>
-            <strong>{linkedAthleteSummary ? athleteName : '—'}</strong>
-            Viewing athlete
-          </span>
-          <span>
-            <strong>{parentGuides.length}</strong>
-            Parent guides
-          </span>
-          <span>
-            <strong>{linkedAthleteSummary ? `${planSeriesStats.completed}/${planSeriesStats.total}` : '—'}</strong>
-            Plans complete
-          </span>
-        </div>
       </section>
-
-      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
 
       <section className={parentNotificationsOpen ? 'panel parent-notifications-panel collapsible-panel open' : 'panel parent-notifications-panel collapsible-panel'}>
         <button
@@ -10560,26 +11909,7 @@ function ParentSettingsScreen({
         )}
       </section>
 
-      <section className="panel parent-support-settings-panel">
-        <PanelTitle icon={<Sparkles size={18} />} title="Support Menu" action="Quick view" />
-        <div className="parent-support-menu">
-          <span>
-            <BookOpen size={18} />
-            <strong>Parent Corner</strong>
-            New guides for conversations at home.
-          </span>
-          <span>
-            <BarChart3 size={18} />
-            <strong>Progress Snapshot</strong>
-            Streaks, work rate, and plan progress.
-          </span>
-          <span>
-            <MessageCircle size={18} />
-            <strong>Encouragement</strong>
-            Send quick support from Overview.
-          </span>
-        </div>
-      </section>
+      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} showAction={false} subscription={subscription} />
     </>
   );
 }
@@ -10592,6 +11922,7 @@ function ParentDashboard({
   deleteAccount,
   goals,
   journalEntries,
+  language,
   lesson,
   linkedAthletes,
   linkedAthleteId,
@@ -10612,9 +11943,11 @@ function ParentDashboard({
   privacySettings,
   readinessHistory,
   requestBrowserNotifications,
+  requestMilestoneReview,
   restorePremiumSubscription,
   setParentAccessDraft,
   setParentLinkFeedback,
+  setLanguage,
   setPlanProgress,
   selectLinkedAthlete,
   startPremiumSubscription,
@@ -10631,6 +11964,17 @@ function ParentDashboard({
   const athleteName = linkedAthleteName(linkedAthleteSummary, athleteProfile);
   const selectedAthleteStreak = streakFromStandardsHistory(standardsHistory);
   const [actionFeedback, setActionFeedback] = useState('');
+  const athleteFirstName = String(athleteName || 'Athlete').trim().split(/\s+/)[0] || 'Athlete';
+  const athleteMeta = [
+    athleteProfile?.sport,
+    athleteProfile?.age ? `Age ${athleteProfile.age}` : ''
+  ].filter(Boolean).join(' • ');
+  const currentPlanPercent = currentPlan.totalCount
+    ? Math.round((currentPlan.completedCount / currentPlan.totalCount) * 100)
+    : 0;
+  const scoreSignalSegments = linkedAthleteId
+    ? Math.min(5, Math.max(0, Math.ceil(Number(athleteScore || 0) / 100)))
+    : 0;
 
   async function sendParentEncouragement(type) {
     const encouragements = {
@@ -10679,7 +12023,7 @@ function ParentDashboard({
   }
 
   return (
-    <>
+    <div className={parentTab === 'overview' ? 'parent-dashboard-overview' : 'parent-dashboard-subscreen'}>
       {parentTab === 'settings' && linkedAthletes.length > 0 && (
         <ParentAthleteSwitcher
           athletes={linkedAthletes}
@@ -10687,97 +12031,117 @@ function ParentDashboard({
           onSelect={selectLinkedAthlete}
         />
       )}
-      {parentTab === 'overview' && !linkedAthleteId && (
-        <section className="panel parent-access-panel">
-          <PanelTitle icon={<Users size={18} />} title="Link Athlete" action="Access code" />
-          <p className="info-note">Enter the parent access code from your athlete’s profile or invite link.</p>
-          <form className="standard-form" onSubmit={linkParentAccessCode}>
-            <input
-              aria-label="Parent access code"
-              placeholder="Parent access code"
-              value={parentAccessDraft}
-              onChange={(event) => {
-                setParentAccessDraft(event.target.value);
-                setParentLinkFeedback('');
-              }}
-            />
-            <button className="primary-action" type="submit">
-              Link Athlete
-            </button>
-          </form>
-          {parentLinkFeedback && <p className="inline-note">{parentLinkFeedback}</p>}
-        </section>
-      )}
       {parentTab === 'overview' && (
-      <section className="panel daily-deposit-panel parent-daily-deposit-panel">
-        <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
-        <h2>{lesson.title}</h2>
-        <p>{lesson.body}</p>
-      </section>
-      )}
+        <>
+          <section className="parent-athlete-snapshot" aria-label={`Viewing ${athleteName}`}>
+            <div className="parent-athlete-avatar" aria-hidden="true">
+              {athleteProfile?.photo ? <img src={athleteProfile.photo} alt="" /> : <span>{athleteFirstName.charAt(0)}</span>}
+            </div>
+            <div>
+              <span>Your athlete</span>
+              <strong>{linkedAthleteId ? athleteFirstName : 'No athlete linked'}</strong>
+              {linkedAthleteId && athleteMeta && <p>{athleteMeta}</p>}
+            </div>
+            <div className={`parent-athlete-status${linkedAthleteId ? ' connected' : ''}`}><i />{linkedAthleteId ? 'Connected' : 'Link needed'}</div>
+          </section>
 
-      {parentTab === 'overview' && (
-      <section className="panel parent-progress-panel">
-        <PanelTitle icon={<BarChart3 size={18} />} title="Athlete Progress" />
-        <div className="parent-progress-hero">
-          <div>
-            <span>Complete Athlete Score</span>
-            <strong>{linkedAthleteId ? athleteScore : '—'}</strong>
-          </div>
-          <p>{linkedAthleteId ? parentProgressTone(weeklySnapshot, selectedAthleteStreak) : 'Link your athlete to see their progress.'}</p>
-        </div>
-        <div className="parent-progress-grid">
-          <span>
-            <strong>{linkedAthleteId ? selectedAthleteStreak : '—'}</strong>
-            Day streak
-          </span>
-          <span>
-            <strong>{linkedAthleteId ? `${weeklySnapshot.productivityAverage}%` : '—'}</strong>
-            7-day work rate
-          </span>
-          <span>
-            <strong>{linkedAthleteId ? `${planSeriesStats.completed}/${planSeriesStats.total}` : '—'}</strong>
-            Plans completed
-          </span>
-        </div>
-        <div className="parent-action-grid parent-action-grid-inline">
-          <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('effort')} type="button">
-            <BadgeCheck size={18} />
-            <strong>Encourage effort</strong>
-            <span>Reinforce the work, not just the result.</span>
-          </button>
-          <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('plan')} type="button">
-            <BookOpen size={18} />
-            <strong>Talk through plan</strong>
-            <span>Use today’s lesson as the bridge.</span>
-          </button>
-          <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('goals')} type="button">
-            <Goal size={18} />
-            <strong>Hold accountable</strong>
-            <span>Point them back to the goals they chose.</span>
-          </button>
-        </div>
-        {actionFeedback && <p className="inline-note">{actionFeedback}</p>}
-      </section>
-      )}
+          {!linkedAthleteId && (
+            <section className="parent-dashboard-card parent-link-card">
+              <div className="parent-dashboard-section-label"><Users size={16} /> Link athlete</div>
+              <p>Enter the parent access code from your athlete’s profile or invitation.</p>
+              <form className="standard-form" onSubmit={linkParentAccessCode}>
+                <input
+                  aria-label="Parent access code"
+                  placeholder="Parent access code"
+                  value={parentAccessDraft}
+                  onChange={(event) => {
+                    setParentAccessDraft(event.target.value);
+                    setParentLinkFeedback('');
+                  }}
+                />
+                <button className="primary-action" type="submit">Link Athlete</button>
+              </form>
+              {parentLinkFeedback && <p className="inline-note">{parentLinkFeedback}</p>}
+            </section>
+          )}
 
-      {parentTab === 'overview' && (
-      <section className="panel parent-current-plan-panel">
-        <PanelTitle icon={<BookOpen size={18} />} title="Your Athlete’s Current Plan" />
-        {linkedAthleteId ? <>
-        <div className="parent-current-plan">
-          <span>{currentPlan.seriesTitle}</span>
-          <strong>{currentPlan.lessonTitle}</strong>
-          <Progress value={currentPlan.totalCount ? Math.round((currentPlan.completedCount / currentPlan.totalCount) * 100) : 0} />
-          <p>{currentPlan.completedCount}/{currentPlan.totalCount} lessons completed</p>
-          {currentPlan.nextUnlock && <em>Next lesson opens {currentPlan.nextUnlock}.</em>}
-        </div>
-        <div className="parent-cue-card">
-          <strong>Tonight’s conversation starter</strong>
-          <span>{currentPlan.cue}</span>
-        </div>
-        </> : <p className="empty-note">Link your athlete to see their current plan, lesson progress, and conversation starters.</p>}
-      </section>
+          <section className="panel daily-deposit-panel today-page-hero parent-daily-deposit-card">
+            <PanelTitle icon={<Brain size={18} />} title="Daily Deposit" />
+            <div className="today-hero-copy parent-daily-deposit-copy">
+              {lesson.title && <h2>{lesson.title}</h2>}
+              <p>{lesson.body}</p>
+            </div>
+          </section>
+
+          <section className="parent-score-hero" aria-labelledby="parent-score-title">
+            <div className="parent-score-heading">
+              <div>
+                <span id="parent-score-title">Performance Points</span>
+                <small>Overall development signal</small>
+              </div>
+              <BarChart3 size={20} aria-hidden="true" />
+            </div>
+            <div className="parent-score-value-row">
+              <strong>{linkedAthleteId ? athleteScore : '—'}</strong>
+              <div className="parent-score-signal" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map((segment) => <i className={segment < scoreSignalSegments ? 'active' : ''} key={segment} />)}
+              </div>
+            </div>
+            <p>{linkedAthleteId ? parentProgressTone(weeklySnapshot, selectedAthleteStreak) : 'Link your athlete to see their progress.'}</p>
+          </section>
+
+          <section className="parent-dashboard-metrics" aria-label="Athlete progress metrics">
+            <div><i><Flame size={16} /></i><strong>{linkedAthleteId ? selectedAthleteStreak : '—'}</strong><span>Day streak</span></div>
+            <div><i><Target size={16} /></i><strong>{linkedAthleteId ? `${weeklySnapshot.productivityAverage}%` : '—'}</strong><span>7-day work rate</span></div>
+            <div><i><BookOpen size={16} /></i><strong>{linkedAthleteId ? `${planSeriesStats.completed}/${planSeriesStats.total}` : '—'}</strong><span>Plans completed</span></div>
+          </section>
+
+          <section className="parent-dashboard-card parent-plan-focus-card">
+            <div className="parent-dashboard-section-label"><BookOpen size={16} /> Your Athlete’s Current Plan</div>
+            {linkedAthleteId ? (
+              <div className="parent-plan-focus-content">
+                <div className="parent-plan-focus-icon" aria-hidden="true"><BookOpen size={23} /></div>
+                <div className="parent-plan-focus-copy">
+                  <span>{currentPlan.seriesTitle}</span>
+                  <strong>{currentPlan.lessonTitle}</strong>
+                  <div className="parent-plan-progress-meta"><span>{currentPlan.completedCount} / {currentPlan.totalCount} lessons completed</span><b>{currentPlanPercent}%</b></div>
+                  <div className="parent-plan-progress-track" aria-label={`${currentPlanPercent}% complete`}><i style={{ width: `${currentPlanPercent}%` }} /></div>
+                  {currentPlan.nextUnlock && <em>Next lesson opens {currentPlan.nextUnlock}.</em>}
+                </div>
+              </div>
+            ) : <p className="parent-dashboard-empty">Link your athlete to see what they are actively working through.</p>}
+          </section>
+
+          <section className="parent-support-today" aria-labelledby="parent-support-title">
+            <div className="parent-dashboard-heading">
+              <span>Parent coaching</span>
+              <h2 id="parent-support-title">How to support today</h2>
+            </div>
+            <div className="parent-support-nudges">
+              <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('effort')} type="button">
+                <i><BadgeCheck size={17} /></i><span><strong>Encourage effort</strong><small>Reinforce the work, not just the result.</small></span><ChevronRight size={17} />
+              </button>
+              <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('plan')} type="button">
+                <i><BookOpen size={17} /></i><span><strong>Talk through the plan</strong><small>Use today’s lesson as the bridge.</small></span><ChevronRight size={17} />
+              </button>
+              <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('goals')} type="button">
+                <i><Goal size={17} /></i><span><strong>Reconnect the goal</strong><small>Ask which action supports the goal they chose.</small></span><ChevronRight size={17} />
+              </button>
+            </div>
+            {actionFeedback && <p className="parent-action-feedback">{actionFeedback}</p>}
+          </section>
+
+          {linkedAthleteId && privacySettings.goalsVisible && (
+            <section className="parent-dashboard-card parent-dashboard-goals">
+              <div className="parent-dashboard-section-label"><Goal size={16} /> Goal snapshot <em>{goals.length} goals</em></div>
+              <div className="parent-goals">
+                {goals.slice(0, 3).map((goal) => (
+                  <span key={goal.id}><strong>{goal.label}</strong>{goal.progress}%</span>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {parentTab === 'settings' && (
@@ -10788,6 +12152,7 @@ function ParentDashboard({
           linkParentAccessCode={linkParentAccessCode}
           linkedAthletes={linkedAthletes}
           linkedAthleteSummary={linkedAthleteSummary}
+          language={language}
           logoutUser={logoutUser}
           notificationPreferences={notificationPreferences}
           parentAccessDraft={parentAccessDraft}
@@ -10797,6 +12162,7 @@ function ParentDashboard({
           requestBrowserNotifications={requestBrowserNotifications}
           setParentAccessDraft={setParentAccessDraft}
           setParentLinkFeedback={setParentLinkFeedback}
+          setLanguage={setLanguage}
           subscription={subscription}
           unlinkParentAthlete={unlinkParentAthlete}
           updateNotificationPreference={updateNotificationPreference}
@@ -10804,13 +12170,13 @@ function ParentDashboard({
       )}
 
       {parentTab === 'parent-corner' && !linkedAthleteId && !premiumAccessAllowed && (
-        <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
+        <ParentCornerSection language={language} parentGuides={parentGuides} parentMessage={parentMessage} requestMilestoneReview={requestMilestoneReview} />
       )}
       {parentTab === 'parent-corner' && (
         premiumAccessAllowed ? (
           <>
-            <ParentCornerSection parentGuides={parentGuides} parentMessage={parentMessage} />
-            <ParentPlanLibrary plans={plans} planProgress={planProgress} setPlanProgress={setPlanProgress} notifyUser={notifyUser} />
+            <ParentCornerSection language={language} parentGuides={parentGuides} parentMessage={parentMessage} requestMilestoneReview={requestMilestoneReview} />
+            <ParentPlanLibrary language={language} plans={plans} planProgress={planProgress} setPlanProgress={setPlanProgress} notifyUser={notifyUser} requestMilestoneReview={requestMilestoneReview} />
           </>
         ) : (
           <PremiumAccessPanel
@@ -10822,24 +12188,11 @@ function ParentDashboard({
         )
       )}
 
-      {parentTab === 'overview' && linkedAthleteId && privacySettings.goalsVisible && (
-        <section className="panel parent-goal-panel">
-          <PanelTitle icon={<Goal size={18} />} title="Goal Snapshot" action={`${goals.length} goals`} />
-          <div className="parent-goals">
-            {goals.slice(0, 3).map((goal) => (
-              <span key={goal.id}>
-                <strong>{goal.label}</strong>
-                {goal.progress}%
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-    </>
+    </div>
   );
 }
 
-function ParentCornerSection({ parentGuides = [], parentMessage }) {
+function ParentCornerSection({ language = 'en', parentGuides = [], parentMessage, requestMilestoneReview }) {
   const [selectedParentContentId, setSelectedParentContentId] = useState(() => (
     localStorage.getItem(parentStarterPlanStorageKey) || ''
   ));
@@ -10855,9 +12208,9 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
       steps: guide.steps,
       guideDay: guide.guideDay,
       guideLength: guide.guideLength,
-      coverImage: parentGuideCoverImage(guide.seriesTitle),
-      thumbnailImage: parentGuideThumbnailImage(guide.seriesTitle),
-      coverPosition: parentGuideCoverPosition(guide.seriesTitle),
+      coverImage: parentGuideCoverImage(guide.seriesTitleEn || guide.seriesTitle),
+      thumbnailImage: parentGuideThumbnailImage(guide.seriesTitleEn || guide.seriesTitle),
+      coverPosition: parentGuideCoverPosition(guide.seriesTitleEn || guide.seriesTitle),
       completedAt: parentGuideProgress[String(guide.id)] || ''
     }))
     : [
@@ -10909,6 +12262,9 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
       if (dayIndex + 1 >= dayCount) next[String(guideId)] = todayKey();
       return next;
     });
+    if (dayIndex === 0) {
+      window.setTimeout(() => requestMilestoneReview?.('parent_day_one_plan'), 500);
+    }
   }
 
   if (selectedContent) {
@@ -10933,6 +12289,7 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
                 <p>{selectedContent.completedAt ? 'Plan complete' : 'Complete this day to unlock the next one.'}</p>
               </div>
               <PlanEpisode
+                language={language}
                 steps={[selectedGuideSteps[activeGuideDayIndex]]}
                 planId={`${selectedContent.id}-day-${activeGuideDayIndex + 1}`}
                 preserveHeadings
@@ -11024,7 +12381,7 @@ function ParentCornerSection({ parentGuides = [], parentMessage }) {
   );
 }
 
-function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser }) {
+function ParentPlanLibrary({ language = 'en', plans, planProgress, setPlanProgress, notifyUser, requestMilestoneReview }) {
   const today = todayKey();
   const sequencedPlans = parentSequencedPlanAccess(plans, planProgress, today);
   const planLibrary = buildPlanLibrary(sequencedPlans);
@@ -11050,6 +12407,9 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
       type: 'planUnlocks',
       id: `parent-plan-complete-${planId}-${Date.now()}`
     });
+    if (planDayNumber(plan) === 1) {
+      window.setTimeout(() => requestMilestoneReview?.('parent_day_one_plan'), 500);
+    }
   }
 
   useEffect(() => {
@@ -11106,7 +12466,7 @@ function ParentPlanLibrary({ plans, planProgress, setPlanProgress, notifyUser })
                   <p>{planDisplaySubject(selectedPlan)}</p>
                 </div>
                 {selectedPlan.unlocked ? (
-                  <PlanEpisode steps={selectedPlan.steps} planId={selectedPlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedPlan.id)} />
+                  <PlanEpisode language={language} steps={selectedPlan.steps} planId={selectedPlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedPlan.id)} />
                 ) : (
                   <div className="locked-message">
                     <LockKeyhole size={18} />

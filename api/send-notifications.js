@@ -33,14 +33,20 @@ function authorized(req) {
 }
 
 async function latestDailyDeposit(date) {
-  const result = await supabaseServiceRequest(
+  let result = await supabaseServiceRequest(
+    `daily_deposits?select=id,body,focus_question,body_es,focus_question_es,release_date,status&status=eq.posted&release_date=lte.${date}&order=release_date.desc&limit=1`
+  );
+  if (result.error) result = await supabaseServiceRequest(
     `daily_deposits?select=id,body,focus_question,release_date,status&status=eq.posted&release_date=lte.${date}&order=release_date.desc&limit=1`
   );
   return result.error ? null : result.data?.[0] ?? null;
 }
 
 async function pendingPlanNotifications() {
-  const result = await supabaseServiceRequest(
+  let result = await supabaseServiceRequest(
+    'performance_plans?select=id,title,subject,title_es,subject_es,release_date,created_at&notification_sent_at=is.null&order=created_at.asc'
+  );
+  if (result.error) result = await supabaseServiceRequest(
     'performance_plans?select=id,title,subject,release_date,created_at&notification_sent_at=is.null&order=created_at.asc'
   );
   return result.error ? [] : result.data ?? [];
@@ -54,10 +60,10 @@ async function markPlanNotificationSent(planId) {
   });
 }
 
-function planSeriesTitle(plan) {
-  const subject = String(plan?.subject ?? '');
-  const match = subject.match(/Series:\s*([^.!]+)[.!]?/i);
-  return match?.[1]?.trim() || String(plan?.title || 'A new plan').trim();
+function planSeriesTitle(plan, language = 'en') {
+  const subject = String(language === 'es' ? (plan?.subject_es || plan?.subject) : plan?.subject ?? '');
+  const match = subject.match(/(?:Series|Serie):\s*([^.!]+)[.!]?/i);
+  return match?.[1]?.trim() || String(language === 'es' ? (plan?.title_es || plan?.title || 'Un plan nuevo') : (plan?.title || 'A new plan')).trim();
 }
 
 function groupPlanNotifications(plans) {
@@ -68,7 +74,7 @@ function groupPlanNotifications(plans) {
     const key = String(plan?.subject || '').match(/Series:/i)
       ? title.toLowerCase()
       : String(plan.id);
-    const group = groups.get(key) ?? { title, plans: [] };
+    const group = groups.get(key) ?? { title, titleEs: planSeriesTitle(plan, 'es'), plans: [] };
     group.plans.push(plan);
     groups.set(key, group);
   });
@@ -77,9 +83,10 @@ function groupPlanNotifications(plans) {
 }
 
 async function notificationRecipients() {
-  const result = await supabaseServiceRequest(
-    'profiles?select=id,role&role=in.(athlete,parent)'
+  let result = await supabaseServiceRequest(
+    'profiles?select=id,role,preferred_language&role=in.(athlete,parent)'
   );
+  if (result.error) result = await supabaseServiceRequest('profiles?select=id,role&role=in.(athlete,parent)');
   return result.error ? [] : result.data ?? [];
 }
 
@@ -329,13 +336,16 @@ export default async function handler(req, res) {
       if (prefs.performance_plans === false) continue;
 
       const availableNow = !releaseDate || releaseDate <= date;
+      const spanish = recipient.preferred_language === 'es';
       const notification = {
         id: `performance-plan-added-${firstPlan.id}-${recipient.id}`,
         type: 'performancePlans',
-        title: availableNow ? 'New performance plan available' : 'New performance plan added',
+        title: spanish
+          ? (availableNow ? 'Nuevo plan de rendimiento disponible' : 'Nuevo plan de rendimiento agregado')
+          : (availableNow ? 'New performance plan available' : 'New performance plan added'),
         body: availableNow
-          ? `${planGroup.title} is ready in Performance Plans.`
-          : `${planGroup.title} has been added and will open on ${releaseDate}.`,
+          ? (spanish ? `${planGroup.titleEs} está listo en Planes de Rendimiento.` : `${planGroup.title} is ready in Performance Plans.`)
+          : (spanish ? `${planGroup.titleEs} fue agregado y se abrirá el ${releaseDate}.` : `${planGroup.title} has been added and will open on ${releaseDate}.`),
         tone: 'info'
       };
       const device = newestDeviceByUser.get(recipient.id);
@@ -361,11 +371,15 @@ export default async function handler(req, res) {
     const prefs = preferences.get(device.user_id) ?? {};
 
     if (isMorningWindow && deposit && prefs.daily_deposits !== false) {
-      const body = String(deposit.body || deposit.focus_question || 'Today’s Daily Deposit is ready.').slice(0, 180);
+      const recipient = recipients.find((profile) => profile.id === device.user_id);
+      const spanish = recipient?.preferred_language === 'es';
+      const body = String(spanish
+        ? (deposit.body_es || deposit.focus_question_es || 'El Depósito Diario de hoy está listo.')
+        : (deposit.body || deposit.focus_question || 'Today’s Daily Deposit is ready.')).slice(0, 180);
       sent.push(sendToDevice(device, {
         id: `push-daily-deposit-${date}-${device.user_id}`,
         type: 'dailyDeposits',
-        title: 'Daily Deposit',
+        title: spanish ? 'Depósito Diario' : 'Daily Deposit',
         body,
         tone: 'info'
       }));

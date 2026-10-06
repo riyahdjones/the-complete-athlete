@@ -82,7 +82,18 @@ function emailJobs(payload) {
   return [{ to: currentEmail, tokenHash: data.token_hash, actionType }];
 }
 
-function emailCopy(actionType) {
+function emailCopy(actionType, language = 'en') {
+  if (language === 'es') {
+    const spanishCopies = {
+      recovery: ['Restablece tu contraseña de Complete Athlete', 'RESTABLECER CONTRASEÑA', 'Crea una contraseña nueva', 'Usa el botón seguro para restablecer tu contraseña y volver a tu entrenamiento.', 'Restablecer mi contraseña', 'Si no solicitaste este cambio, puedes ignorar este correo.'],
+      signup: ['Confirma tu cuenta de Complete Athlete', 'BIENVENIDO A THE COMPLETE ATHLETE', 'Confirma tu correo', 'Confirma tu correo para terminar de crear tu cuenta y comenzar a entrenar la parte de tu juego que nadie ve.', 'Confirmar mi cuenta', 'Si no creaste esta cuenta, puedes ignorar este correo.'],
+      invite: ['Te invitaron a The Complete Athlete', 'TU INVITACIÓN ESTÁ LISTA', 'Únete a The Complete Athlete', 'Acepta tu invitación para comenzar a desarrollar la mentalidad, los hábitos y la disciplina que cambian el rendimiento.', 'Aceptar invitación', 'Si no esperabas esta invitación, puedes ignorar este correo.'],
+      email_change: ['Confirma tu nuevo correo de Complete Athlete', 'CAMBIO DE CORREO', 'Confirma este correo', 'Usa el botón seguro para confirmar el correo conectado a tu cuenta.', 'Confirmar correo', 'Si no solicitaste este cambio, escribe a help@completeathlete.io.'],
+      magiclink: ['Tu enlace de acceso a Complete Athlete', 'ACCESO SEGURO', 'Inicia sesión en tu cuenta', 'Usa el botón seguro para iniciar sesión en The Complete Athlete.', 'Iniciar sesión', 'Si no solicitaste este enlace, puedes ignorar este correo.']
+    };
+    const copy = spanishCopies[actionType] || ['Completa la acción de tu cuenta', 'THE COMPLETE ATHLETE', 'Continúa de forma segura', 'Usa el botón seguro para continuar.', 'Continuar', 'Si no solicitaste esto, puedes ignorar este correo.'];
+    return { subject: copy[0], eyebrow: copy[1], heading: copy[2], body: copy[3], button: copy[4], footer: copy[5] };
+  }
   const copies = {
     recovery: ['Reset your Complete Athlete password', 'PASSWORD RESET', 'Create a new password', 'Use the secure button below to reset your password and get back to your training.', 'Reset my password', "If you didn't request this, you can safely ignore this email."],
     signup: ['Confirm your Complete Athlete account', 'WELCOME TO THE COMPLETE ATHLETE', 'Confirm your email', 'Confirm your email to finish creating your account and start training the part of your game no one sees.', 'Confirm my account', "If you didn't create this account, you can safely ignore this email."],
@@ -105,11 +116,15 @@ function confirmationLink(payload, job) {
 }
 
 function renderEmail(payload, job) {
-  const copy = emailCopy(job.actionType);
+  const language = String(payload.user?.user_metadata?.preferred_language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
+  const copy = emailCopy(job.actionType, language);
   const firstName = displayName(payload).split(/\s+/)[0];
-  const greeting = firstName ? `Hi ${escapeHtml(firstName)},` : 'Hi,';
+  const greeting = language === 'es'
+    ? (firstName ? `Hola ${escapeHtml(firstName)},` : 'Hola,')
+    : (firstName ? `Hi ${escapeHtml(firstName)},` : 'Hi,');
   const link = confirmationLink(payload, job);
-  const html = `<!doctype html><html><body style="margin:0;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#071633"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border:1px solid #d8e2f2;border-radius:20px;overflow:hidden"><tr><td style="height:10px;background:#2f73ff"></td></tr><tr><td style="padding:36px 34px 14px"><div style="font-size:12px;font-weight:800;letter-spacing:1.4px;color:#2f73ff">${copy.eyebrow}</div><h1 style="margin:12px 0 14px;font-size:30px;line-height:1.1">${copy.heading}</h1><p style="font-size:17px;line-height:1.6;color:#33415d">${greeting}</p><p style="font-size:17px;line-height:1.6;color:#33415d">${copy.body}</p></td></tr><tr><td style="padding:18px 34px 24px"><a href="${escapeHtml(link)}" style="display:block;background:#2168f4;color:#fff;text-decoration:none;text-align:center;font-size:17px;font-weight:800;padding:16px 22px;border-radius:14px">${copy.button}</a></td></tr><tr><td style="padding:0 34px 34px"><p style="font-size:13px;line-height:1.55;color:#66718a">${copy.footer}</p><p style="font-size:12px;color:#8992a6">The Complete Athlete · Train the part of your game no one sees.</p></td></tr></table></td></tr></table></body></html>`;
+  const tagline = language === 'es' ? 'Entrena la parte de tu juego que nadie ve.' : 'Train the part of your game no one sees.';
+  const html = `<!doctype html><html lang="${language}"><body style="margin:0;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#071633"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f6fb;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border:1px solid #d8e2f2;border-radius:20px;overflow:hidden"><tr><td style="height:10px;background:#2f73ff"></td></tr><tr><td style="padding:36px 34px 14px"><div style="font-size:12px;font-weight:800;letter-spacing:1.4px;color:#2f73ff">${copy.eyebrow}</div><h1 style="margin:12px 0 14px;font-size:30px;line-height:1.1">${copy.heading}</h1><p style="font-size:17px;line-height:1.6;color:#33415d">${greeting}</p><p style="font-size:17px;line-height:1.6;color:#33415d">${copy.body}</p></td></tr><tr><td style="padding:18px 34px 24px"><a href="${escapeHtml(link)}" style="display:block;background:#2168f4;color:#fff;text-decoration:none;text-align:center;font-size:17px;font-weight:800;padding:16px 22px;border-radius:14px">${copy.button}</a></td></tr><tr><td style="padding:0 34px 34px"><p style="font-size:13px;line-height:1.55;color:#66718a">${copy.footer}</p><p style="font-size:12px;color:#8992a6">The Complete Athlete · ${tagline}</p></td></tr></table></td></tr></table></body></html>`;
   const text = `${greeting}\n\n${copy.body}\n\n${copy.button}: ${link}\n\n${copy.footer}`;
   return { ...copy, html, text };
 }

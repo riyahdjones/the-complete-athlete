@@ -34,11 +34,12 @@ function voiceSettings() {
   };
 }
 
-function audioCachePath({ planId, text, voiceId, modelId, settings }) {
+function audioCachePath({ language, planId, text, voiceId, modelId, settings }) {
   const digest = createHash('sha256')
     .update(JSON.stringify({
       version: 1,
       outputFormat,
+      language,
       planId: String(planId || ''),
       voiceId,
       modelId,
@@ -46,7 +47,7 @@ function audioCachePath({ planId, text, voiceId, modelId, settings }) {
       text
     }))
     .digest('hex');
-  return `${safePathSegment(planId)}/${digest}.mp3`;
+  return `${safePathSegment(language, 'en')}/${safePathSegment(planId)}/${digest}.mp3`;
 }
 
 function storageConfig() {
@@ -141,12 +142,13 @@ export default async function handler(req, res) {
   }
 
   const body = await readJson(req);
+  const language = String(body.language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
   const planId = safePathSegment(body.planId);
   const text = cleanText(body.text);
   if (text.length < 12) return json(res, 400, { error: 'Not enough text to narrate.' });
   const settings = voiceSettings();
   const storage = storageConfig();
-  const cachePath = audioCachePath({ planId, text, voiceId, modelId, settings });
+  const cachePath = audioCachePath({ language, planId, text, voiceId, modelId, settings });
   const cachedAudio = await readCachedAudio(storage, cachePath);
   if (cachedAudio) return sendAudio(res, cachedAudio, 'HIT');
 
@@ -160,6 +162,7 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       text,
       model_id: modelId,
+      language_code: language,
       voice_settings: settings
     })
   });
