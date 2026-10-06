@@ -232,7 +232,8 @@ const retiredDefaultStandards = new Set([
 ]);
 
 function refreshDefaultStandards(standards) {
-  if (!Array.isArray(standards) || standards.length === 0) return standardsSeed;
+  if (!Array.isArray(standards)) return standardsSeed;
+  if (standards.length === 0) return [];
   const customStandards = standards.filter((standard) => !retiredDefaultStandards.has(standard.label));
   const hasRetiredDefaults = customStandards.length !== standards.length;
   return hasRetiredDefaults ? [...standardsSeed, ...customStandards] : standards;
@@ -3889,15 +3890,16 @@ function App() {
         setGoals(goalsResult.data.map(goalFromSupabase));
       }
 
-      if (!standardsResult.error && Array.isArray(standardsResult.data) && standardsResult.data.length) {
+      if (!standardsResult.error && Array.isArray(standardsResult.data)) {
         setStandards((current) => {
           const doneByLabel = new Map(current.map((standard) => [standard.label, standard.done]));
-          return standardsResult.data.map((row) => ({
+          const remoteStandards = standardsResult.data.map((row) => ({
             ...standardFromSupabase(row),
             done: row.entry_date === todayKey()
               ? Boolean(row.done)
               : doneByLabel.get(row.label) ?? false
           }));
+          return remoteStandards;
         });
       }
 
