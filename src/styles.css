@@ -9061,6 +9061,30 @@ select {
 .training-section-heading h2 { margin: 0; color: #0b1831; font-size: 1.02rem; line-height: 1.12; letter-spacing: -.025em; }
 .training-section-heading p { margin: 4px 0 0; color: #61718a; font-size: .66rem; line-height: 1.35; }
 .training-section-heading.compact h2 { color: #4c5f7c; font-size: .71rem; font-weight: 750; letter-spacing: 0; }
+.training-carousel-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+.training-carousel-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #173b76;
+  border: 1px solid #cedbeb;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 4px 11px rgba(31, 69, 119, .08);
+}
+.training-carousel-controls button:active {
+  color: #fff;
+  background: #173b76;
+  transform: scale(.94);
+}
 .plan-need-rail,
 .training-category-rail,
 .recommended-plan-rail {
@@ -17599,22 +17623,13 @@ select {
   }
 }
 
-/* Let the Plans rails own horizontal gestures without sticky snap resistance. */
-.native-shell:has(.plans-tab),
-.native-shell:has(.plans-tab) .plans-tab,
-.native-shell:has(.plans-tab) .plans-tab .phone-frame,
-.native-shell:has(.plans-tab) .plans-tab .mobile-native-frame,
-.native-shell:has(.plans-tab) .plans-tab .content {
-  touch-action: pan-x pan-y;
-}
-
 .plans-tab .plan-need-rail,
 .plans-tab .training-category-rail,
 .plans-tab .recommended-plan-rail {
   scroll-snap-type: none;
   scroll-behavior: auto;
   overscroll-behavior-x: contain;
-  touch-action: pan-x pan-y;
+  touch-action: pan-y;
   will-change: scroll-position;
   transform: translateZ(0);
   cursor: grab;

@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Camera,
   Check,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -8798,7 +8799,16 @@ function PerformancePlanHero({ series, onContinue }) {
 
 function useHorizontalPointerDrag() {
   const railRef = useRef(null);
-  const dragStateRef = useRef({ active: false, moved: false, pointerId: null, startX: 0, startScrollLeft: 0 });
+  const dragStateRef = useRef({
+    active: false,
+    axis: null,
+    moved: false,
+    pointerId: null,
+    touchId: null,
+    startX: 0,
+    startY: 0,
+    startScrollLeft: 0
+  });
 
   function finishDrag(event) {
     const rail = railRef.current;
@@ -8806,7 +8816,9 @@ function useHorizontalPointerDrag() {
     if (!rail || !drag.active) return;
     drag.active = false;
     rail.classList.remove('is-dragging');
-    if (rail.hasPointerCapture?.(drag.pointerId)) rail.releasePointerCapture(drag.pointerId);
+    if (drag.pointerId !== null && rail.hasPointerCapture?.(drag.pointerId)) {
+      try { rail.releasePointerCapture(drag.pointerId); } catch { /* capture may already be released */ }
+    }
     window.setTimeout(() => {
       dragStateRef.current.moved = false;
     }, 0);
@@ -8821,30 +8833,72 @@ function useHorizontalPointerDrag() {
     },
     onPointerCancel: finishDrag,
     onPointerDown(event) {
-      if (event.pointerType === 'touch' || event.button !== 0) return;
+      if (event.pointerType === 'touch' || event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
       const rail = railRef.current;
       if (!rail) return;
       dragStateRef.current = {
         active: true,
+        axis: null,
         moved: false,
         pointerId: event.pointerId,
+        touchId: null,
         startX: event.clientX,
+        startY: event.clientY,
         startScrollLeft: rail.scrollLeft
       };
       rail.setPointerCapture?.(event.pointerId);
-      rail.classList.add('is-dragging');
     },
     onPointerMove(event) {
       const rail = railRef.current;
       const drag = dragStateRef.current;
       if (!rail || !drag.active || drag.pointerId !== event.pointerId) return;
-      const distance = event.clientX - drag.startX;
-      if (Math.abs(distance) > 4) drag.moved = true;
-      if (!drag.moved) return;
+      const distanceX = event.clientX - drag.startX;
+      const distanceY = event.clientY - drag.startY;
+      if (!drag.axis && Math.max(Math.abs(distanceX), Math.abs(distanceY)) > 6) {
+        drag.axis = Math.abs(distanceX) > Math.abs(distanceY) ? 'horizontal' : 'vertical';
+      }
+      if (drag.axis !== 'horizontal') return;
+      drag.moved = true;
+      rail.classList.add('is-dragging');
       event.preventDefault();
-      rail.scrollLeft = drag.startScrollLeft - distance;
+      rail.scrollLeft = drag.startScrollLeft - distanceX;
     },
-    onPointerUp: finishDrag
+    onPointerUp: finishDrag,
+    onTouchStart(event) {
+      if (event.touches.length !== 1) return;
+      const rail = railRef.current;
+      const touch = event.touches[0];
+      if (!rail || !touch) return;
+      dragStateRef.current = {
+        active: true,
+        axis: null,
+        moved: false,
+        pointerId: null,
+        touchId: touch.identifier,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startScrollLeft: rail.scrollLeft
+      };
+    },
+    onTouchMove(event) {
+      const rail = railRef.current;
+      const drag = dragStateRef.current;
+      if (!rail || !drag.active) return;
+      const touch = Array.from(event.touches).find((item) => item.identifier === drag.touchId);
+      if (!touch) return;
+      const distanceX = touch.clientX - drag.startX;
+      const distanceY = touch.clientY - drag.startY;
+      if (!drag.axis && Math.max(Math.abs(distanceX), Math.abs(distanceY)) > 6) {
+        drag.axis = Math.abs(distanceX) > Math.abs(distanceY) ? 'horizontal' : 'vertical';
+      }
+      if (drag.axis !== 'horizontal') return;
+      drag.moved = true;
+      rail.classList.add('is-dragging');
+      event.preventDefault();
+      rail.scrollLeft = drag.startScrollLeft - distanceX;
+    },
+    onTouchCancel: finishDrag,
+    onTouchEnd: finishDrag
   };
 
   return { dragHandlers, railRef };
@@ -8869,9 +8923,23 @@ function NeedSelector({ activeNeed, onSelect }) {
 function RecommendedPlans({ plans, onOpen, trialPlanMode }) {
   const { dragHandlers, railRef } = useHorizontalPointerDrag();
   if (!plans.length) return null;
+
+  function moveRecommendedRail(direction) {
+    const rail = railRef.current;
+    if (!rail) return;
+    const distance = Math.max(240, rail.clientWidth * 0.82);
+    rail.scrollLeft = Math.max(0, Math.min(rail.scrollWidth - rail.clientWidth, rail.scrollLeft + (direction * distance)));
+  }
+
   return (
     <section className="recommended-training-section">
-      <header className="training-section-heading compact"><div><span>Recommended for you</span><h2>Based on where you are in your game.</h2></div></header>
+      <header className="training-section-heading compact">
+        <div><span>Recommended for you</span><h2>Based on where you are in your game.</h2></div>
+        <div className="training-carousel-controls" aria-label="Move through recommended plans">
+          <button aria-label="Previous recommended plan" onClick={() => moveRecommendedRail(-1)} type="button"><ChevronLeft size={16}/></button>
+          <button aria-label="Next recommended plan" onClick={() => moveRecommendedRail(1)} type="button"><ChevronRight size={16}/></button>
+        </div>
+      </header>
       <div className="recommended-plan-rail" ref={railRef} {...dragHandlers}>
         {plans.map((series) => (
           <button className={`recommended-training-card${series.completedCount >= series.plans.length ? ' completed' : ''}`} key={series.id} onClick={() => onOpen(series, 'recommended')} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-cover-position': series.coverPosition }} type="button">
