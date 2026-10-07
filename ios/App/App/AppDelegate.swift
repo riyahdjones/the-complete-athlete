@@ -112,7 +112,7 @@ public class TCAVoiceCoachPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesiz
     public let identifier = "TCAVoiceCoachPlugin"
     public let jsName = "TCAVoiceCoach"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestVoicePermissions", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startListening", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopListening", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
@@ -126,7 +126,7 @@ public class TCAVoiceCoachPlugin: CAPPlugin, CAPBridgedPlugin, AVSpeechSynthesiz
     private var inputTapInstalled = false
     private var latestTranscript = ""
 
-    @objc func requestPermissions(_ call: CAPPluginCall) {
+    @objc func requestVoicePermissions(_ call: CAPPluginCall) {
         SFSpeechRecognizer.requestAuthorization { speechStatus in
             AVAudioSession.sharedInstance().requestRecordPermission { microphoneAllowed in
                 DispatchQueue.main.async {

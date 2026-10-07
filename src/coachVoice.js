@@ -88,7 +88,7 @@ export function createCoachVoiceController({
   async function requestPermissions() {
     if (!native) return true;
     await nativeReady;
-    const permissions = await NativeVoiceCoach.requestPermissions();
+    const permissions = await NativeVoiceCoach.requestVoicePermissions();
     if (!permissions?.speech || !permissions?.microphone) {
       throw new Error('Microphone or speech recognition permission denied.');
     }
