@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   PenLine,
   Plus,
   Sparkles,
+  Smartphone,
   Target,
   Trash2,
   X
@@ -515,11 +516,14 @@ export default function GoalCommandCenter({
   standards,
   standardsHistory = [],
   streakCount = 0,
-  trackAnalyticsEvent
+  trackAnalyticsEvent,
+  userId
 }) {
   const [filter, setFilter] = useState('active');
   const [composerOpen, setComposerOpen] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState(null);
+  const [widgetNoticeVisible, setWidgetNoticeVisible] = useState(false);
+  const widgetNoticeRecorded = useRef(false);
   const [archivedGoalIds, setArchivedGoalIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('the-complete-athlete-archived-goals') || '[]'); }
     catch { return []; }
@@ -535,6 +539,27 @@ export default function GoalCommandCenter({
     if (filter === 'completed') return !archived && clampProgress(goal.progress) >= 100;
     return !archived && clampProgress(goal.progress) < 100;
   }), [archivedGoalIds, filter, goals]);
+
+  useEffect(() => {
+    if (widgetNoticeRecorded.current) return undefined;
+    widgetNoticeRecorded.current = true;
+    const storageKey = `tca-goal-widget-notice-count:v1:${String(userId || 'local-athlete')}`;
+    let appearanceCount = 0;
+    try {
+      appearanceCount = Math.max(0, Number(localStorage.getItem(storageKey)) || 0);
+    } catch {
+      appearanceCount = 0;
+    }
+    if (appearanceCount >= 3) return undefined;
+    try {
+      localStorage.setItem(storageKey, String(appearanceCount + 1));
+    } catch {
+      // The notice can still appear when storage is unavailable.
+    }
+    setWidgetNoticeVisible(true);
+    const timer = window.setTimeout(() => setWidgetNoticeVisible(false), 10000);
+    return () => window.clearTimeout(timer);
+  }, [userId]);
 
   function toggleArchive(id) {
     setArchivedGoalIds((current) => {
@@ -576,16 +601,18 @@ export default function GoalCommandCenter({
 
   return (
     <div className="goal-command-center">
-      <section className="goal-command-header">
-        <div><span>Goal Command Center</span><p>Turn what you want into what you do.</p></div>
-        <button onClick={() => setComposerOpen(true)} type="button"><Plus size={16}/> New Goal</button>
-      </section>
+      <blockquote className="goals-discipline-quote">
+        “Goals are the GPS for where you want to go, but it’s your daily discipline that gets you there.”
+      </blockquote>
 
-      {goals.length > 0 && (
-        <div className="goal-command-filters" aria-label="Filter goals">
-          {['active', 'completed', 'archived'].map((item) => <button className={filter === item ? 'active' : ''} key={item} onClick={() => setFilter(item)} type="button">{item}</button>)}
-        </div>
-      )}
+      <div className={`goal-command-controls${goals.length ? '' : ' no-filters'}`}>
+        {goals.length > 0 && (
+          <div className="goal-command-filters" aria-label="Filter goals">
+            {['active', 'completed', 'archived'].map((item) => <button className={filter === item ? 'active' : ''} key={item} onClick={() => setFilter(item)} type="button">{item}</button>)}
+          </div>
+        )}
+        <button className="goal-command-add" onClick={() => setComposerOpen(true)} type="button"><Plus size={16}/> New Goal</button>
+      </div>
 
       {!goals.length ? (
         <section className="goal-command-empty">
@@ -597,6 +624,17 @@ export default function GoalCommandCenter({
         <div className="goal-command-list">{filteredGoals.map((goal) => <GoalOverviewCard goal={goal} standards={standards} standardsHistory={standardsHistory} onOpen={setSelectedGoalId} key={goal.id} />)}</div>
       ) : (
         <section className="goal-command-filter-empty"><CircleHelp size={22}/><strong>No {filter} goals yet.</strong><p>Your goals will appear here when their status changes.</p></section>
+      )}
+
+      {widgetNoticeVisible && (
+        <aside className="goal-widget-notice" role="status">
+          <i><Smartphone size={20}/></i>
+          <div>
+            <strong>Keep your goals in sight</strong>
+            <p>You can add Complete Athlete widgets to your Home Screen and see your goals every day.</p>
+          </div>
+          <button aria-label="Dismiss Home Screen widget notice" onClick={() => setWidgetNoticeVisible(false)} type="button"><X size={16}/></button>
+        </aside>
       )}
     </div>
   );

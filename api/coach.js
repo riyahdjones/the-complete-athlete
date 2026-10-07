@@ -82,6 +82,14 @@ Your role:
 - Use the athlete's context when provided, but do not invent personal facts.
 - If an age is available, adjust language and safety caution for that age. For younger athletes, use simpler language and encourage involving a parent/guardian or trusted adult sooner.
 - Use prior growth memory only as context. Do not mention private memory as if it is surveillance; phrase it naturally as patterns the athlete has been working on.
+- Treat context in this order: current athlete message, current conversation, relevant long-term memory, then general knowledge. What the athlete says now always wins.
+- Use only context that genuinely helps with the current issue. Never recite the athlete's profile, app activity, or memory to prove that you know it.
+- Never invent a past conversation, struggle, result, goal, routine, injury, emotion, or commitment. If a remembered detail is uncertain, ask instead of implying certainty.
+- Reference prior conversations sparingly and naturally. Never mention database fields, stored profiles, exact timestamps, or the mechanics of memory.
+- Do not assume today's issue has the same cause as a previous issue. Ask what happened now; connect a prior pattern only after the athlete confirms the same pattern is present.
+- A recurring pattern requires evidence from multiple distinct moments. Never label an athlete permanently from one event. Describe patterns as changeable behaviors, not identities.
+- Prefer strategies the athlete has said worked before. Do not keep recommending a technique the athlete has said does not help.
+- When sport and position are known, use a small amount of relevant sport language. Do not force terminology or turn every answer into a sport analogy.
 - Use the app curriculum context when the athlete asks about the Daily Deposit, Today's Focus, or Performance Plans. Explain the idea in plain athlete language and help them apply it to their sport or day.
 - When answering about a Performance Plan, mention the athlete's current plan day when available, such as "Day 1 of 7," and anchor the advice to that day's steps.
 - If a Performance Plan is locked, explain that it unlocks after the prior plan is completed and the next day arrives. Do not give locked-plan steps as if they are available today.
@@ -103,15 +111,19 @@ Response style:
 - Sound like a real coach in a private conversation, not a worksheet, script, or motivational poster.
 - If the athlete sends a casual check-in like "you there," "hey," "what's up," or "can you help," answer naturally first. Do not treat it as a performance problem.
 - Use the athlete's first name sometimes when it feels natural, especially to greet, reassure, or bring them back to the point. Do not use their name in every message.
-- Default to discovery before advice. When the situation is vague, broad, or missing a specific moment, ask one warm, focused question and wait. Do not attach advice to the question.
-- It is okay to spend the first two coach turns understanding the situation. Ask about the most recent moment, what the athlete thought or felt, what they did next, or what they want to change. Ask only the single question that will reveal the most useful context.
+- Default to discovery before advice. For a new personal coaching topic, ask one short, focused question and wait. Ask a second question on the next turn only when the root issue is still unclear; do not interrogate once the athlete has made the real pressure or meaning clear.
+- The first question should establish the specific recent moment. When needed, the second should go one layer deeper into the athlete's thought, feeling, response, or desired change. Do not repeat the first question in different words or attach advice to a discovery question.
 - Do not assume the problem or deliver a speech from one short message. Reflect only what the athlete actually said.
 - Once the problem is clear, give one honest observation, one practical move, and one question or small action for today.
-- Default to 2-4 short sentences and no more than 90 words. A simple check-in or clarification should usually be 1-2 sentences and under 45 words.
-- Only exceed 90 words when safety support or a factual sports answer truly requires it.
+- Default to 2-3 short sentences and no more than 65 words. A discovery question should be one or two brief sentences and under 35 words.
+- Only exceed 65 words when safety support or a factual sports answer truly requires it.
 - Never start with "One clear truth" or use labels like "Reflection," "Action step," "Cue ideas," or "Do this right now."
 - Do not use markdown formatting, asterisks, bold marks, headings, rigid formats, numbered lists, repeated slogans, hashtags, or clinical language.
 - End after the useful point. Do not repeat the same idea in different words.
+- Do not treat every message as a request for a solution. Curiosity is often the right first response.
+- Coach the root issue, not only the athlete's opening statement. Use short questions to uncover what the result, mistake, role, criticism, pressure, or comparison means to them.
+- Do not try to finish an entire coaching session in one reply. Once the real issue is clear, say so naturally, reframe it, offer one strategy, and give one immediate action.
+- App features are tools, not promotions. Mention a goal, plan, journal, Game Day Mode, activity streak, or journey only when it directly improves the coaching moment.
 
 Examples of the right style:
 Athlete: "you there"
@@ -190,31 +202,12 @@ function limitResponse(limit, language = 'en') {
 
 function needsClarifyingQuestion(message, history) {
   const words = message.split(/\s+/).filter(Boolean);
-  const lower = message.toLowerCase();
   const recentAthleteTurns = cleanMessages(history).filter((entry) => entry.role === 'athlete').length;
   if (isCasualCheckIn(message)) return false;
-  if (recentAthleteTurns >= 2) return false;
-
-  const vaguePhrases = [
-    'challenge',
-    'struggling',
-    'having a hard time',
-    'need help',
-    'help me',
-    'stressed',
-    'overthinking',
-    'pressure',
-    'not confident',
-    'feel off',
-    'bad day'
-  ];
-  const eventClues =
-    /\b(today|yesterday|last|during|after|before|when|practice|game|match|meet|race|tryout|coach said|teammate said|first quarter|second quarter|third quarter|fourth quarter|inning|set|lap|hole|at-bat|free throw|playing time|bench)\b/i;
-  const responseClues =
-    /\b(i thought|i told myself|i felt|i started|i stopped|i did|i said|my body|my mind|i want to|i wish|next time)\b/i;
-  const hasEnoughContext = words.length >= 16 && eventClues.test(message) && responseClues.test(message);
-
-  return !hasEnoughContext && (words.length <= 18 || vaguePhrases.some((phrase) => lower.includes(phrase)));
+  if (recentAthleteTurns <= 1) return true;
+  if (recentAthleteTurns >= 3) return false;
+  const rootClues = /\b(i think|i feel|i felt|i tell myself|i told myself|i'm afraid|i am afraid|because|means that|worried that|scared that|i wish|i want to change|next time)\b/i;
+  return words.length < 14 || !rootClues.test(message);
 }
 
 function isCurriculumQuestion(message) {
@@ -528,15 +521,23 @@ function isCasualCheckIn(message) {
 }
 
 function clarifyingResponse(message, athlete, history = [], language = 'en') {
+  const athleteTurnCount = cleanMessages(history).filter((entry) => entry.role === 'athlete').length;
   if (language === 'es') {
     const lower = message.toLowerCase();
     const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
     const namePhrase = firstName && firstName !== 'Athlete' && firstName !== 'Unknown' ? `, ${firstName}` : '';
     if (isCasualCheckIn(message)) return `Estoy aquí${namePhrase}. ¿Qué está pasando hoy?`;
+    if (/^(necesito ayuda|ayúdame|puedes ayudarme|no sé qué hacer)[\s?.!]*$/i.test(message)) return `Estoy aquí${namePhrase}. ¿Qué está pasando ahora mismo?`;
+    if (athleteTurnCount >= 2) {
+      if (/coach|entrenador|feedback|correcci[oó]n/.test(lower)) return 'Cuando recibes esa corrección, ¿qué te dices por dentro y qué cambia en tu siguiente jugada?';
+      if (/playing time|banca|titular|jugar|rol/.test(lower)) return 'Cuando piensas en tu rol, ¿qué temes que signifique sobre ti como atleta?';
+      if (/teammate|equipo|compañer/.test(lower)) return '¿Qué parte te afecta más: lo que pasó, lo que crees que significa o no saber cómo responder?';
+      return 'En ese momento, ¿qué notaste primero: tus pensamientos, tus emociones, tu cuerpo o tu enfoque?';
+    }
     if (/coach|entrenador|feedback|correcci[oó]n/.test(lower)) return 'Estoy contigo. ¿Qué te dijo o hizo tu entrenador recientemente y cómo respondiste en ese momento?';
-    if (/playing time|banca|titular|jugar/.test(lower)) return 'Te escucho. ¿Qué te ha dicho tu entrenador sobre tu rol y qué parte de eso es la más difícil ahora?';
+    if (/playing time|banca|titular|jugar|rol/.test(lower)) return 'Te escucho. ¿Qué te ha dicho tu entrenador sobre tu rol y qué parte de eso es la más difícil ahora?';
     if (/teammate|equipo|compañer/.test(lower)) return 'Estoy contigo. ¿Qué pasó recientemente con tu compañero o equipo y qué quieres manejar de otra manera?';
-    return 'Ayúdame a ver el momento exacto. ¿Qué pasó recientemente y qué te dijiste justo después?';
+    return 'Estoy contigo. ¿Qué pasó?';
   }
   if (isCasualCheckIn(message)) {
     const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
@@ -545,9 +546,30 @@ function clarifyingResponse(message, athlete, history = [], language = 'en') {
   }
 
   const lower = message.toLowerCase();
-  const priorAthleteTurns = cleanMessages(history).filter((entry) => entry.role === 'athlete').length;
+  const firstName = cleanMessage(athlete?.name, 60).split(/\s+/)[0];
+  const namePhrase = firstName && firstName !== 'Athlete' && firstName !== 'Unknown' ? `, ${firstName}` : '';
   const sport = cleanMessage(athlete?.sport, 40);
   const sportPhrase = sport && sport !== 'Unknown' ? ` in ${sport}` : '';
+
+  if (/^(i need help|need help|help me|can you help me|i don'?t know what to do)[\s?.!]*$/i.test(message)) {
+    return `I'm here${namePhrase}. What's going on right now?`;
+  }
+
+  if (athleteTurnCount >= 2) {
+    if (/\bcoach|feedback|correction\b/.test(lower)) {
+      return 'When that correction comes, what do you tell yourself—and what changes on your very next play?';
+    }
+    if (/\bplaying time|bench|starter|starting|role\b/.test(lower)) {
+      return 'When you think about your role, what are you afraid it says about you as an athlete?';
+    }
+    if (/\bteammate|team|locker room\b/.test(lower)) {
+      return 'What is affecting you most: what happened, what you think it means, or not knowing how to respond?';
+    }
+    if (/\bconfidence|pressure|overthink|nervous|fear|mistake|messing up|slump|focus\b/.test(lower)) {
+      return 'In that moment, what shows up first: your self-talk, your body language, or your focus leaving the next play?';
+    }
+    return 'What part of that moment is hardest for you internally, and what do you wish you could change?';
+  }
 
   if (/\bcoach|feedback|correction\b/.test(lower)) {
     return "I'm with you. What did your coach say or do most recently, and how did you respond in that moment?";
@@ -558,8 +580,8 @@ function clarifyingResponse(message, athlete, history = [], language = 'en') {
   if (/\bteammate|team|locker room\b/.test(lower)) {
     return "I'm with you. What happened with your teammate or team most recently, and what do you want to handle differently?";
   }
-  if (/\bconfidence|pressure|overthink|nervous|fear|mistake|messing up|slump\b/.test(lower) || priorAthleteTurns > 0) {
-    return "Help me see the exact moment. What happened most recently, and what did you tell yourself right after?";
+  if (/\bconfidence|pressure|overthink|nervous|fear|mistake|messing up|slump\b/.test(lower) || athleteTurnCount > 0) {
+    return 'I’m with you. What happened most recently?';
   }
 
   return `I'm with you. Is this mainly about confidence, pressure, a coach, teammates, playing time, focus${sportPhrase ? `, or something happening in ${sport}` : ', or something outside your sport'}?`;
@@ -571,7 +593,8 @@ function asArray(value) {
 
 function safeJsonParse(value, fallback) {
   try {
-    return JSON.parse(value);
+    const normalized = String(value ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+    return JSON.parse(normalized);
   } catch {
     return fallback;
   }
@@ -598,24 +621,96 @@ function cleanMessages(messages) {
     .slice(-40);
 }
 
-function buildMemoryContext(memory) {
-  if (!memory) return 'No prior coach memory yet.';
-
-  const patterns = asArray(memory.patterns).slice(0, MAX_MEMORY_ITEMS).join('; ');
-  const growth = asArray(memory.growth_markers).slice(0, MAX_MEMORY_ITEMS).join('; ');
-  const flags = asArray(memory.safety_flags).slice(0, MAX_MEMORY_ITEMS).join('; ');
-
-  return [
-    `Summary: ${memory.summary || 'None yet'}`,
-    `Patterns: ${patterns || 'None yet'}`,
-    `Growth markers: ${growth || 'None yet'}`,
-    `Next focus: ${memory.next_focus || 'None yet'}`,
-    `Safety notes: ${flags || 'None'}`
-  ].join('\n');
+function historyBeforeCurrentMessage(history, message) {
+  const cleaned = cleanMessages(history);
+  const last = cleaned[cleaned.length - 1];
+  if (last?.role === 'athlete' && last.text === cleanMessage(message, 1000)) return cleaned.slice(0, -1);
+  return cleaned;
 }
 
-function buildCurriculumContext(curriculum) {
+const contextStopWords = new Set([
+  'about', 'after', 'again', 'also', 'and', 'athlete', 'because', 'before', 'coach', 'could', 'from',
+  'have', 'help', 'into', 'just', 'like', 'more', 'need', 'really', 'that', 'their', 'them', 'then',
+  'there', 'they', 'this', 'today', 'want', 'what', 'when', 'where', 'with', 'would', 'your'
+]);
+
+function contextTokens(value) {
+  return new Set(String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 3 && !contextStopWords.has(token)));
+}
+
+function memoryItemText(item) {
+  if (typeof item === 'string') return cleanMessage(item, 280);
+  if (!item || typeof item !== 'object') return '';
+  return cleanMessage(item.pattern || item.detail || item.strategy || item.cue || item.routine || item.commitment || item.text, 280);
+}
+
+function memoryEvidenceCount(item) {
+  if (!item || typeof item !== 'object') return 1;
+  return Math.max(1, Number(item.evidence_count || item.evidenceCount || 1));
+}
+
+function relevantMemoryItems(items, conversationText, limit = 3) {
+  const queryTokens = contextTokens(conversationText);
+  if (!queryTokens.size) return [];
+  return asArray(items)
+    .map((item) => {
+      const text = memoryItemText(item);
+      const searchable = item && typeof item === 'object' ? `${text} ${JSON.stringify(item.contexts || item.tags || [])}` : text;
+      const tokens = contextTokens(searchable);
+      const score = [...tokens].reduce((total, token) => total + (queryTokens.has(token) ? 1 : 0), 0);
+      return { item, text, score };
+    })
+    .filter((entry) => entry.text && entry.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+function buildMemoryContext(memory, message, history = [], athlete = {}) {
+  if (!memory) return 'No relevant long-term coach memory is available.';
+  const conversationText = [
+    ...historyBeforeCurrentMessage(history, message).slice(-6).map((entry) => entry.text),
+    message,
+    athlete?.sport,
+    athlete?.position
+  ].join(' ');
+  const lines = [];
+  const summaryMatches = relevantMemoryItems([memory.summary], conversationText, 1);
+  const patternMatches = relevantMemoryItems(memory.patterns, conversationText, 3);
+  const growthMatches = relevantMemoryItems(memory.growth_markers, conversationText, 2);
+  const workedMatches = relevantMemoryItems(memory.strategies_worked, conversationText, 3);
+  const didNotWorkMatches = relevantMemoryItems(memory.strategies_not_worked, conversationText, 3);
+  const cueMatches = relevantMemoryItems(memory.reset_cues, conversationText, 3);
+  const routineMatches = relevantMemoryItems(memory.routines, conversationText, 2);
+  const commitmentMatches = relevantMemoryItems(memory.commitments, conversationText, 2);
+  const nextFocusMatches = relevantMemoryItems([memory.next_focus], conversationText, 1);
+
+  if (summaryMatches.length) lines.push(`Relevant continuity: ${summaryMatches[0].text}`);
+  patternMatches.forEach(({ item, text }) => {
+    const evidence = memoryEvidenceCount(item);
+    lines.push(`${evidence >= 2 ? 'Evidence-backed pattern' : 'Possible pattern—verify before connecting'} (${evidence} moment${evidence === 1 ? '' : 's'}): ${text}`);
+  });
+  if (growthMatches.length) lines.push(`Relevant growth: ${growthMatches.map((entry) => entry.text).join('; ')}`);
+  if (workedMatches.length) lines.push(`Strategies the athlete said worked: ${workedMatches.map((entry) => entry.text).join('; ')}`);
+  if (didNotWorkMatches.length) lines.push(`Strategies the athlete said did not help: ${didNotWorkMatches.map((entry) => entry.text).join('; ')}`);
+  if (cueMatches.length) lines.push(`Established reset cues: ${cueMatches.map((entry) => entry.text).join('; ')}`);
+  if (routineMatches.length) lines.push(`Relevant routines: ${routineMatches.map((entry) => entry.text).join('; ')}`);
+  if (commitmentMatches.length) lines.push(`Relevant commitments: ${commitmentMatches.map((entry) => entry.text).join('; ')}`);
+  if (nextFocusMatches.length) lines.push(`Relevant next focus: ${nextFocusMatches[0].text}`);
+
+  return lines.length
+    ? `${lines.join('\n')}\nUse only if it helps now. Verify possible patterns and never force a historical connection.`
+    : 'No long-term memory was relevant enough to include for this message.';
+}
+
+function buildCurriculumContext(curriculum, message = '') {
   if (!curriculum) return 'No app curriculum loaded.';
+
+  const queryTokens = contextTokens(message);
+  const curriculumRequested = isCurriculumQuestion(message);
 
   const deposit = curriculum.dailyDeposit;
   const depositLines = deposit
@@ -627,7 +722,16 @@ function buildCurriculumContext(curriculum) {
       ]
     : ['Today\'s Daily Deposit: Not available.'];
 
-  const plans = asArray(curriculum.performancePlans).slice(0, MAX_CURRICULUM_PLANS);
+  const plans = asArray(curriculum.performancePlans)
+    .map((plan) => {
+      const searchable = `${plan.title || ''} ${plan.seriesTitle || ''} ${plan.subject || ''}`;
+      const score = [...contextTokens(searchable)].reduce((total, token) => total + (queryTokens.has(token) ? 1 : 0), 0);
+      return { plan, score };
+    })
+    .filter(({ score }) => curriculumRequested || score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ plan }) => plan);
   const planLines = plans.length
     ? plans.map((plan, index) => {
         const steps = asArray(plan.steps).slice(0, MAX_CURRICULUM_STEPS).join('; ');
@@ -648,18 +752,29 @@ function buildCurriculumContext(curriculum) {
 }
 
 function buildInput({ message, history, athlete, memory, curriculum, sportsContext, language = 'en' }) {
-  const goals = asArray(athlete?.goals).filter(Boolean);
-  const standards = asArray(athlete?.standards).filter(Boolean);
-  const context = [
-    `Athlete name: ${athlete?.name || 'Unknown'}`,
+  const conversationText = [...historyBeforeCurrentMessage(history, message).slice(-6).map((entry) => entry.text), message].join(' ');
+  const needsGoals = /\b(goal|starting|starter|role|playing time|motivat|progress|season|improv|dream)\b/i.test(conversationText);
+  const needsWork = /\b(train|practice|discipline|motivat|routine|habit|work|streak|locked|activity)\b/i.test(conversationText);
+  const needsGameDay = /\b(game|match|meet|race|tomorrow|pregame|pre-game|nervous|pressure|visuali[sz]|compete)\b/i.test(conversationText);
+  const needsJourney = /\bjourney|confidence|focus|mindset|overthink|mental\b/i.test(conversationText);
+  const goals = needsGoals ? asArray(athlete?.goals).filter(Boolean).slice(0, 5) : [];
+  const standards = needsWork ? asArray(athlete?.standards).filter(Boolean).slice(0, 6) : [];
+  const contextLines = [
+    `First name: ${athlete?.name || 'Unknown'}`,
     `Sport: ${athlete?.sport || 'Unknown'}`,
-    `Age: ${athlete?.age || 'Unknown'}`,
-    `Location: ${athlete?.location || 'Unknown'}`,
-    `Goals: ${goals.slice(0, 5).join('; ') || 'No goals provided'}`,
-    `Today’s productivity items: ${standards.slice(0, 6).join('; ') || 'No productivity items provided'}`
-  ].join('\n');
+    `Age: ${athlete?.age || 'Unknown'}`
+  ];
+  if (athlete?.position) contextLines.push(`Position: ${athlete.position}`);
+  if (athlete?.teamLevel) contextLines.push(`Team level: ${athlete.teamLevel}`);
+  if (athlete?.dreamGoal && needsGoals) contextLines.push(`Dream goal: ${athlete.dreamGoal}`);
+  if (goals.length) contextLines.push(`Relevant goals: ${goals.join('; ')}`);
+  if (standards.length) contextLines.push(`Relevant current activities: ${standards.join('; ')}`);
+  if (needsWork && athlete?.lockedInDays != null) contextLines.push(`Current locked-in streak: ${athlete.lockedInDays} day(s)`);
+  if (needsJourney && athlete?.journey) contextLines.push(`21-Day Journey: ${cleanMessage(JSON.stringify(athlete.journey), 500)}`);
+  if (needsGameDay && athlete?.recentGameDay) contextLines.push(`Recent Game Day context: ${cleanMessage(JSON.stringify(athlete.recentGameDay), 600)}`);
+  const context = contextLines.join('\n');
 
-  const recentHistory = Array.isArray(history) ? history.slice(-MAX_HISTORY_MESSAGES) : [];
+  const recentHistory = historyBeforeCurrentMessage(history, message).slice(-MAX_HISTORY_MESSAGES);
   const messages = recentHistory
     .map((entry) => ({
       role: entry.role === 'coach' ? 'assistant' : 'user',
@@ -670,7 +785,7 @@ function buildInput({ message, history, athlete, memory, curriculum, sportsConte
   return [
     {
       role: 'developer',
-      content: `${coachInstructions}\n\nLanguage requirement: ${language === 'es' ? 'Respond entirely in natural, age-appropriate Spanish. Keep the same concise coaching style. Do not mix in English unless the athlete asks.' : 'Respond in English.'}\n\nAthlete context:\n${context}\n\nApp curriculum context:\n${buildCurriculumContext(curriculum)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nPrivate coach growth memory:\n${buildMemoryContext(memory)}`
+      content: `${coachInstructions}\n\nLanguage requirement: ${language === 'es' ? 'Respond entirely in natural, age-appropriate Spanish. Keep the same concise coaching style. Do not mix in English unless the athlete asks.' : 'Respond in English.'}\n\nSelectively retrieved athlete context:\n${context}\n\nRelevant app curriculum context:\n${buildCurriculumContext(curriculum, message)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nRelevant private coaching continuity:\n${buildMemoryContext(memory, message, history, athlete)}`
     },
     ...messages,
     {
@@ -752,7 +867,7 @@ async function getProfile(userId, token) {
 async function getAthleteContext(userId, token, profile, fallbackAthlete = {}) {
   const [athleteProfileResult, goalsResult, standardsResult] = await Promise.all([
     supabaseRequest(
-      `athlete_profiles?select=sport,age,location&user_id=eq.${encodeURIComponent(userId)}`,
+      `athlete_profiles?select=*&user_id=eq.${encodeURIComponent(userId)}`,
       token,
       { method: 'GET' }
     ),
@@ -780,9 +895,14 @@ async function getAthleteContext(userId, token, profile, fallbackAthlete = {}) {
     name: profile?.full_name || fallbackAthlete.name || '',
     sport: athleteProfile?.sport || fallbackAthlete.sport || '',
     age: athleteProfile?.age || fallbackAthlete.age || '',
-    location: athleteProfile?.location || fallbackAthlete.location || '',
+    position: athleteProfile?.position || fallbackAthlete.position || '',
+    teamLevel: athleteProfile?.team_level || fallbackAthlete.teamLevel || '',
+    dreamGoal: athleteProfile?.dream_goal || fallbackAthlete.dreamGoal || '',
     goals: goals.length ? goals : asArray(fallbackAthlete.goals),
-    standards: standards.length ? standards : asArray(fallbackAthlete.standards)
+    standards: standards.length ? standards : asArray(fallbackAthlete.standards),
+    lockedInDays: Number(fallbackAthlete.lockedInDays) || 0,
+    journey: fallbackAthlete.journey || null,
+    recentGameDay: fallbackAthlete.recentGameDay || null
   };
 }
 
@@ -891,12 +1011,19 @@ async function createAthleteProfile(user, token) {
 }
 
 async function getCoachMemory(userId, token) {
-  const { data } = await supabaseRequest(
-    `coach_memories?select=summary,patterns,growth_markers,next_focus,safety_flags&athlete_user_id=eq.${encodeURIComponent(userId)}`,
+  let result = await supabaseRequest(
+    `coach_memories?select=summary,patterns,growth_markers,next_focus,safety_flags,strategies_worked,strategies_not_worked,reset_cues,routines,commitments&athlete_user_id=eq.${encodeURIComponent(userId)}`,
     token,
     { method: 'GET' }
   );
-  return Array.isArray(data) ? data[0] : null;
+  if (result.error) {
+    result = await supabaseRequest(
+      `coach_memories?select=summary,patterns,growth_markers,next_focus,safety_flags&athlete_user_id=eq.${encodeURIComponent(userId)}`,
+      token,
+      { method: 'GET' }
+    );
+  }
+  return Array.isArray(result.data) ? result.data[0] : null;
 }
 
 async function reserveCoachMessage(token) {
@@ -932,7 +1059,7 @@ async function saveCoachSession({ userId, token, sessionId, title, messages, saf
   });
 }
 
-async function updateCoachMemory({ apiKey, model, userId, token, previousMemory, athleteMessage, coachMessage, safety }) {
+async function updateCoachMemory({ apiKey, model, userId, token, previousMemory, conversationHistory = [], athleteMessage, coachMessage, safety }) {
   if (safety !== 'ok') return;
 
   const memoryPrompt = `
@@ -940,13 +1067,23 @@ Update this private athlete coach memory after one new exchange.
 
 Rules:
 - Keep it concise and useful for future mental performance coaching.
-- Track patterns, growth, recurring friction points, and next focus.
+- Preserve only meaningful long-term coaching details, not ordinary conversation filler.
+- Track patterns, growth, recurring friction points, strategies that worked, strategies that did not work, reset cues, routines, commitments, and next focus.
+- A pattern must be an object with keys pattern, evidence_count, and last_seen. Increase evidence_count only when the new athlete message provides another distinct example. Never promote a one-time event into a confirmed pattern.
+- Store strategies as objects with strategy, contexts, and last_seen. Put one under strategies_worked only when the athlete explicitly says it helped. Put one under strategies_not_worked only when the athlete explicitly says it did not help.
+- Store reset cues as objects with cue and contexts; routines as objects with routine and contexts; and commitments as objects with commitment, contexts, and status.
+- Preserve exact athlete-created reset words or short cues when useful, but do not store full raw messages.
+- Do not infer a position, goal, routine, result, emotion, or preference that the athlete did not state.
+- Merge with useful previous memory instead of replacing it with only the newest exchange.
 - Do not include medical diagnosis, protected traits, gossip, or unnecessary sensitive details.
 - Do not store exact raw messages.
-- Return only valid JSON with keys: summary, patterns, growth_markers, next_focus, safety_flags.
+- Return only valid JSON with keys: summary, patterns, growth_markers, strategies_worked, strategies_not_worked, reset_cues, routines, commitments, next_focus, safety_flags.
 
 Previous memory:
 ${JSON.stringify(previousMemory ?? {})}
+
+Recent conversation context:
+${JSON.stringify(historyBeforeCurrentMessage(conversationHistory, athleteMessage).slice(-6))}
 
 New athlete message:
 ${athleteMessage}
@@ -983,19 +1120,33 @@ ${coachMessage}
   const nextMemory = safeJsonParse(text, null);
   if (!nextMemory || typeof nextMemory !== 'object') return;
 
-  await supabaseRequest('coach_memories?on_conflict=athlete_user_id', token, {
+  const memoryRecord = {
+    athlete_user_id: userId,
+    summary: cleanMessage(nextMemory.summary, 700),
+    patterns: asArray(nextMemory.patterns).slice(0, MAX_MEMORY_ITEMS),
+    growth_markers: asArray(nextMemory.growth_markers).slice(0, MAX_MEMORY_ITEMS),
+    strategies_worked: asArray(nextMemory.strategies_worked).slice(0, MAX_MEMORY_ITEMS),
+    strategies_not_worked: asArray(nextMemory.strategies_not_worked).slice(0, MAX_MEMORY_ITEMS),
+    reset_cues: asArray(nextMemory.reset_cues).slice(0, MAX_MEMORY_ITEMS),
+    routines: asArray(nextMemory.routines).slice(0, MAX_MEMORY_ITEMS),
+    commitments: asArray(nextMemory.commitments).slice(0, MAX_MEMORY_ITEMS),
+    next_focus: cleanMessage(nextMemory.next_focus, 280),
+    safety_flags: asArray(nextMemory.safety_flags).slice(0, MAX_MEMORY_ITEMS),
+    updated_at: new Date().toISOString()
+  };
+  const memoryWrite = await supabaseRequest('coach_memories?on_conflict=athlete_user_id', token, {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({
-      athlete_user_id: userId,
-      summary: cleanMessage(nextMemory.summary, 700),
-      patterns: asArray(nextMemory.patterns).slice(0, MAX_MEMORY_ITEMS),
-      growth_markers: asArray(nextMemory.growth_markers).slice(0, MAX_MEMORY_ITEMS),
-      next_focus: cleanMessage(nextMemory.next_focus, 280),
-      safety_flags: asArray(nextMemory.safety_flags).slice(0, MAX_MEMORY_ITEMS),
-      updated_at: new Date().toISOString()
-    })
+    body: JSON.stringify(memoryRecord)
   });
+  if (memoryWrite.error) {
+    const { strategies_worked, strategies_not_worked, reset_cues, routines, commitments, ...legacyRecord } = memoryRecord;
+    await supabaseRequest('coach_memories?on_conflict=athlete_user_id', token, {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(legacyRecord)
+    });
+  }
 }
 
 async function moderate(message, apiKey) {
@@ -1231,10 +1382,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const [athleteContext, curriculumContext, sportsContext] = await Promise.all([
+  const curriculumRelevant = isCurriculumQuestion(message);
+  const model = process.env.OPENAI_COACH_MODEL || 'gpt-4.1-mini';
+  const [athleteContext, curriculumContext, sportsContext, memory] = await Promise.all([
     getAthleteContext(user.id, token, profile, body.athlete),
-    getCurriculumContext(token, body.curriculum, user.id, language),
-    getSportsContext(message)
+    curriculumRelevant ? getCurriculumContext(token, body.curriculum, user.id, language) : Promise.resolve(null),
+    getSportsContext(message),
+    getCoachMemory(user.id, token)
   ]);
 
   const sportsKnowledgeQuestion = hasSportsKnowledgeIntent(message);
@@ -1258,8 +1412,6 @@ export default async function handler(req, res) {
     });
   }
 
-  const model = process.env.OPENAI_COACH_MODEL || 'gpt-4.1-mini';
-  const memory = await getCoachMemory(user.id, token);
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {
@@ -1277,7 +1429,7 @@ export default async function handler(req, res) {
         sportsContext,
         language
       }),
-      max_output_tokens: 220
+      max_output_tokens: sportsKnowledgeQuestion ? 220 : 150
     })
   });
 
@@ -1320,6 +1472,7 @@ export default async function handler(req, res) {
     userId: user.id,
     token,
     previousMemory: memory,
+    conversationHistory: body.history,
     athleteMessage: message,
     coachMessage: reply,
     safety: 'ok'

@@ -69,6 +69,41 @@ class TCAViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(TCAReviewPlugin())
         bridge?.registerPluginInstance(TCAGoalWidgetPlugin())
         bridge?.registerPluginInstance(TCAVoiceCoachPlugin())
+        bridge?.registerPluginInstance(TCAPlanAudioPlugin())
+    }
+}
+
+@objc(TCAPlanAudioPlugin)
+public class TCAPlanAudioPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "TCAPlanAudioPlugin"
+    public let jsName = "TCAPlanAudio"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "beginPlayback", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "endPlayback", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func beginPlayback(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+                try session.setActive(true)
+                call.resolve()
+            } catch {
+                call.reject("Plan audio could not start.", "PLAN_AUDIO_SESSION_FAILED", error)
+            }
+        }
+    }
+
+    @objc func endPlayback(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                call.resolve()
+            } catch {
+                call.reject("Plan audio could not close.", "PLAN_AUDIO_SESSION_CLOSE_FAILED", error)
+            }
+        }
     }
 }
 

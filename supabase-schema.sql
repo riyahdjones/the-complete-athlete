@@ -16,6 +16,9 @@ create table if not exists public.profiles (
 create table if not exists public.athlete_profiles (
   user_id uuid primary key references public.profiles(id) on delete cascade,
   sport text not null default '',
+  position text not null default '',
+  team_level text not null default '',
+  dream_goal text not null default '',
   age text not null default '',
   location text not null default '',
   parent_contact text not null default '',

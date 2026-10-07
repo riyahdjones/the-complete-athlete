@@ -1,6 +1,11 @@
 alter table public.athlete_profiles
 add column if not exists photo_url text not null default '';
 
+alter table public.athlete_profiles
+  add column if not exists position text not null default '',
+  add column if not exists team_level text not null default '',
+  add column if not exists dream_goal text not null default '';
+
 alter table public.profiles
   add column if not exists parent_access_code text not null default ('TCA-' || upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8)));
 
@@ -444,10 +449,22 @@ create table if not exists public.coach_memories (
   summary text not null default '',
   patterns jsonb not null default '[]'::jsonb,
   growth_markers jsonb not null default '[]'::jsonb,
+  strategies_worked jsonb not null default '[]'::jsonb,
+  strategies_not_worked jsonb not null default '[]'::jsonb,
+  reset_cues jsonb not null default '[]'::jsonb,
+  routines jsonb not null default '[]'::jsonb,
+  commitments jsonb not null default '[]'::jsonb,
   next_focus text not null default '',
   safety_flags jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.coach_memories
+  add column if not exists strategies_worked jsonb not null default '[]'::jsonb,
+  add column if not exists strategies_not_worked jsonb not null default '[]'::jsonb,
+  add column if not exists reset_cues jsonb not null default '[]'::jsonb,
+  add column if not exists routines jsonb not null default '[]'::jsonb,
+  add column if not exists commitments jsonb not null default '[]'::jsonb;
 
 create table if not exists public.coach_daily_usage (
   athlete_user_id uuid not null references public.profiles(id) on delete cascade,

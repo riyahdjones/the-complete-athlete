@@ -15,10 +15,22 @@ create table if not exists public.coach_memories (
   summary text not null default '',
   patterns jsonb not null default '[]'::jsonb,
   growth_markers jsonb not null default '[]'::jsonb,
+  strategies_worked jsonb not null default '[]'::jsonb,
+  strategies_not_worked jsonb not null default '[]'::jsonb,
+  reset_cues jsonb not null default '[]'::jsonb,
+  routines jsonb not null default '[]'::jsonb,
+  commitments jsonb not null default '[]'::jsonb,
   next_focus text not null default '',
   safety_flags jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.coach_memories
+  add column if not exists strategies_worked jsonb not null default '[]'::jsonb,
+  add column if not exists strategies_not_worked jsonb not null default '[]'::jsonb,
+  add column if not exists reset_cues jsonb not null default '[]'::jsonb,
+  add column if not exists routines jsonb not null default '[]'::jsonb,
+  add column if not exists commitments jsonb not null default '[]'::jsonb;
 
 alter table public.coach_sessions enable row level security;
 alter table public.coach_memories enable row level security;

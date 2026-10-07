@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.git/
+.DS_Store
+.env*
+.vercel/
+admin-dashboard/node_modules/
+admin-dashboard/.next/
+ios/
+app-store-screenshots/
+complete-athlete-build-*/
+complete-athlete-build-*.zip
+complete-athlete-update-*.bundle

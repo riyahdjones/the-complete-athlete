@@ -1,6 +1,7 @@
 import { startSocialAuth, finishSocialProfile, completeSocialRedirect } from './socialAuth';
 import { canRequestNativeAppReview, recordParentAppOpen, requestAppReview } from './appReview';
 import { syncGoalWidgets } from './goalWidget';
+import { planAudioPlayer } from './planAudioPlayer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
@@ -76,7 +77,7 @@ import {
   saveLanguagePreference,
   supportedLanguages
 } from './i18n';
-import GameDayMode, { gameDayBadgeCounts, loadGameDaySessions } from './GameDayMode';
+import GameDayMode, { gameDayBadgeCounts, getRecentGameDayContext, loadGameDaySessions } from './GameDayMode';
 import GoalCommandCenter from './GoalsScreen';
 import { createCoachVoiceController } from './coachVoice';
 import {
@@ -1689,11 +1690,18 @@ function linkedAthleteName(summary, athleteProfile) {
 }
 
 const coachTopics = [
-  { title: "I'm feeling burnt out", prompt: "I'm feeling burnt out." },
-  { title: 'I made a mistake in a game', prompt: 'I made a mistake in a game and I keep thinking about it.' },
-  { title: 'My coach is getting on me', prompt: 'My coach is getting on me and I need help responding well.' },
-  { title: "I'm losing confidence", prompt: "I'm losing confidence and need help finding my footing." },
-  { title: "I'm nervous about tomorrow", prompt: "I'm nervous about tomorrow and want to feel ready." }
+  { category: 'Confidence', title: "I'm losing confidence.", prompt: "I'm losing confidence and need help finding my footing.", icon: Sparkles },
+  { category: 'Pressure', title: "I'm nervous about tomorrow.", prompt: "I'm nervous about tomorrow and want to feel ready.", icon: Target },
+  { category: 'Mistakes', title: 'I made a mistake in a game.', prompt: 'I made a mistake in a game and I keep thinking about it.', icon: RotateCcw },
+  { category: 'Coaching', title: 'My coach is getting on me.', prompt: 'My coach is getting on me and I need help responding well.', icon: MessageCircle },
+  { category: 'Burnout', title: "I'm feeling burnt out.", prompt: "I'm feeling burnt out and I need help figuring out what to do next.", icon: Dumbbell },
+  { category: 'Focus', title: "I can't stop overthinking.", prompt: "I can't stop overthinking and I need help getting back to the present moment.", icon: Brain },
+  { category: 'Playing time', title: "I'm frustrated with my role.", prompt: "I'm frustrated with my role and how much I'm playing.", icon: Trophy },
+  { category: 'Motivation', title: "I don't feel motivated.", prompt: "I don't feel motivated to train right now.", icon: Flame },
+  { category: 'Game day', title: 'Help me get locked in.', prompt: 'I have a game coming up and I need help getting locked in.', icon: Goal },
+  { category: 'Team', title: "I'm frustrated with a teammate.", prompt: "I'm frustrated with a teammate and want to handle it the right way.", icon: Users },
+  { category: 'Comparison', title: "Everyone feels ahead of me.", prompt: "I'm comparing myself to other athletes and it feels like everyone is ahead of me.", icon: LineChart },
+  { category: 'After the game', title: 'I played badly today.', prompt: 'I played badly today and I need help processing it.', icon: Shield }
 ];
 
 const parentMessageSeed = {
@@ -3556,9 +3564,9 @@ function App() {
         document.activeElement?.isContentEditable;
       const keyboardLikelyOpen = textEntryActive && viewportHeight > 0 && window.innerHeight - viewportHeight > 120;
       document.documentElement.classList.toggle('keyboard-open', keyboardLikelyOpen);
+      setViewportRevision((current) => current + 1);
       if (textEntryActive) return;
       setIsPhoneViewport(phoneViewport);
-      setViewportRevision((current) => current + 1);
       document.documentElement.classList.toggle('keyboard-open', keyboardLikelyOpen);
       if (!keyboardLikelyOpen && viewportHeight > 0) {
         document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`);
@@ -5797,6 +5805,7 @@ function App() {
       ),
       plans: (
         <PlansScreen
+          athleteProfile={athleteProfile}
           language={language}
           plans={localizedPlans}
           planProgress={planProgress}
@@ -5826,13 +5835,16 @@ function App() {
           standardsHistory={standardsHistory}
           streakCount={streakCount}
           trackAnalyticsEvent={trackAnalyticsEvent}
+          userId={authSession?.id}
         />
       ),
       coach: (
         <CoachScreen
           activeCoachSessionId={activeCoachSessionId}
+          athleteJourney={athleteJourney}
           athleteProfile={athleteProfile}
           authSession={authSession}
+          coachComposerFocused={coachComposerFocused}
           coachSessions={coachSessions}
           lesson={activeLesson}
           language={language}
@@ -5841,6 +5853,7 @@ function App() {
           planProgress={planProgress}
           plans={localizedPlans}
           standards={standards}
+          streakCount={streakCount}
           setActiveCoachSessionId={setActiveCoachSessionId}
           setCoachSessions={setCoachSessions}
           setMessages={setMessages}
@@ -6086,13 +6099,14 @@ function App() {
       document.documentElement.classList.contains('native-shell')
       || isPhoneViewport
     );
-  const coachTypingMode = useMobileAppShell && view === 'athlete' && tab === 'coach' && coachComposerFocused;
+  const coachKeyboardOpen = typeof document !== 'undefined' && document.documentElement.classList.contains('keyboard-open');
+  const coachTypingMode = useMobileAppShell && view === 'athlete' && tab === 'coach' && coachComposerFocused && coachKeyboardOpen;
   const isAthleteHome = view === 'athlete' && tab === 'home';
   const isParentOverview = view === 'parent' && parentTab === 'overview';
 
   return (
     <div
-      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} previous-design ${view}-experience${coachTypingMode ? ' coach-typing-mode' : ''}${isParentOverview ? ' parent-dashboard-active' : ''}`}
+      className={`${useMobileAppShell ? 'mobile-native-app' : 'app-shell'} previous-design ${view}-experience ${view === 'athlete' ? `${tab}-tab` : `${parentTab}-parent-tab`}${coachTypingMode ? ' coach-typing-mode' : ''}${isParentOverview ? ' parent-dashboard-active' : ''}`}
       data-viewport-revision={viewportRevision}
     >
       {!useMobileAppShell && (
@@ -6148,6 +6162,7 @@ function App() {
 
         <section className="content">{content}</section>
 
+        <PersistentPlanAudioPlayer />
         {view === 'athlete' && !coachTypingMode && <BottomNav tab={tab} setTab={changeAthleteTab} />}
         {view === 'parent' && <ParentBottomNav tab={parentTab} setTab={changeParentTab} />}
       </main>
@@ -7611,7 +7626,7 @@ function QuickAddSection({ draft, onSelect, userId }) {
     <>
       <div className="activity-quick-add">
         <div className="activity-section-heading">
-          <div><strong>Quick add</strong><span>Add common items with one tap</span></div>
+          <div><strong>Add to today</strong><span>Choose a shortcut or write your own</span></div>
           <button className="quick-add-edit-button" onClick={openEditor} type="button">Edit</button>
         </div>
         <div className="activity-quick-grid" aria-label="Quick add daily activities">
@@ -8265,16 +8280,18 @@ function HomeScreen({
           total={standards.length}
         />
 
-        <QuickAddSection draft={standardDraft} onSelect={setStandardDraft} userId={userId} />
+        <section className="activity-builder" aria-label="Add something you need to do today">
+          <QuickAddSection draft={standardDraft} onSelect={setStandardDraft} userId={userId} />
 
-        <ActivityComposer
-          draft={standardDraft}
-          goalId={standardGoalId}
-          goals={goals}
-          onDraftChange={setStandardDraft}
-          onGoalChange={setStandardGoalId}
-          onSubmit={addStandard}
-        />
+          <ActivityComposer
+            draft={standardDraft}
+            goalId={standardGoalId}
+            goals={goals}
+            onDraftChange={setStandardDraft}
+            onGoalChange={setStandardGoalId}
+            onSubmit={addStandard}
+          />
+        </section>
 
         <div className="activity-list-section">
           <div className="activity-list-heading">
@@ -8679,7 +8696,225 @@ function NotificationTray({ notifications, onClose }) {
 }
 
 
-function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', requestedPlanId = '', setRequestedPlanSeriesId, setRequestedPlanId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, requestMilestoneReview, trackAnalyticsEvent }) {
+const performancePlanNeeds = [
+  { id: 'confidence', label: 'Confidence', terms: ['confidence', 'positive self image', 'self image', 'belief', '90%'] },
+  { id: 'focus', label: 'Focus', terms: ['focus', 'lock in', 'controllables', 'boring wins'] },
+  { id: 'pressure', label: 'Pressure', terms: ['pressure', 'controllables', 'next play', 'thermostat'] },
+  { id: 'motivation', label: 'Motivation', terms: ['motivation', 'champion habits', 'boring wins', 'discipline'] },
+  { id: 'bad-game', label: 'Bad Game', terms: ['next play', 'slump', 'controllables', 'reset'] },
+  { id: 'slump', label: 'Slump', terms: ['slump'] },
+  { id: 'coach', label: 'Coach Issues', terms: ['coachable athlete', 'coach', 'thermostat', 'leadership'] },
+  { id: 'discipline', label: 'Discipline', terms: ['champion habits', 'discipline', 'habit', 'boring wins'] },
+  { id: 'leadership', label: 'Leadership', terms: ['leadership', 'leader', 'thermostat', 'coachable athlete'] },
+  { id: 'goals', label: 'Goals', terms: ['goal blueprint', 'goal', '90-day target'] }
+];
+
+const planOutcomeOverrides = [
+  [/slump/i, 'Stop chasing confidence. Rebuild trust in your game.'],
+  [/positive self image|self-image|mirror/i, 'Build confidence that is not controlled by your last performance.'],
+  [/champion habits?/i, 'Build the habits that make consistency automatic.'],
+  [/control the controllables?/i, 'Stay composed and spend your energy on the next response.'],
+  [/coachable athlete/i, 'Turn feedback into growth without losing confidence.'],
+  [/goal blueprint/i, 'Turn a meaningful target into daily actions you can execute.'],
+  [/imagination station|visualization/i, 'Train your mind to see, rehearse, and trust the response you want.'],
+  [/compete differently|faith/i, 'Compete with purpose, freedom, and faith beyond the outcome.'],
+  [/boring wins/i, 'Build the consistency that keeps working after motivation fades.'],
+  [/next play/i, 'Reset faster after mistakes and return to the moment in front of you.'],
+  [/lock in|focus/i, 'Protect your attention and bring it back to the next rep.'],
+  [/thermostat/i, 'Lead your emotions instead of letting the environment lead you.'],
+  [/90%|ninety/i, 'Build the invisible mindset and habits underneath performance.']
+];
+
+function planDiscoveryText(series) {
+  return `${series?.title || ''} ${series?.category || ''} ${series?.tagline || ''}`.toLowerCase();
+}
+
+function planOutcome(series) {
+  const text = planDiscoveryText(series);
+  const override = planOutcomeOverrides.find(([pattern]) => pattern.test(text));
+  if (override) return override[1];
+  const firstSentence = String(series?.tagline || '').match(/^[^.!?]+[.!?]?/)?.[0]?.trim() || '';
+  return firstSentence || 'Build a stronger response for the moments that test your game.';
+}
+
+function nextOpenPlan(series) {
+  return series?.plans?.find((plan) => plan.unlocked && !plan.completedAt)
+    ?? [...(series?.plans || [])].reverse().find((plan) => plan.unlocked)
+    ?? series?.plans?.[0];
+}
+
+function seriesDayNumber(series, plan = nextOpenPlan(series)) {
+  const index = (series?.plans || []).findIndex((item) => String(item.id) === String(plan?.id));
+  return planDayNumber(plan) || Math.max(1, index + 1);
+}
+
+function planStatusLabel(series, trialPlanMode = false) {
+  if (!series?.plans?.length) return 'Start plan';
+  if (series.completedCount >= series.plans.length) return 'Completed';
+  const day = seriesDayNumber(series);
+  if (series.completedCount > 0) return `In progress · Day ${day}`;
+  if (trialPlanMode) return 'Day 1 ready';
+  return `Day ${day} ready`;
+}
+
+function TrainingProgress({ completed, total }) {
+  return (
+    <div className="training-progress" aria-label={`${completed} of ${total} training days complete`}>
+      {Array.from({ length: total }, (_, index) => <i className={index < completed ? 'complete' : index === completed ? 'current' : ''} key={index} />)}
+    </div>
+  );
+}
+
+function PlanStatusBadge({ series, trialPlanMode = false }) {
+  const complete = series.completedCount >= series.plans.length;
+  return <span className={`training-plan-status${complete ? ' complete' : series.completedCount > 0 ? ' active' : ''}`}>{planStatusLabel(series, trialPlanMode)}{complete ? ' ✓' : ''}</span>;
+}
+
+function PerformancePlanHero({ series, onContinue }) {
+  if (!series) return null;
+  const nextPlan = nextOpenPlan(series);
+  const day = seriesDayNumber(series, nextPlan);
+  const total = series.plans.length;
+  const completed = series.completedCount;
+  const isComplete = completed >= total;
+  return (
+    <section className="performance-plan-hero" style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-cover-position': series.coverPosition }}>
+      <div className="performance-plan-hero-media" aria-hidden="true" />
+      <div className="performance-plan-hero-copy">
+        <span className="training-eyebrow">{isComplete ? 'Training complete' : 'Continue training'}</span>
+        <small>{series.category}</small>
+        <h2>{series.title}</h2>
+        <div className="performance-plan-next">
+          <b>{isComplete ? `${total} days complete` : `Day ${day} of ${total}`}</b>
+          <strong>{isComplete ? 'Review your training' : nextPlan?.title || 'Your next lesson'}</strong>
+        </div>
+        <TrainingProgress completed={completed} total={total} />
+        <p>{isComplete ? 'Every day complete. Revisit the lessons whenever you need them.' : `${completed} day${completed === 1 ? '' : 's'} complete · ${Math.max(total - completed, 0)} to go`}</p>
+        <button onClick={onContinue} type="button">{isComplete ? 'Review Plan' : `Continue Day ${day}`} <ArrowRight size={17}/></button>
+      </div>
+    </section>
+  );
+}
+
+function useHorizontalPointerDrag() {
+  const railRef = useRef(null);
+  const dragStateRef = useRef({ active: false, moved: false, pointerId: null, startX: 0, startScrollLeft: 0 });
+
+  function finishDrag(event) {
+    const rail = railRef.current;
+    const drag = dragStateRef.current;
+    if (!rail || !drag.active) return;
+    drag.active = false;
+    rail.classList.remove('is-dragging');
+    if (rail.hasPointerCapture?.(drag.pointerId)) rail.releasePointerCapture(drag.pointerId);
+    window.setTimeout(() => {
+      dragStateRef.current.moved = false;
+    }, 0);
+  }
+
+  const dragHandlers = {
+    onClickCapture(event) {
+      if (!dragStateRef.current.moved) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dragStateRef.current.moved = false;
+    },
+    onPointerCancel: finishDrag,
+    onPointerDown(event) {
+      if (event.pointerType === 'touch' || event.button !== 0) return;
+      const rail = railRef.current;
+      if (!rail) return;
+      dragStateRef.current = {
+        active: true,
+        moved: false,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startScrollLeft: rail.scrollLeft
+      };
+      rail.setPointerCapture?.(event.pointerId);
+      rail.classList.add('is-dragging');
+    },
+    onPointerMove(event) {
+      const rail = railRef.current;
+      const drag = dragStateRef.current;
+      if (!rail || !drag.active || drag.pointerId !== event.pointerId) return;
+      const distance = event.clientX - drag.startX;
+      if (Math.abs(distance) > 4) drag.moved = true;
+      if (!drag.moved) return;
+      event.preventDefault();
+      rail.scrollLeft = drag.startScrollLeft - distance;
+    },
+    onPointerUp: finishDrag
+  };
+
+  return { dragHandlers, railRef };
+}
+
+function NeedSelector({ activeNeed, onSelect }) {
+  const { dragHandlers, railRef } = useHorizontalPointerDrag();
+  return (
+    <section className="plan-discovery-section">
+      <header className="training-section-heading">
+        <div><span>Find your training</span><h2>What do you need right now?</h2><p>Tell us what you’re dealing with. We’ll help you find the right training.</p></div>
+      </header>
+      <div className="plan-need-rail" aria-label="Choose what you need help with" ref={railRef} {...dragHandlers}>
+        {performancePlanNeeds.map((need) => (
+          <button aria-pressed={activeNeed === need.id} className={activeNeed === need.id ? 'active' : ''} key={need.id} onClick={() => onSelect(activeNeed === need.id ? '' : need.id)} type="button">{need.label}</button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RecommendedPlans({ plans, onOpen, trialPlanMode }) {
+  const { dragHandlers, railRef } = useHorizontalPointerDrag();
+  if (!plans.length) return null;
+  return (
+    <section className="recommended-training-section">
+      <header className="training-section-heading compact"><div><span>Recommended for you</span><h2>Based on where you are in your game.</h2></div></header>
+      <div className="recommended-plan-rail" ref={railRef} {...dragHandlers}>
+        {plans.map((series) => (
+          <button className={`recommended-training-card${series.completedCount >= series.plans.length ? ' completed' : ''}`} key={series.id} onClick={() => onOpen(series, 'recommended')} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-cover-position': series.coverPosition }} type="button">
+            <span className="recommended-plan-cover" aria-hidden="true" />
+            <span className="recommended-plan-copy">
+              <small>{series.category}</small>
+              <strong>{series.title}</strong>
+              <p>{planOutcome(series)}</p>
+              <span><b>{series.plans.length} days · 10 min/day</b><PlanStatusBadge series={series} trialPlanMode={trialPlanMode} /></span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PlanCategoryRail({ activeCategory, categories, onSelect }) {
+  const { dragHandlers, railRef } = useHorizontalPointerDrag();
+  return (
+    <div className="training-category-rail" aria-label="Plan categories" ref={railRef} {...dragHandlers}>
+      {categories.map((category) => <button className={category === activeCategory ? 'active' : ''} key={category} onClick={() => onSelect(category)} type="button">{category}</button>)}
+    </div>
+  );
+}
+
+function PerformancePlanCard({ series, onOpen, trialPlanMode }) {
+  const complete = series.completedCount >= series.plans.length;
+  return (
+    <button className={`performance-plan-card${complete ? ' completed' : ''}`} onClick={() => onOpen(series, 'browse_plans')} style={{ '--plan-thumb': `url(${series.thumbnailImage})`, '--plan-cover-position': series.coverPosition }} type="button">
+      <span className="performance-plan-card-image" aria-hidden="true" />
+      <span className="performance-plan-card-copy">
+        <small>{series.category}</small>
+        <strong>{series.title}</strong>
+        <p>{planOutcome(series)}</p>
+        <span><b>{series.plans.length} days · 10 min/day</b><PlanStatusBadge series={series} trialPlanMode={trialPlanMode} /></span>
+      </span>
+      <ChevronRight className="performance-plan-chevron" size={18}/>
+    </button>
+  );
+}
+
+function PlansScreen({ athleteProfile, language = 'en', plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', requestedPlanId = '', setRequestedPlanSeriesId, setRequestedPlanId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, requestMilestoneReview, trackAnalyticsEvent }) {
   const readOnly = !setPlanProgress;
   const today = todayKey();
   const sequencedPlans = trialPlanMode
@@ -8688,15 +8923,36 @@ function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = fal
   const planLibrary = buildPlanLibrary(sequencedPlans);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [activeNeed, setActiveNeed] = useState('');
   const [planDetailTab, setPlanDetailTab] = useState('summary');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const selectedSeries = planLibrary.find((series) => series.id === selectedSeriesId) ?? null;
-  const continueSeries = planLibrary.find((series) => series.openCount > 0 && series.completedCount < series.plans.length) ?? planLibrary[0];
-  const categories = ['All', ...Array.from(new Set(planLibrary.map((series) => series.category)))];
+  const continueSeries = planLibrary.find((series) => series.completedCount > 0 && series.completedCount < series.plans.length)
+    ?? planLibrary.find((series) => series.openCount > 0 && series.completedCount < series.plans.length)
+    ?? planLibrary[0];
+  const categoryOrder = ['Mindset', 'Discipline', 'Pressure', 'Leadership', 'Faith', 'Goals'];
+  const availableCategories = Array.from(new Set(planLibrary.map((series) => series.category)));
+  const categories = ['All', ...categoryOrder.filter((category) => availableCategories.includes(category)), ...availableCategories.filter((category) => !categoryOrder.includes(category))];
   const categoryLibrary = activeCategory === 'All'
     ? planLibrary
     : planLibrary.filter((series) => series.category === activeCategory);
   const filteredLibrary = categoryLibrary;
+  const activeNeedConfig = performancePlanNeeds.find((need) => need.id === activeNeed);
+  const challenges = athleteChallengesByIds(athleteProfile?.currentChallenges, athleteProfile?.currentChallenge);
+  const recommendationPool = [];
+  const addRecommendation = (series) => {
+    if (series && !recommendationPool.some((item) => item.id === series.id)) recommendationPool.push(series);
+  };
+  if (activeNeedConfig) {
+    planLibrary.filter((series) => activeNeedConfig.terms.some((term) => planDiscoveryText(series).includes(term))).forEach(addRecommendation);
+  } else {
+    challenges.forEach((challenge) => {
+      addRecommendation(planLibrary.find((series) => series.title === challenge.recommendedPlanTitle));
+      addRecommendation(planLibrary.find((series) => challenge.planKeywords.some((keyword) => planDiscoveryText(series).includes(keyword))));
+    });
+  }
+  planLibrary.filter((series) => series.id !== continueSeries?.id && series.completedCount < series.plans.length).forEach(addRecommendation);
+  const recommendedSeries = recommendationPool.slice(0, 4);
   const visiblePlans = selectedSeries?.plans ?? [];
   const defaultVisiblePlan = visiblePlans.find((plan) => plan.unlocked && !plan.completedAt)
     ?? [...visiblePlans].reverse().find((plan) => plan.unlocked)
@@ -8722,10 +8978,11 @@ function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = fal
     setRequestedPlanId?.('');
   }, [planLibrary, requestedPlanId, requestedPlanSeriesId, setRequestedPlanId, setRequestedPlanSeriesId]);
 
-  function openSeries(series, source) {
+  function openSeries(series, source, continueToLesson = false) {
     setSelectedSeriesId(series.id);
-    setPlanDetailTab('summary');
-    setSelectedPlanId('');
+    const nextPlan = nextOpenPlan(series);
+    setPlanDetailTab(continueToLesson ? 'lessons' : 'summary');
+    setSelectedPlanId(continueToLesson && nextPlan ? String(nextPlan.id) : '');
     trackAnalyticsEvent?.('plan_series_opened', {
       source,
       seriesTitle: series.title,
@@ -8839,7 +9096,7 @@ function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = fal
                 <p>{planDisplaySubject(selectedVisiblePlan)}</p>
               </div>
               {selectedVisiblePlan.unlocked && selectedVisiblePlan.steps.length > 0 && (
-                <PlanEpisode language={language} steps={selectedVisiblePlan.steps} planId={selectedVisiblePlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedVisiblePlan.id)} />
+                <PlanEpisode language={language} steps={selectedVisiblePlan.steps} planId={selectedVisiblePlan.id} planTitle={selectedVisiblePlan.title} preserveHeadings={shouldPreservePlanHeadings(selectedVisiblePlan.id)} />
               )}
               {!selectedVisiblePlan.unlocked && (
                 <div className="locked-message">
@@ -8866,60 +9123,33 @@ function PlansScreen({ language = 'en', plans, planProgress, trialPlanMode = fal
   }
 
   return (
-    <>
-      <section className="panel plan-hero">
-        <PanelTitle icon={<BookOpen size={18} />} title="Plan Library" action="10 focused mins a day" />
-        <h2>Choose a plan. Work the next lesson. Carry it into the day.</h2>
+    <div className="performance-training-center">
+      <section className="performance-plans-intro">
+        <div><span>Mental training center</span><h2>Build your mental game. One day at a time.</h2></div>
+        <small><Clock size={13}/> 10 focused min/day</small>
       </section>
 
-      {continueSeries && (
-        <section className="panel continue-plan-panel">
-          <PanelTitle icon={<Sparkles size={18} />} title="Continue Training" action={trialPlanMode ? 'Trial access' : `${continueSeries.completedCount}/${continueSeries.plans.length} done`} />
-          <button className="continue-plan-card has-cover" onClick={() => openSeries(continueSeries, 'continue_training')} style={{ '--plan-cover': `url(${continueSeries.coverImage})`, '--plan-cover-position': continueSeries.coverPosition }} type="button">
-            <div className="plan-cover" aria-hidden="true" />
-            <div className="plan-card-copy">
-              <span>{continueSeries.category}</span>
-              <strong>{continueSeries.title}</strong>
-              <em>{trialPlanMode ? 'Day 1 open during trial' : nextPlanLabel(continueSeries)}</em>
-              <p>{continueSeries.tagline}</p>
-            </div>
-          </button>
-        </section>
-      )}
+      <PerformancePlanHero series={continueSeries} onContinue={() => openSeries(continueSeries, 'continue_training', true)} />
+      <NeedSelector activeNeed={activeNeed} onSelect={setActiveNeed} />
+      <RecommendedPlans plans={recommendedSeries} onOpen={openSeries} trialPlanMode={trialPlanMode} />
 
-      <section className="panel plan-library-panel">
-        <PanelTitle icon={<Target size={18} />} title="Browse Library" action={`${filteredLibrary.length} shown`} />
+      <section className="browse-training-section">
+        <header className="training-section-heading browse-heading">
+          <div><span>Browse plans</span><h2>Find your next edge.</h2></div>
+          <strong>{planLibrary.length} Plans</strong>
+        </header>
         {planLibrary.length === 0 ? (
           <p className="empty-note">No performance plans are open yet. Check back on the next release day.</p>
         ) : (
           <>
-            <div className="plan-category-strip" aria-label="Plan categories">
-              {categories.map((category) => (
-                <button
-                  className={category === activeCategory ? 'active' : ''}
-                  key={category}
-                  onClick={() => setActiveCategory(category)}
-                  type="button"
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-            <div className="plan-list">
-              {filteredLibrary.map((series) => (
-                <button className="plan-list-row has-cover" key={series.id} onClick={() => openSeries(series, 'browse_library')} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-thumb': `url(${series.thumbnailImage})`, '--plan-cover-position': series.coverPosition }} type="button">
-                  <div className="plan-cover-thumb" aria-hidden="true" />
-                  <span>{series.category}</span>
-                  <strong>{series.title}</strong>
-                  <p>{series.tagline}</p>
-                  <em>{trialPlanMode ? 'Day 1 open during trial' : `${series.completedCount}/${series.plans.length} complete · ${series.openCount} open`}</em>
-                </button>
-              ))}
+            <PlanCategoryRail activeCategory={activeCategory} categories={categories} onSelect={setActiveCategory} />
+            <div className="performance-plan-list">
+              {filteredLibrary.map((series) => <PerformancePlanCard key={series.id} onOpen={openSeries} series={series} trialPlanMode={trialPlanMode} />)}
             </div>
           </>
         )}
       </section>
-    </>
+    </div>
   );
 }
 
@@ -9642,27 +9872,62 @@ function sectionAudioText(section) {
   return cleanAudioText(`${title}${body}`);
 }
 
-function PlanAudioControls({ language = 'en', sections, planId }) {
-  const speechRef = useRef({
-    sectionIndex: 0,
-    mode: 'section',
-    source: 'idle',
-    stopped: true,
-  });
-  const audioRef = useRef(null);
-  const audioUrlRef = useRef('');
-  const audioCacheRef = useRef(new Map());
-  const playbackIdRef = useRef(0);
-  const [rate, setRate] = useState(1);
-  const [status, setStatus] = useState('idle');
-  const [activeSectionIndex, setActiveSectionIndex] = useState(-1);
-  const [playbackMode, setPlaybackMode] = useState('plan');
-  const [currentTime, setCurrentTime] = useState(0);
-  const [currentDuration, setCurrentDuration] = useState(0);
+function PersistentPlanAudioPlayer() {
+  const audioState = usePlanAudioState();
+  if (audioState.status === 'idle') return null;
+  const progress = audioState.duration > 0
+    ? Math.min(100, Math.max(0, (audioState.currentTime / audioState.duration) * 100))
+    : 0;
+
+  return (
+    <aside className="persistent-plan-player" aria-label="Current plan audio">
+      <div className="persistent-plan-player-progress" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <button
+        className="persistent-plan-player-toggle"
+        disabled={audioState.status === 'loading'}
+        onClick={() => planAudioPlayer.toggle()}
+        type="button"
+        aria-label={audioState.status === 'playing' ? 'Pause plan audio' : 'Resume plan audio'}
+      >
+        {audioState.status === 'playing' ? <Pause size={17} /> : <Play size={17} />}
+      </button>
+      <div className="persistent-plan-player-copy">
+        <strong>{audioState.planTitle || 'Performance Plan'}</strong>
+        <span>
+          {audioState.status === 'loading'
+            ? 'Preparing audio…'
+            : audioState.status === 'error'
+              ? audioState.error
+              : `${audioState.status === 'paused' ? 'Paused' : 'Playing'} · ${audioState.sectionTitle}`}
+        </span>
+      </div>
+      <button className="persistent-plan-player-close" onClick={() => planAudioPlayer.stop()} type="button" aria-label="Stop plan audio">
+        <X size={16} />
+      </button>
+    </aside>
+  );
+}
+
+function usePlanAudioState() {
+  const [audioState, setAudioState] = useState(planAudioPlayer.getState());
+  useEffect(() => planAudioPlayer.subscribe(setAudioState), []);
+  return audioState;
+}
+
+function PlanAudioControls({ language = 'en', sections, planId, planTitle = 'Performance Plan' }) {
+  const audioState = usePlanAudioState();
+  const { rate } = audioState;
+  const isCurrentPlan = String(audioState.planId) === String(planId);
+  const status = isCurrentPlan ? audioState.status : 'idle';
+  const activeSectionIndex = isCurrentPlan ? audioState.sectionIndex : -1;
+  const playbackMode = isCurrentPlan ? audioState.mode : 'plan';
+  const currentTime = isCurrentPlan ? audioState.currentTime : 0;
+  const currentDuration = isCurrentPlan ? audioState.duration : 0;
   const canPlayAudio = typeof window !== 'undefined' && typeof Audio !== 'undefined';
   const availableSections = sections
-    .map((section, index) => ({ ...section, index, audioText: sectionAudioText(section) }))
-    .filter((section) => section.audioText.length > 12);
+    .map((section, index) => ({ ...section, index, audioText: sectionAudioText(section) }));
   const estimatedSectionSeconds = sections.map((section) => {
     const wordCount = sectionAudioText(section).split(/\s+/).filter(Boolean).length;
     return Math.max(1, Math.round((wordCount / 150) * 60));
@@ -9687,8 +9952,6 @@ function PlanAudioControls({ language = 'en', sections, planId }) {
     return `${minutes}:${String(adjustedSeconds % 60).padStart(2, '0')}`;
   }
 
-  useEffect(() => () => stopSpeech(), [planId]);
-
   useEffect(() => {
     function handleSectionListen(event) {
       if (event.detail?.planId !== planId) return;
@@ -9699,52 +9962,6 @@ function PlanAudioControls({ language = 'en', sections, planId }) {
     window.addEventListener('tca-plan-section-listen', handleSectionListen);
     return () => window.removeEventListener('tca-plan-section-listen', handleSectionListen);
   });
-
-  function cleanupAudio() {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-      audioRef.current = null;
-    }
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = '';
-    }
-  }
-
-  function audioCacheKey(sectionIndex, text) {
-    return `${language}:${planId}:${sectionIndex}:${text.length}:${text.slice(0, 48)}`;
-  }
-
-  async function getNarratedAudio(sectionIndex, text) {
-    const cacheKey = audioCacheKey(sectionIndex, text);
-    let blob = audioCacheRef.current.get(cacheKey);
-    if (!blob) {
-      blob = await requestNarratedAudio(text);
-      audioCacheRef.current.set(cacheKey, blob);
-    }
-    return blob;
-  }
-
-  function prefetchNarratedSection(sectionIndex) {
-    if (!canPlayAudio || sectionIndex >= sections.length) return;
-    const nextText = sectionAudioText(sections[sectionIndex]);
-    if (!nextText) return;
-    const cacheKey = audioCacheKey(sectionIndex, nextText);
-    if (audioCacheRef.current.has(cacheKey)) return;
-    getNarratedAudio(sectionIndex, nextText).catch(() => {});
-  }
-
-  function stopSpeech() {
-    playbackIdRef.current += 1;
-    speechRef.current.stopped = true;
-    speechRef.current.source = 'idle';
-    cleanupAudio();
-    setStatus('idle');
-    setActiveSectionIndex(-1);
-    setCurrentTime(0);
-    setCurrentDuration(0);
-  }
 
   async function requestNarratedAudio(text) {
     const session = await supabase?.auth?.getSession?.().catch(() => null);
@@ -9766,127 +9983,31 @@ function PlanAudioControls({ language = 'en', sections, planId }) {
     return blob;
   }
 
-  async function playNarratedSection(sectionIndex, mode, text, playbackId) {
-    if (!canPlayAudio) return false;
-    try {
-      cleanupAudio();
-      const blob = await getNarratedAudio(sectionIndex, text);
-      if (playbackId !== playbackIdRef.current || speechRef.current.stopped) return true;
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audio.playbackRate = rate;
-      audio.preload = 'auto';
-      audioUrlRef.current = url;
-      audioRef.current = audio;
-      speechRef.current = {
-        sectionIndex,
-        mode,
-        source: 'narrated',
-        stopped: false,
-        playbackId
-      };
-      setPlaybackMode(mode);
-      setActiveSectionIndex(sectionIndex);
-      setStatus('playing');
-      setCurrentTime(0);
-      setCurrentDuration(0);
-      audio.onloadedmetadata = () => {
-        if (playbackId !== playbackIdRef.current) return;
-        setCurrentDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
-      };
-      audio.ontimeupdate = () => {
-        if (playbackId !== playbackIdRef.current) return;
-        setCurrentTime(audio.currentTime || 0);
-      };
-      if (mode === 'plan') prefetchNarratedSection(sectionIndex + 1);
-      audio.onended = () => {
-        if (playbackId !== playbackIdRef.current) return;
-        cleanupAudio();
-        if (speechRef.current.stopped) return;
-        const nextSection = sectionIndex + 1;
-        if (mode === 'plan' && nextSection < sections.length) {
-          setActiveSectionIndex(nextSection);
-          setCurrentTime(0);
-          setCurrentDuration(0);
-          setStatus('loading');
-          startSpeech(nextSection, 'plan', false);
-          return;
-        }
-        setStatus('idle');
-        setActiveSectionIndex(-1);
-      };
-      audio.onerror = () => {
-        if (playbackId !== playbackIdRef.current) return;
-        cleanupAudio();
-        audioCacheRef.current.delete(audioCacheKey(sectionIndex, text));
-        showAudioError(playbackId);
-      };
-      await audio.play();
-      return true;
-    } catch {
-      if (playbackId !== playbackIdRef.current) return true;
-      cleanupAudio();
-      audioCacheRef.current.delete(audioCacheKey(sectionIndex, text));
-      return false;
-    }
-  }
-
-  function showAudioError(playbackId) {
-    if (playbackId !== playbackIdRef.current) return;
-    playbackIdRef.current += 1;
-    speechRef.current.stopped = true;
-    cleanupAudio();
-    setStatus('error');
-  }
-
-  async function startSpeech(sectionIndex = 0, mode = 'section', shouldCancel = true) {
-    const section = sections[sectionIndex];
-    const audioText = sectionAudioText(section);
-    if (!audioText) return;
-    if (shouldCancel) stopSpeech();
-    const playbackId = playbackIdRef.current + 1;
-    playbackIdRef.current = playbackId;
-    speechRef.current.stopped = false;
-    speechRef.current.source = 'loading';
-    speechRef.current.sectionIndex = sectionIndex;
-    speechRef.current.mode = mode;
-    setPlaybackMode(mode);
-    setActiveSectionIndex(sectionIndex);
-    setCurrentTime(0);
-    setCurrentDuration(0);
-    setStatus('loading');
-    const narrated = await playNarratedSection(sectionIndex, mode, audioText, playbackId);
-    if (!narrated && playbackId === playbackIdRef.current) {
-      showAudioError(playbackId);
-    }
+  function startSpeech(sectionIndex = 0, mode = 'section') {
+    planAudioPlayer.start({
+      language,
+      planId,
+      planTitle,
+      sections: availableSections,
+      loadAudio: (_index, text) => requestNarratedAudio(text)
+    }, sectionIndex, mode);
   }
 
   async function togglePause() {
     if (status === 'loading') return;
-    if (status === 'playing' && audioRef.current) {
-      audioRef.current.pause();
-      setStatus('paused');
-      return;
-    }
-    if (status === 'paused' && audioRef.current) {
-      const playbackId = playbackIdRef.current;
-      try {
-        await audioRef.current.play();
-        if (playbackId === playbackIdRef.current) setStatus('playing');
-      } catch { showAudioError(playbackId); }
-      return;
-    }
+    if (status === 'playing' || status === 'paused') { planAudioPlayer.toggle(); return; }
     if (status === 'error') { restartCurrentSection(); return; }
     startSpeech(availableSections[0]?.index ?? 0, 'plan');
   }
 
   function restartCurrentSection() {
     const sectionIndex = activeSectionIndex >= 0 ? activeSectionIndex : availableSections[0]?.index ?? 0;
-    startSpeech(sectionIndex, speechRef.current.mode || 'section');
+    if (isCurrentPlan) planAudioPlayer.restart();
+    else startSpeech(sectionIndex, playbackMode || 'section');
   }
 
 
-  if (!canPlayAudio || !availableSections.length) return null;
+  if (!canPlayAudio || !availableSections.some((section) => section.audioText.length > 12)) return null;
 
   return (
     <div className="plan-audio-panel" aria-label="Plan audio controls">
@@ -9900,12 +10021,7 @@ function PlanAudioControls({ language = 'en', sections, planId }) {
           value={rate}
           onChange={(event) => {
             const nextRate = Number(event.target.value);
-            setRate(nextRate);
-            if (audioRef.current) {
-              audioRef.current.playbackRate = nextRate;
-            } else if (status === 'playing' && activeSectionIndex >= 0) {
-              setTimeout(() => startSpeech(activeSectionIndex, speechRef.current.mode || 'section'), 0);
-            }
+            planAudioPlayer.setRate(nextRate);
           }}
         >
           <option value="0.9">0.9x</option>
@@ -9943,7 +10059,7 @@ function PlanAudioControls({ language = 'en', sections, planId }) {
   );
 }
 
-function PlanEpisode({ language = 'en', steps, planId, preserveHeadings = false }) {
+function PlanEpisode({ language = 'en', steps, planId, planTitle = 'Performance Plan', preserveHeadings = false }) {
   const body = steps.join('\n\n');
   const sections = explicitPlanReaderSections(body, preserveHeadings);
   const readerSections = sections.length ? sections : buildPlanReaderSections(planReaderBlocks(body), planId);
@@ -9951,7 +10067,7 @@ function PlanEpisode({ language = 'en', steps, planId, preserveHeadings = false 
   return (
     <div className="episode-flow episode-page-flow">
       <article className="episode-section episode-page" key={`${planId}-page`}>
-        <PlanAudioControls language={language} sections={readerSections} planId={planId} />
+        <PlanAudioControls language={language} sections={readerSections} planId={planId} planTitle={planTitle} />
         {readerSections.map((section, sectionIndex) => (
           <section className={`reader-section reader-section-${section.tone}`} key={`${planId}-section-${sectionIndex}`}>
             <div className="reader-section-header">
@@ -10215,8 +10331,10 @@ function JournalScreen({
 
 function CoachScreen({
   activeCoachSessionId,
+  athleteJourney,
   athleteProfile,
   authSession,
+  coachComposerFocused,
   coachSessions,
   lesson,
   language,
@@ -10226,6 +10344,7 @@ function CoachScreen({
   planProgress,
   plans,
   standards,
+  streakCount,
   setActiveCoachSessionId,
   setCoachSessions,
   setMessages,
@@ -10242,7 +10361,14 @@ function CoachScreen({
   const [voiceSpeaking, setVoiceSpeaking] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceError, setVoiceError] = useState('');
+  const [coachHistoryOpen, setCoachHistoryOpen] = useState(false);
   const coachFirstName = String(athleteProfile?.name || authSession?.name || 'Athlete').trim().split(/\s+/)[0];
+  const rotatingCoachTopics = useMemo(() => {
+    const daySeed = Number(todayKey().replaceAll('-', '')) || 0;
+    const nameSeed = [...coachFirstName].reduce((total, character) => total + character.charCodeAt(0), 0);
+    const offset = (daySeed + nameSeed) % coachTopics.length;
+    return Array.from({ length: 6 }, (_, index) => coachTopics[(offset + index * 5) % coachTopics.length]);
+  }, [coachFirstName]);
   const chatPanelRef = useRef(null);
   const coachDraftRef = useRef(null);
   const voiceControllerRef = useRef(null);
@@ -10482,6 +10608,8 @@ function CoachScreen({
       }
     }
 
+    const recentGameDay = getRecentGameDayContext(authSession?.id, 1)[0] || null;
+    const currentJourney = athleteJourney ? journeyProgress(athleteJourney) : null;
     const response = await fetch(appApiUrl('/api/coach'), {
       method: 'POST',
       headers,
@@ -10496,9 +10624,20 @@ function CoachScreen({
           name: athleteProfile?.name || authSession?.name || '',
           sport: athleteProfile?.sport || '',
           age: athleteProfile?.age || '',
-          location: athleteProfile?.location || '',
+          position: athleteProfile?.position || '',
+          teamLevel: athleteProfile?.teamLevel || athleteProfile?.team_level || '',
+          dreamGoal: athleteProfile?.dreamGoal || athleteProfile?.dream_goal || '',
           goals: goals.map((goal) => `${goal.label}: ${goal.value}`),
-          standards: standards.filter((standard) => standard.active !== false).map((standard) => standard.label)
+          standards: standards.filter((standard) => standard.active !== false).map((standard) => standard.label),
+          lockedInDays: streakCount,
+          journey: currentJourney ? {
+            currentDay: currentJourney.nextDay?.day || currentJourney.total || 1,
+            completedDays: currentJourney.completed,
+            totalDays: currentJourney.total,
+            percent: currentJourney.percent,
+            primaryFocus: athleteJourney?.developmentProfile?.primaryFocusLabel || ''
+          } : null,
+          recentGameDay
         },
         curriculum: {
           dailyDeposit: {
@@ -10618,11 +10757,12 @@ function CoachScreen({
 
   voiceSendRef.current = sendMessage;
 
-  function useTopic(prompt) {
-    setMessageDraft(prompt);
+  function useTopic(prompt, category = '') {
     trackAnalyticsEvent?.('coach_topic_selected', {
-      promptLength: prompt.length
+      promptLength: prompt.length,
+      category
     }, { area: 'coach' });
+    void sendMessage(prompt);
   }
 
   function startNewChat() {
@@ -10637,6 +10777,7 @@ function CoachScreen({
 
   function openCoachSession(session) {
     void endVoiceSession();
+    setCoachHistoryOpen(false);
     setCoachComposerFocused(false);
     setActiveCoachSessionId(session.id);
     setMessages(session.messages);
@@ -10654,76 +10795,111 @@ function CoachScreen({
     }
   }
 
+  function dismissCoachComposer() {
+    coachDraftRef.current?.blur();
+    setCoachComposerFocused(false);
+  }
+
   return (
     <div className="coach-screen">
-      <section className="coach-conversation">
-        <div className="coach-conversation-head">
-          <div className="coach-conversation-title">
-            <span>Mindset Coach</span>
-            <strong>{activeCoachSessionId ? 'Conversation open' : 'New conversation'}</strong>
+      <section className={`coach-conversation${messages.length === 0 ? ' is-starting' : ' is-active'}`}>
+        <div className="coach-command-head">
+          <div className="coach-identity">
+            <div className="coach-mark" aria-hidden="true">
+              <UserRound size={22} strokeWidth={2.35} />
+              <i />
+            </div>
+            <div className="coach-conversation-title">
+              <span>Mindset Coach</span>
+              <strong>Ready when you are.</strong>
+              <small>Private mental performance coaching</small>
+            </div>
           </div>
-          <button className="ghost-action" onClick={startNewChat}>
-            <Plus size={16} />
-            New
-          </button>
+          <div className="coach-head-actions">
+            <button className="coach-head-icon" onClick={() => setCoachHistoryOpen(true)} type="button" aria-label="Open conversation history">
+              <BookOpen size={17} />
+              {coachSessions.length > 0 && <span>{coachSessions.length}</span>}
+            </button>
+            <button className="coach-new-chat" onClick={startNewChat} type="button" aria-label="Start new conversation">
+              <Plus size={16} />
+              <span>New chat</span>
+            </button>
+          </div>
         </div>
 
-        {!voiceMode ? (
-          <button className="coach-voice-launch" disabled={!voiceSupported} onClick={startVoiceSession} type="button">
-            <span className="coach-voice-launch-icon"><Mic size={20} /></span>
-            <span><strong>Start Voice Session</strong><small>{voiceSupported ? 'Talk it through with your coach' : 'Available in the iPhone app'}</small></span>
-            <ChevronRight size={18} />
-          </button>
-        ) : (
-          <div className={`coach-voice-session${voiceListening ? ' listening' : ''}${voiceSpeaking ? ' speaking' : ''}${voiceTranscribing ? ' transcribing' : ''}`} aria-live="polite">
-            <button className="coach-voice-orb" disabled={voiceTranscribing} onClick={handleVoiceControl} type="button" aria-label={voiceListening ? 'Finish speaking' : voiceSpeaking ? 'Interrupt coach' : 'Speak to coach'}>
-              {voiceSpeaking ? <Volume2 size={23} /> : <Mic size={23} />}
-            </button>
-            <div className="coach-voice-copy">
-              <span>Voice Coach</span>
-              <strong>{voiceTranscribing ? 'Turning your voice into text…' : coachThinking ? 'Coach is thinking…' : voiceSpeaking ? 'Coach is speaking' : voiceListening ? 'I’m listening…' : 'Your turn'}</strong>
-              <p>{voiceTranscript || (voiceTranscribing ? 'One moment.' : voiceListening ? 'Say what’s on your mind, then tap the microphone.' : voiceSpeaking ? 'Tap the speaker to interrupt.' : 'Tap the microphone to continue.')}</p>
+        {messages.length === 0 && (
+          <div className="coach-starting-state">
+            <div className="coach-performance-orb" aria-hidden="true">
+              <span><UserRound size={29} strokeWidth={2.2} /></span>
             </div>
-            <button className="coach-voice-end" onClick={endVoiceSession} type="button">End</button>
+            <div className="coach-welcome-copy">
+              <span>Built for the moments between the highlights.</span>
+              <h2>What’s on your mind today, {coachFirstName}?</h2>
+            </div>
+
+            <div className="coach-quick-starts">
+              <div className="coach-section-label">
+                <div>
+                  <strong>Quick starts</strong>
+                  <span>Choose what’s closest to what you’re feeling.</span>
+                </div>
+                <Sparkles size={16} />
+              </div>
+              <div className="coach-topic-grid">
+                {rotatingCoachTopics.map((topic) => {
+                  const TopicIcon = topic.icon;
+                  return (
+                    <button key={`${topic.category}-${topic.title}`} onClick={() => useTopic(topic.prompt, topic.category)} type="button">
+                      <span className="coach-topic-icon"><TopicIcon size={16} /></span>
+                      <span>
+                        <small>{topic.category}</small>
+                        <strong>{topic.title}</strong>
+                      </span>
+                      <ChevronRight size={15} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
-        {voiceError && <p className="coach-voice-error">{voiceError}</p>}
-
-        <div className="coach-topics">
-          {coachTopics.map((topic) => (
-            <button key={topic.title} onClick={() => useTopic(topic.prompt)}>
-              {topic.title}
-            </button>
-          ))}
-        </div>
-        <section className="chat-panel" ref={chatPanelRef}>
-          {messages.length === 0 && (
-            <div className="coach-empty-state">
-              <strong>What’s on your mind today, {coachFirstName}?</strong>
-              <span>Ask anything. Get real guidance. Built for your journey.</span>
-            </div>
-          )}
+        {messages.length > 0 && <section className="chat-panel" ref={chatPanelRef}>
           {messages.map((message, index) => (
-            <div translate="no" className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'} key={`${message.role}-${index}`}>
-              <span>{message.text}</span>
-              {message.role === 'coach' && voiceSupported && (
-                <button className="coach-message-audio" onClick={() => speakCoachMessage(message.text, false)} type="button" aria-label="Listen to this coach response">
-                  <Volume2 size={15} />
-                </button>
-              )}
+            <div className={`coach-message-row ${message.role}`} key={`${message.role}-${index}`}>
+              {message.role === 'coach' && <span className="coach-message-avatar" aria-hidden="true"><UserRound size={15} strokeWidth={2.35} /></span>}
+              <div translate="no" className={message.role === 'coach' ? 'bubble coach' : 'bubble athlete'}>
+                {message.role === 'coach' && <small className="coach-message-label">Coach</small>}
+                <span>{message.text}</span>
+              </div>
             </div>
           ))}
           {coachThinking && (
-            <div className="bubble coach thinking" aria-label="Coach is typing">
-              <span />
-              <span />
-              <span />
+            <div className="coach-message-row coach">
+              <span className="coach-message-avatar" aria-hidden="true"><UserRound size={15} strokeWidth={2.35} /></span>
+              <div className="bubble coach thinking" aria-label="Coach is thinking">
+                <small className="coach-message-label">Coach is thinking</small>
+                <i /><i /><i />
+              </div>
             </div>
           )}
-        </section>
+        </section>}
 
         {coachStatus && <p className="coach-status">{coachStatus}</p>}
+        {coachComposerFocused && (
+          <div className="coach-composer-modebar">
+            {messages.length === 0 && (
+              <button onClick={dismissCoachComposer} type="button">
+                <Sparkles size={14} />
+                Quick starts
+              </button>
+            )}
+            <button className="coach-composer-done" onClick={dismissCoachComposer} type="button">
+              <ChevronDown size={15} />
+              Done
+            </button>
+          </div>
+        )}
         <div className="composer">
           <textarea
             ref={coachDraftRef}
@@ -10746,38 +10922,48 @@ function CoachScreen({
               }
             }}
             disabled={coachThinking}
-            placeholder="Ask your coach..."
+            placeholder="Tell your coach what’s going on…"
             enterKeyHint="send"
             rows={2}
           />
-          <button className="icon-button dark" onClick={() => sendMessage()} aria-label="Send message" disabled={coachThinking}>
+          <button className="icon-button dark" onClick={() => sendMessage()} aria-label="Send message" disabled={coachThinking || !messageDraft.trim()}>
             <Send size={18} />
           </button>
         </div>
+        <div className="coach-private-note"><Shield size={13} /><span>Your conversations stay private.</span></div>
       </section>
 
-      <section className="coach-support-grid">
-        <div className="panel coach-history-panel">
-          <PanelTitle icon={<BookOpen size={18} />} title="History" action={`${coachSessions.length} saved`} />
-          {coachSessions.length === 0 ? (
-            <p className="empty-note">Saved coach conversations will appear here.</p>
-          ) : (
-            <div className="coach-history">
-              {coachSessions.map((session) => (
-                <article className={session.id === activeCoachSessionId ? 'coach-session active' : 'coach-session'} key={session.id}>
-                  <button onClick={() => openCoachSession(session)}>
-                    <strong>{session.title}</strong>
-                    <span>{session.date} at {session.time}</span>
-                  </button>
-                  <button className="remove-standard" onClick={() => removeCoachSession(session.id)} aria-label={`Remove coach chat from ${session.date}`}>
-                    <Trash2 size={16} />
-                  </button>
-                </article>
-              ))}
+      {coachHistoryOpen && (
+        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setCoachHistoryOpen(false)}>
+          <section className="bottom-sheet coach-history-sheet" role="dialog" aria-modal="true" aria-label="Conversation history" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-head">
+              <div>
+                <span>{coachSessions.length} saved</span>
+                <strong>Recent Conversations</strong>
+              </div>
+              <button className="icon-button sheet-close" onClick={() => setCoachHistoryOpen(false)} type="button" aria-label="Close conversation history"><X size={18} /></button>
             </div>
-          )}
+            {coachSessions.length === 0 ? (
+              <div className="coach-history-empty"><MessageCircle size={22} /><strong>No conversations yet</strong><span>Your saved coach conversations will appear here.</span></div>
+            ) : (
+              <div className="coach-history">
+                {coachSessions.map((session) => (
+                  <article className={session.id === activeCoachSessionId ? 'coach-session active' : 'coach-session'} key={session.id}>
+                    <button onClick={() => openCoachSession(session)}>
+                      <strong>{session.title}</strong>
+                      <span>{session.date} at {session.time}</span>
+                    </button>
+                    <button className="remove-standard" onClick={() => removeCoachSession(session.id)} aria-label={`Remove coach chat from ${session.date}`}>
+                      <Trash2 size={16} />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-      </section>
+      )}
     </div>
   );
 }
@@ -12356,6 +12542,7 @@ function ParentCornerSection({ language = 'en', parentGuides = [], parentMessage
                 language={language}
                 steps={[selectedGuideSteps[activeGuideDayIndex]]}
                 planId={`${selectedContent.id}-day-${activeGuideDayIndex + 1}`}
+                planTitle={selectedContent.title}
                 preserveHeadings
               />
             </>
@@ -12530,7 +12717,7 @@ function ParentPlanLibrary({ language = 'en', plans, planProgress, setPlanProgre
                   <p>{planDisplaySubject(selectedPlan)}</p>
                 </div>
                 {selectedPlan.unlocked ? (
-                  <PlanEpisode language={language} steps={selectedPlan.steps} planId={selectedPlan.id} preserveHeadings={shouldPreservePlanHeadings(selectedPlan.id)} />
+                  <PlanEpisode language={language} steps={selectedPlan.steps} planId={selectedPlan.id} planTitle={selectedPlan.title} preserveHeadings={shouldPreservePlanHeadings(selectedPlan.id)} />
                 ) : (
                   <div className="locked-message">
                     <LockKeyhole size={18} />
