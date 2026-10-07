@@ -78,11 +78,11 @@ public class TCAPlanAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "TCAPlanAudioPlugin"
     public let jsName = "TCAPlanAudio"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "beginPlayback", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "endPlayback", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "activatePlanAudioSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deactivatePlanAudioSession", returnType: CAPPluginReturnPromise)
     ]
 
-    @objc func beginPlayback(_ call: CAPPluginCall) {
+    @objc func activatePlanAudioSession(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             do {
                 let session = AVAudioSession.sharedInstance()
@@ -95,7 +95,7 @@ public class TCAPlanAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    @objc func endPlayback(_ call: CAPPluginCall) {
+    @objc func deactivatePlanAudioSession(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             do {
                 try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

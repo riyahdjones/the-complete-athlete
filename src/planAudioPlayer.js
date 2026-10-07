@@ -34,12 +34,12 @@ function isNativeIOS() {
 
 function beginNativeAudioSession() {
   if (!isNativeIOS()) return Promise.resolve();
-  return NativePlanAudio.beginPlayback().catch(() => {});
+  return NativePlanAudio.activatePlanAudioSession().catch(() => {});
 }
 
 function endNativeAudioSession() {
   if (!isNativeIOS()) return;
-  NativePlanAudio.endPlayback().catch(() => {});
+  NativePlanAudio.deactivatePlanAudioSession().catch(() => {});
 }
 
 function clearAudio() {
