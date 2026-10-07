@@ -17625,7 +17625,8 @@ select {
 
 .plans-tab .plan-need-rail,
 .plans-tab .training-category-rail,
-.plans-tab .recommended-plan-rail {
+.plans-tab .recommended-plan-rail,
+.plans-tab .plan-day-strip {
   scroll-snap-type: none;
   scroll-behavior: auto;
   overscroll-behavior-x: contain;
@@ -17637,11 +17638,11 @@ select {
   -webkit-user-select: none;
 }
 
-.plans-tab :is(.plan-need-rail, .training-category-rail, .recommended-plan-rail).is-dragging {
+.plans-tab :is(.plan-need-rail, .training-category-rail, .recommended-plan-rail, .plan-day-strip).is-dragging {
   cursor: grabbing;
 }
 
-.plans-tab :is(.plan-need-rail, .training-category-rail, .recommended-plan-rail).is-dragging * {
+.plans-tab :is(.plan-need-rail, .training-category-rail, .recommended-plan-rail, .plan-day-strip).is-dragging * {
   pointer-events: none;
 }
 

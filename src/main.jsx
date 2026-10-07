@@ -8984,6 +8984,7 @@ function PerformancePlanCard({ series, onOpen, trialPlanMode }) {
 
 function PlansScreen({ athleteProfile, language = 'en', plans, planProgress, trialPlanMode = false, requestedPlanSeriesId = '', requestedPlanId = '', setRequestedPlanSeriesId, setRequestedPlanId, setPlanProgress, awardPoints, notifyUser, persistPlanCompletion, requestMilestoneReview, trackAnalyticsEvent }) {
   const readOnly = !setPlanProgress;
+  const { dragHandlers: dayStripDragHandlers, railRef: dayStripRef } = useHorizontalPointerDrag();
   const today = todayKey();
   const sequencedPlans = trialPlanMode
     ? trialPlanAccess(plans, planProgress)
@@ -9142,7 +9143,7 @@ function PlansScreen({ athleteProfile, language = 'en', plans, planProgress, tri
           <button className="primary-action full" type="button" onClick={() => setPlanDetailTab('lessons')}>Continue Plan <ArrowRight size={18}/></button>
         </section>
         {planDetailTab === 'lessons' && <div className="plan-reader-stack single-plan-reader">
-          <div className="plan-day-strip" aria-label="Plan days">
+          <div className="plan-day-strip" aria-label="Plan days" ref={dayStripRef} {...dayStripDragHandlers}>
             {visiblePlans.map((plan, index) => <button className={String(plan.id) === String(selectedVisiblePlan?.id) ? 'active' : ''} disabled={!plan.unlocked} key={plan.id} onClick={() => setSelectedPlanId(String(plan.id))} type="button">{plan.completedAt ? <Check size={13}/> : plan.unlocked ? index + 1 : <LockKeyhole size={12}/>}</button>)}
           </div>
           {selectedVisiblePlan && (
