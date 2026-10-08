@@ -10991,7 +10991,7 @@ function CoachScreen({
               }
             }}
             disabled={coachThinking}
-            placeholder="Tell your coach what’s going on…"
+            placeholder="What would you like to work on today?"
             enterKeyHint="send"
             rows={2}
           />
