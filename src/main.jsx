@@ -5191,7 +5191,7 @@ function App() {
     });
   }
 
-  function awardPoints({ type, points, label, uniqueKey, metadata = {} }) {
+  function awardPoints({ type, points, label, uniqueKey, metadata = {}, showPopup = true }) {
     const cleanKey = uniqueKey || `${type}-${Date.now()}`;
     const cleanPoints = Number(points) || 0;
     if (cleanPoints <= 0) return false;
@@ -5214,7 +5214,8 @@ function App() {
 
     persistPointEvent(pointEvent);
     if (notificationPreferences.points) playPointsEarnedSound(cleanPoints);
-    showPointsEarnedPopup(cleanPoints, label);
+    if (showPopup) showPointsEarnedPopup(cleanPoints, label);
+    else triggerPointsEarnedHaptic();
     trackAnalyticsEvent('points_awarded', {
       pointType: type,
       points: cleanPoints,
@@ -8152,7 +8153,8 @@ function HomeScreen({
       points: standardsPoints,
       label: streakBonus > 0 ? `Daily activity tracker complete with ${nextStreak}-day streak bonus` : 'Daily activity tracker complete',
       uniqueKey: `standards-completed-${submissionDate}`,
-      metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus }
+      metadata: { completed: completedStandards.length, total: standards.length, streak: nextStreak, streakBonus },
+      showPopup: false
     });
     setDayCompletion({
       points: awarded ? standardsPoints : 0,
