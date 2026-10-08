@@ -1449,26 +1449,32 @@ export default async function handler(req, res) {
     });
   }
 
+  const modelRequest = {
+    model,
+    input: buildInput({
+      message,
+      history: body.history,
+      athlete: athleteContext,
+      memory,
+      curriculum: curriculumContext,
+      sportsContext,
+      entryContext,
+      language
+    }),
+    max_output_tokens: sportsKnowledgeQuestion ? 700 : 500
+  };
+  if (/^gpt-5\.5(?:-|$)/.test(model) && !model.includes('-pro')) {
+    modelRequest.reasoning = { effort: 'none' };
+    modelRequest.text = { verbosity: 'low' };
+  }
+
   const response = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      model,
-      input: buildInput({
-        message,
-        history: body.history,
-        athlete: athleteContext,
-        memory,
-        curriculum: curriculumContext,
-        sportsContext,
-        entryContext,
-        language
-      }),
-      max_output_tokens: sportsKnowledgeQuestion ? 320 : entryContext ? 280 : 240
-    })
+    body: JSON.stringify(modelRequest)
   });
 
   if (!response.ok) {
@@ -1483,7 +1489,8 @@ export default async function handler(req, res) {
   }
 
   const data = await response.json();
-  const reply = displayCoachText(extractOutputText(data));
+  const exhaustedOutputBudget = data.status === 'incomplete' && data.incomplete_details?.reason === 'max_output_tokens';
+  const reply = exhaustedOutputBudget ? '' : displayCoachText(extractOutputText(data));
   if (!reply) {
     await logAppEvent({
       area: 'coach',
