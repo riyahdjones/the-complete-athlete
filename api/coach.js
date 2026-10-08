@@ -41,6 +41,21 @@ const quickStartGuidance = {
   'After the game': 'Explore the moment, result, or self-judgment that is still sticking with the athlete.'
 };
 
+const quickStartFallbackQuestions = {
+  Confidence: 'When do you notice your confidence slipping most—before the moment, after a mistake, or when you start comparing yourself?',
+  Pressure: 'What part of tomorrow feels heaviest right now: the result, making a mistake, or what other people may think?',
+  Mistakes: 'Take me to the mistake. What happened—and what did you start telling yourself right after it?',
+  Coaching: 'What did your coach say or do, and what part of it is getting to you most?',
+  Burnout: 'How long have you felt this drained, and is it the training, the pressure, or everything around the sport that feels heaviest?',
+  Focus: 'When the overthinking starts, what thought keeps pulling you away from the next play?',
+  'Playing time': 'What have you been told about your role, and what are you afraid your playing time says about you?',
+  Motivation: 'Is the motivation missing because you are tired, discouraged by your progress, or disconnected from what you are working toward?',
+  'Game day': 'What feels least settled about the game right now—your nerves, confidence, focus, or knowing what to expect?',
+  Team: 'What happened with your teammate, and what outcome do you want from the way you handle it?',
+  Comparison: 'Who or what are you comparing yourself to, and what does being “behind” mean to you right now?',
+  'After the game': 'What part of the game is sticking with you most: one moment, the result, or how you felt about your performance?'
+};
+
 const sportsLeagues = {
   nba: { label: 'NBA', sport: 'basketball', league: 'nba' },
   nfl: { label: 'NFL', sport: 'football', league: 'nfl' },
@@ -1452,7 +1467,7 @@ export default async function handler(req, res) {
         entryContext,
         language
       }),
-      max_output_tokens: sportsKnowledgeQuestion ? 220 : 150
+      max_output_tokens: sportsKnowledgeQuestion ? 320 : entryContext ? 280 : 240
     })
   });
 
@@ -1477,6 +1492,24 @@ export default async function handler(req, res) {
       userId: user.id,
       metadata: { model }
     });
+    const fallbackReply = entryContext ? quickStartFallbackQuestions[entryContext.category] : '';
+    if (fallbackReply) {
+      await saveCoachSession({
+        userId: user.id,
+        token,
+        sessionId: body.sessionId,
+        title: body.sessionTitle || message,
+        messages: [...cleanMessages(body.history), { role: 'coach', text: fallbackReply }],
+        safety: 'ok'
+      });
+      return json(res, 200, {
+        reply: fallbackReply,
+        safety: 'ok',
+        mode: 'guided_fallback',
+        messageCount: usage.messageCount,
+        messageLimit: usage.messageLimit
+      });
+    }
     return json(res, 502, { error: 'Coach model returned an empty response.' });
   }
 
