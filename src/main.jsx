@@ -10879,9 +10879,7 @@ function CoachScreen({
               <i />
             </div>
             <div className="coach-conversation-title">
-              <span>Mindset Coach</span>
               <strong>Ready when you are.</strong>
-              <small>Private mental performance coaching</small>
             </div>
           </div>
           <div className="coach-head-actions">
