@@ -10611,9 +10611,26 @@ function CoachScreen({
     await startVoiceListening();
   }
 
-  function coachReply(text) {
+  function coachReply(text, entryContext = null) {
     const lower = text.toLowerCase();
     const words = text.trim().split(/\s+/).filter(Boolean);
+    if (entryContext?.source === 'quick_start') {
+      const quickStartQuestions = {
+        Confidence: 'When do you notice your confidence slipping most—before the moment, after a mistake, or when you start comparing yourself?',
+        Pressure: 'What part of tomorrow feels heaviest right now: the result, making a mistake, or what other people may think?',
+        Mistakes: 'Take me to the mistake. What happened—and what did you start telling yourself right after it?',
+        Coaching: 'What did your coach say or do, and what part of it is getting to you most?',
+        Burnout: 'How long have you felt this drained, and is it the training, the pressure, or everything around the sport that feels heaviest?',
+        Focus: 'When the overthinking starts, what thought keeps pulling you away from the next play?',
+        'Playing time': 'What have you been told about your role, and what are you afraid your playing time says about you?',
+        Motivation: 'Is the motivation missing because you are tired, discouraged by your progress, or disconnected from what you are working toward?',
+        'Game day': 'What feels least settled about the game right now—your nerves, confidence, focus, or knowing what to expect?',
+        Team: 'What happened with your teammate, and what outcome do you want from the way you handle it?',
+        Comparison: 'Who or what are you comparing yourself to, and what does being “behind” mean to you right now?',
+        'After the game': 'What part of the game is sticking with you most: one moment, the result, or how you felt about your performance?'
+      };
+      if (quickStartQuestions[entryContext.category]) return quickStartQuestions[entryContext.category];
+    }
     if (/^(yo+|hey+|hi+|hello+|sup|what'?s up|you there|are you there|u there|can you help|help me|coach|mindset coach)[\s?.!]*$/i.test(text)) {
       const firstName = String(athleteProfile?.name || authSession?.name || '').trim().split(/\s+/)[0];
       const namePhrase = firstName ? `, ${firstName}` : '';
@@ -10667,7 +10684,7 @@ function CoachScreen({
     });
   }
 
-  async function requestCoachReply(clean, nextMessages, sessionId, sessionTitle) {
+  async function requestCoachReply(clean, nextMessages, sessionId, sessionTitle, entryContext = null) {
     const headers = { 'Content-Type': 'application/json' };
 
     if (isSupabaseConfigured) {
@@ -10686,6 +10703,7 @@ function CoachScreen({
         language,
         locale: language === 'es' ? 'es-US' : 'en-US',
         message: clean,
+        entryContext,
         sessionId: String(sessionId),
         sessionTitle,
         history: nextMessages.slice(-12),
@@ -10749,7 +10767,7 @@ function CoachScreen({
     return payload;
   }
 
-  async function sendMessage(voiceText = '') {
+  async function sendMessage(voiceText = '', entryContext = null) {
     const clean = (typeof voiceText === 'string' && voiceText ? voiceText : messageDraft).trim();
     if (!clean || coachThinking) return;
     const nextMessages = [
@@ -10772,7 +10790,7 @@ function CoachScreen({
     }, { area: 'coach' });
 
     try {
-      const payload = await requestCoachReply(clean, nextMessages, sessionId, sessionTitle);
+      const payload = await requestCoachReply(clean, nextMessages, sessionId, sessionTitle, entryContext);
       if (payload.messageLimit) {
         setCoachStatus(`${payload.messageCount} of ${payload.messageLimit} coach messages used today.`);
       }
@@ -10800,7 +10818,7 @@ function CoachScreen({
         return;
       }
       if (import.meta.env.DEV) {
-        const reply = coachReply(clean);
+        const reply = coachReply(clean, entryContext);
         setCoachStatus('Local coach backend is not connected, so this chat used the prototype coach.');
         trackAnalyticsEvent?.('coach_fallback_reply_used', {
           reason: error.message || 'backend_unavailable'
@@ -10831,7 +10849,7 @@ function CoachScreen({
       promptLength: prompt.length,
       category
     }, { area: 'coach' });
-    void sendMessage(prompt);
+    void sendMessage(prompt, { source: 'quick_start', category });
   }
 
   function startNewChat() {

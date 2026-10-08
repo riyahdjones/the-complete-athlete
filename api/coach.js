@@ -26,6 +26,21 @@ const SPORTS_MAX_SEARCH_PLAYERS = 4;
 const SPORTS_MAX_SEARCH_ARTICLES = 5;
 const SPORTS_TEAM_CACHE_TTL_MS = 1000 * 60 * 60 * 12;
 
+const quickStartGuidance = {
+  Confidence: 'Find when confidence drops and what the athlete starts believing in that moment.',
+  Pressure: 'Explore what specifically feels at stake in the upcoming event. Do not ask what happened most recently.',
+  Mistakes: 'Explore the actual mistake and the athlete’s immediate self-talk or next-play response.',
+  Coaching: 'Explore what the coach said or did and how the athlete interpreted it.',
+  Burnout: 'Explore duration and whether training load, pressure, results, or life outside the sport is draining them.',
+  Focus: 'Identify the recurring thought or trigger that pulls attention away from the next play.',
+  'Playing time': 'Explore what the athlete has been told about their role and what meaning they attach to it.',
+  Motivation: 'Distinguish physical tiredness, discouragement, unclear purpose, and avoidance without accusing the athlete.',
+  'Game day': 'This is future-facing. Explore what feels least settled about the upcoming competition and what “locked in” would look like.',
+  Team: 'Explore the specific interaction and the outcome the athlete wants from handling it well.',
+  Comparison: 'Explore who or what triggers comparison and what the athlete believes being behind means.',
+  'After the game': 'Explore the moment, result, or self-judgment that is still sticking with the athlete.'
+};
+
 const sportsLeagues = {
   nba: { label: 'NBA', sport: 'basketball', league: 'nba' },
   nfl: { label: 'NFL', sport: 'football', league: 'nfl' },
@@ -751,7 +766,7 @@ function buildCurriculumContext(curriculum, message = '') {
   return [...depositLines, '', ...planLines].join('\n');
 }
 
-function buildInput({ message, history, athlete, memory, curriculum, sportsContext, language = 'en' }) {
+function buildInput({ message, history, athlete, memory, curriculum, sportsContext, entryContext, language = 'en' }) {
   const conversationText = [...historyBeforeCurrentMessage(history, message).slice(-6).map((entry) => entry.text), message].join(' ');
   const needsGoals = /\b(goal|starting|starter|role|playing time|motivat|progress|season|improv|dream)\b/i.test(conversationText);
   const needsWork = /\b(train|practice|discipline|motivat|routine|habit|work|streak|locked|activity)\b/i.test(conversationText);
@@ -773,6 +788,9 @@ function buildInput({ message, history, athlete, memory, curriculum, sportsConte
   if (needsJourney && athlete?.journey) contextLines.push(`21-Day Journey: ${cleanMessage(JSON.stringify(athlete.journey), 500)}`);
   if (needsGameDay && athlete?.recentGameDay) contextLines.push(`Recent Game Day context: ${cleanMessage(JSON.stringify(athlete.recentGameDay), 600)}`);
   const context = contextLines.join('\n');
+  const entryGuidance = entryContext?.source === 'quick_start' && quickStartGuidance[entryContext.category]
+    ? `The athlete selected the “${entryContext.category}” quick start. ${quickStartGuidance[entryContext.category]} Ask one natural, specific question that moves this exact topic forward. Do not use a generic catch-all question, and do not give a full solution before hearing their answer.`
+    : 'The athlete typed their own message. Follow the normal discovery and response rules.';
 
   const recentHistory = historyBeforeCurrentMessage(history, message).slice(-MAX_HISTORY_MESSAGES);
   const messages = recentHistory
@@ -785,7 +803,7 @@ function buildInput({ message, history, athlete, memory, curriculum, sportsConte
   return [
     {
       role: 'developer',
-      content: `${coachInstructions}\n\nLanguage requirement: ${language === 'es' ? 'Respond entirely in natural, age-appropriate Spanish. Keep the same concise coaching style. Do not mix in English unless the athlete asks.' : 'Respond in English.'}\n\nSelectively retrieved athlete context:\n${context}\n\nRelevant app curriculum context:\n${buildCurriculumContext(curriculum, message)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nRelevant private coaching continuity:\n${buildMemoryContext(memory, message, history, athlete)}`
+      content: `${coachInstructions}\n\nLanguage requirement: ${language === 'es' ? 'Respond entirely in natural, age-appropriate Spanish. Keep the same concise coaching style. Do not mix in English unless the athlete asks.' : 'Respond in English.'}\n\nConversation entry guidance:\n${entryGuidance}\n\nSelectively retrieved athlete context:\n${context}\n\nRelevant app curriculum context:\n${buildCurriculumContext(curriculum, message)}\n\nCurrent sports context:\n${sportsContext || 'No live sports lookup was needed for this message.'}\n\nRelevant private coaching continuity:\n${buildMemoryContext(memory, message, history, athlete)}`
     },
     ...messages,
     {
@@ -1298,6 +1316,10 @@ export default async function handler(req, res) {
   }
 
   const message = cleanMessage(body.message);
+  const entryCategory = cleanMessage(body.entryContext?.category, 40);
+  const entryContext = body.entryContext?.source === 'quick_start' && quickStartGuidance[entryCategory]
+    ? { source: 'quick_start', category: entryCategory }
+    : null;
   const language = String(body.language || body.locale || profile?.preferred_language || user.user_metadata?.preferred_language || 'en').toLowerCase().startsWith('es') ? 'es' : 'en';
   if (!message) {
     return json(res, 400, { error: 'Message is required.' });
@@ -1393,7 +1415,7 @@ export default async function handler(req, res) {
 
   const sportsKnowledgeQuestion = hasSportsKnowledgeIntent(message);
 
-  if (!sportsKnowledgeQuestion && !isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
+  if (!entryContext && !sportsKnowledgeQuestion && !isCurriculumQuestion(message) && needsClarifyingQuestion(message, body.history)) {
     const reply = clarifyingResponse(message, athleteContext, body.history, language);
     await saveCoachSession({
       userId: user.id,
@@ -1427,6 +1449,7 @@ export default async function handler(req, res) {
         memory,
         curriculum: curriculumContext,
         sportsContext,
+        entryContext,
         language
       }),
       max_output_tokens: sportsKnowledgeQuestion ? 220 : 150
