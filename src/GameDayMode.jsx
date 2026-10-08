@@ -228,6 +228,16 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
 
   useEffect(() => localStorage.setItem(storageKey(STORAGE_PREFIX, userId), JSON.stringify(sessions)), [sessions, userId]);
   useEffect(() => {
+    if (!open && !historyOpen && !detailId) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.classList.add('game-day-modal-open');
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.classList.remove('game-day-modal-open');
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, historyOpen, detailId]);
+  useEffect(() => {
     if (!isSupabaseConfigured || !isCloudUser(userId)) return undefined;
     let cancelled = false;
     supabase.from('game_day_sessions').select('*').eq('athlete_user_id', userId).order('started_at', { ascending: false }).then(({ data, error }) => {
@@ -303,6 +313,13 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
     window.setTimeout(() => setReadyFinish(false), 2000);
   }
   function closeFinished() { setOpen(false); setDraft(null); setReadyFinish(false); }
+  function goBack() {
+    if (draft?.stage === 'questions' && draft.questionIndex > 0) {
+      setDraft((current) => ({ ...current, questionIndex: current.questionIndex - 1 }));
+      return;
+    }
+    setOpen(false);
+  }
   const summary = draft ? summarize(draft) : null;
   const detail = sessions.find((session) => session.id === detailId);
   return <>
@@ -314,16 +331,16 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
       <button className="game-day-history-link" type="button" onClick={() => setHistoryOpen(true)}><History size={16} /> Game Day History</button>
     </section>
 
-    {open && draft && <div className="game-day-modal" role="dialog" aria-modal="true" aria-label="Game Day Mode">
-      <header><button type="button" onClick={() => setOpen(false)} aria-label="Save and exit"><X /></button><div><span>Game Day Mode</span><strong>{draft.stage === 'questions' ? `${draft.questionIndex + 1} of 3` : 'Prepare. Trust. Compete.'}</strong></div></header>
+    {open && draft && createPortal(<div className="game-day-modal" role="dialog" aria-modal="true" aria-label="Game Day Mode">
+      <header><button className="game-day-back" type="button" onClick={goBack} aria-label={draft.stage === 'questions' && draft.questionIndex > 0 ? 'Previous question' : 'Back to Today'}><ArrowLeft /><b>Back</b></button><div><span>Game Day Mode</span><strong>{draft.stage === 'questions' ? `${draft.questionIndex + 1} of 3` : 'Prepare. Trust. Compete.'}</strong></div></header>
       {draft.stage === 'questions' && activeQuestion && <main className="game-day-step game-day-question"><div className="game-day-progress"><i style={{ width: `${((draft.questionIndex + 1) / 3) * 100}%` }} /></div><span className="game-day-kicker">{activeQuestion.category}</span><h2>{activeQuestion.questionText}</h2><QuestionInput question={activeQuestion} value={activeResponse} onChange={setAnswer} /><button className="game-day-primary" disabled={!activeResponse?.length} type="button" onClick={advanceQuestion}>{draft.questionIndex === 2 ? 'Build My Game Day' : 'Next'} <ArrowRight /></button></main>}
       {draft.stage === 'summary' && <main className="game-day-step game-day-summary"><span className="game-day-kicker">Your Game Day</span><h2>You identified what matters.</h2><div><span>Today’s Focus</span><strong>{summary.focus}</strong></div>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<div><span>Game Day Mindset</span><strong>{summary.mindset}</strong></div><section><Clock3 /><h3>90 Second<br />Game Day Visualization</h3><p>Put your headphones in. Close your eyes. See it before you do it.</p></section><button className="game-day-primary" type="button" onClick={() => { setVisualizing(true); track('game_day_visualization_started'); }}>Begin Visualization <Play /></button></main>}
       {draft.stage === 'locked' && <main className="game-day-step game-day-locked"><div className="locked-check"><Check /></div><span className="game-day-kicker">Locked in.</span><h2>{summary.focus}</h2>{summary.controls.filter(Boolean).length > 0 && <div><span>My Controllables</span><strong>{summary.controls.join(' • ')}</strong></div>}<blockquote>{summary.mindset}</blockquote><button className="game-day-primary" type="button" onClick={lockIn}>I’m Ready</button></main>}
       {draft.stage === 'complete' && <main className="game-day-step game-day-finish"><Trophy /><h2>Go do work!</h2><p>Trust your game</p>{!readyFinish && <button className="game-day-primary" type="button" onClick={closeFinished}>Done</button>}</main>}
-    </div>}
+    </div>, document.body)}
     {visualizing && <Visualization onComplete={finishVisualization} onExit={() => setVisualizing(false)} track={track} />}
 
-    {historyOpen && <div className="game-day-modal game-day-history" role="dialog" aria-modal="true" aria-label="Game Day History"><header><button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history"><X /></button><div><span>Game Day</span><strong>History</strong></div></header><main className="game-day-step">{sessions.length === 0 ? <p className="game-day-empty">Your completed Game Day sessions will appear here.</p> : sessions.map((session) => <article className="game-day-history-card" key={session.id}><button type="button" onClick={() => setDetailId(session.id)}><span>{new Date(session.startedAt).toLocaleDateString()}</span><strong>{session.sport}{session.opponentName ? ` · ${session.opponentName}` : ''}</strong><em>Pregame complete</em></button></article>)}</main></div>}
-    {detail && <div className="game-day-modal game-day-detail" role="dialog" aria-modal="true"><header><button type="button" onClick={() => setDetailId(null)} aria-label="Back"><ArrowLeft /></button><div><span>{new Date(detail.startedAt).toLocaleDateString()}</span><strong>{detail.sport}</strong></div></header><main className="game-day-step"><h2>{detail.opponentName || 'Game Day Session'}</h2>{detail.responses.map((response) => <div className="game-day-response" key={response.id}><span>{response.category}</span><strong>{response.questionTextSnapshot}</strong><p>{Array.isArray(response.answer) ? response.answer.join(' • ') : response.answer}</p></div>)}<p className="game-day-completion-line"><Check /> Visualization completed</p></main></div>}
+    {historyOpen && createPortal(<div className="game-day-modal game-day-history" role="dialog" aria-modal="true" aria-label="Game Day History"><header><button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close history"><X /></button><div><span>Game Day</span><strong>History</strong></div></header><main className="game-day-step">{sessions.length === 0 ? <p className="game-day-empty">Your completed Game Day sessions will appear here.</p> : sessions.map((session) => <article className="game-day-history-card" key={session.id}><button type="button" onClick={() => setDetailId(session.id)}><span>{new Date(session.startedAt).toLocaleDateString()}</span><strong>{session.sport}{session.opponentName ? ` · ${session.opponentName}` : ''}</strong><em>Pregame complete</em></button></article>)}</main></div>, document.body)}
+    {detail && createPortal(<div className="game-day-modal game-day-detail" role="dialog" aria-modal="true"><header><button type="button" onClick={() => setDetailId(null)} aria-label="Back"><ArrowLeft /></button><div><span>{new Date(detail.startedAt).toLocaleDateString()}</span><strong>{detail.sport}</strong></div></header><main className="game-day-step"><h2>{detail.opponentName || 'Game Day Session'}</h2>{detail.responses.map((response) => <div className="game-day-response" key={response.id}><span>{response.category}</span><strong>{response.questionTextSnapshot}</strong><p>{Array.isArray(response.answer) ? response.answer.join(' • ') : response.answer}</p></div>)}<p className="game-day-completion-line"><Check /> Visualization completed</p></main></div>, document.body)}
   </>;
 }

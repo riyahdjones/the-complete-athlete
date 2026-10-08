@@ -13479,13 +13479,16 @@ select {
 .game-day-history-link, .game-day-restart-link { display: flex; align-items: center; justify-content: center; gap: 7px; grid-column: 1 / -1; color: rgba(255,255,255,.84); border: 0; background: transparent; font-weight: 750; }
 .game-day-restart-link { color: rgba(255,255,255,.68); font-size: .72rem; }
 
-.game-day-modal { position: fixed; z-index: 10050; inset: 0; display: flex; flex-direction: column; width: min(100%, 540px); margin: auto; color: #0b1732; background: linear-gradient(180deg, #f9fcff, #edf5ff); overflow-y: auto; overscroll-behavior: contain; }
-.game-day-modal > header { position: sticky; z-index: 3; top: 0; display: flex; align-items: center; gap: 14px; min-height: 78px; padding: max(16px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid #dce8f7; background: rgba(249,252,255,.94); backdrop-filter: blur(16px); }
+.game-day-modal { position: fixed; z-index: 10050; inset: 0; display: flex; flex-direction: column; box-sizing: border-box; width: min(100%, 540px); height: 100vh; min-height: 100dvh; max-height: 100dvh; margin: auto; color: #0b1732; background: linear-gradient(180deg, #f9fcff, #edf5ff); overflow: hidden; overscroll-behavior: contain; }
+.game-day-modal > header { position: relative; z-index: 3; display: flex; flex: 0 0 auto; align-items: center; gap: 14px; min-height: 78px; padding: max(16px, env(safe-area-inset-top)) 20px 14px; border-bottom: 1px solid #dce8f7; background: rgba(249,252,255,.97); backdrop-filter: blur(16px); }
 .game-day-modal > header button { display: grid; place-items: center; width: 42px; height: 42px; color: #173459; border: 1px solid #d7e3f3; border-radius: 50%; background: #fff; }
+.game-day-modal > header .game-day-back { display: flex; width: auto; min-width: 82px; padding: 0 13px 0 10px; border-radius: 999px; font: inherit; }
+.game-day-back svg { width: 20px; height: 20px; }
+.game-day-back b { font-size: .78rem; }
 .game-day-modal > header span, .game-day-modal > header strong { display: block; }
 .game-day-modal > header span { color: #3771bd; font-size: .66rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .game-day-modal > header strong { margin-top: 3px; color: #0b1732; font-size: .98rem; }
-.game-day-step { display: flex; flex: 1; flex-direction: column; gap: 16px; padding: 30px 22px calc(34px + env(safe-area-inset-bottom)); }
+.game-day-step { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; gap: 16px; padding: 30px 22px calc(34px + env(safe-area-inset-bottom)); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
 .game-day-step h2 { margin: 0; color: #071733; font-size: clamp(1.55rem, 6vw, 2.1rem); line-height: 1.13; }
 .game-day-step label { display: grid; gap: 7px; color: #20395e; font-size: .78rem; font-weight: 850; }
 .game-day-step label em { color: #7d8ca2; font-size: .68rem; font-style: normal; font-weight: 650; }
