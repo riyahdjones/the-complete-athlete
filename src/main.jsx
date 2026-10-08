@@ -568,8 +568,9 @@ function resetStandardsForNewDay(standards) {
 function normalizeStreak(saved) {
   if (!saved.lastSubmittedDate) return { count: 0, lastSubmittedDate: null };
   const gap = daysBetween(saved.lastSubmittedDate, todayKey());
+  const savedCount = Number(saved.streakCount) || 0;
   return {
-    count: gap > 1 ? 0 : Number(saved.streakCount) || 0,
+    count: gap > 1 || savedCount < 2 ? 0 : savedCount,
     lastSubmittedDate: gap > 1 ? null : saved.lastSubmittedDate
   };
 }
@@ -1699,7 +1700,7 @@ function streakFromStandardsHistory(history, endDate = todayKey()) {
     streak += 1;
     cursor = addDays(cursor, -1);
   }
-  return streak;
+  return streak >= 2 ? streak : 0;
 }
 
 function linkedAthleteName(summary, athleteProfile) {
@@ -8118,7 +8119,8 @@ function HomeScreen({
 
     const submissionDate = todayKey();
     const isFirstLockedDay = new Set(standardsHistory.map((entry) => entry.date)).size === 0;
-    const nextStreak = lastSubmittedDate === addDays(submissionDate, -1) ? streakCount + 1 : 1;
+    const submittedYesterday = lastSubmittedDate === addDays(submissionDate, -1);
+    const nextStreak = submittedYesterday ? Math.max(2, streakCount + 1) : 0;
     const completedGoalIds = [...new Set(completedStandards.map((standard) => standard.goalId).filter(Boolean))];
     setStreakCount(nextStreak);
     setLastSubmittedDate(submissionDate);
@@ -8146,7 +8148,9 @@ function HomeScreen({
           : goal
       )
     );
-    const streakBonus = Math.min(nextStreak * pointValues.streakBonusPerDay, pointValues.streakBonusCap);
+    const streakBonus = nextStreak >= 2
+      ? Math.min(nextStreak * pointValues.streakBonusPerDay, pointValues.streakBonusCap)
+      : 0;
     const standardsPoints = allStandardsCompleted ? pointValues.standardsCompleted + streakBonus : 0;
     const awarded = standardsPoints > 0 && awardPoints({
       type: 'standards_completed',
@@ -8181,7 +8185,9 @@ function HomeScreen({
     notifyUser(
       allStandardsCompleted ? 'Daily activity tracker locked' : 'Daily activity submitted',
       allStandardsCompleted
-        ? `Your day is locked in. Current streak: ${nextStreak} day${nextStreak === 1 ? '' : 's'}.`
+        ? (nextStreak >= 2
+          ? `Your day is locked in. Current streak: ${nextStreak} days.`
+          : 'Your day is locked in. Come back tomorrow to start a streak.')
         : `You submitted ${completedStandards.length} of ${standards.length} items. Complete every item to earn activity points.`,
       'success',
       {
@@ -8210,7 +8216,7 @@ function HomeScreen({
       });
     }
 
-    if (nextStreak === 3 || nextStreak % 7 === 0) {
+    if (nextStreak === 3 || (nextStreak >= 7 && nextStreak % 7 === 0)) {
       notifyUser(
         `${nextStreak}-day streak`,
         `You have protected your daily work for ${nextStreak} straight days.`,
