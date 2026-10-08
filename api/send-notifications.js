@@ -121,11 +121,51 @@ async function markProfileNotification(userId, column) {
   });
 }
 
-async function planUnlockUsers(yesterday) {
-  const result = await supabaseServiceRequest(
-    `performance_plan_progress?select=athlete_user_id&completed_at=eq.${yesterday}`
-  );
-  return new Set((result.data ?? []).map((row) => row.athlete_user_id));
+function planDayNumber(plan) {
+  const match = String(plan?.challenge_day || '').match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+async function planUnlockCandidates(yesterday, today) {
+  const [progressResult, plansResult] = await Promise.all([
+    supabaseServiceRequest(
+      `performance_plan_progress?select=athlete_user_id,plan_id,completed_at&completed_at=eq.${yesterday}`
+    ),
+    supabaseServiceRequest(
+      'performance_plans?select=id,title,subject,title_es,subject_es,release_date,challenge_day&order=release_date.asc'
+    )
+  ]);
+  if (progressResult.error) return new Map();
+
+  const plans = plansResult.error ? [] : plansResult.data ?? [];
+  const series = new Map();
+  plans.forEach((plan) => {
+    const key = planSeriesTitle(plan).toLowerCase();
+    const items = series.get(key) ?? [];
+    items.push(plan);
+    series.set(key, items);
+  });
+  series.forEach((items) => items.sort((first, second) => (
+    planDayNumber(first) - planDayNumber(second)
+    || String(first.release_date || '').localeCompare(String(second.release_date || ''))
+    || String(first.title || '').localeCompare(String(second.title || ''))
+  )));
+
+  const candidates = new Map();
+  (progressResult.data ?? []).forEach((progress) => {
+    const currentPlan = plans.find((plan) => String(plan.id) === String(progress.plan_id));
+    let nextPlan = null;
+    if (currentPlan) {
+      const items = series.get(planSeriesTitle(currentPlan).toLowerCase()) ?? [];
+      const currentIndex = items.findIndex((plan) => String(plan.id) === String(currentPlan.id));
+      nextPlan = currentIndex >= 0 ? items[currentIndex + 1] ?? null : null;
+      if (!nextPlan || (nextPlan.release_date && nextPlan.release_date > today)) return;
+    }
+    if (!candidates.has(progress.athlete_user_id)) {
+      candidates.set(progress.athlete_user_id, nextPlan);
+    }
+  });
+  return candidates;
 }
 
 async function streakRescueUsers(today, yesterday) {
@@ -299,6 +339,7 @@ export default async function handler(req, res) {
   const yesterday = dateKey(-1);
   const hour = easternHour();
   const isMorningWindow = hour >= 6 && hour <= 8;
+  const isPlanUnlockWindow = hour === 10;
   const isReengagementWindow = isMorningWindow || (hour >= 9 && hour <= 11);
   const isEveningWindow = hour >= 19 && hour <= 21;
   const [deposit, addedPlans, devices, recipients, inactiveUsers, unlockUsers, rescueUsers, milestoneUsers, premiumAccess] = await Promise.all([
@@ -307,7 +348,7 @@ export default async function handler(req, res) {
     pushDevices(),
     notificationRecipients(),
     inactiveProfiles(),
-    isMorningWindow ? planUnlockUsers(yesterday) : Promise.resolve(new Set()),
+    isPlanUnlockWindow ? planUnlockCandidates(yesterday, date) : Promise.resolve(new Map()),
     isEveningWindow ? streakRescueUsers(date, yesterday) : Promise.resolve(new Set()),
     isEveningWindow ? streakMilestoneUsers(date) : Promise.resolve(new Set()),
     loadPremiumAccessUserIds()
@@ -367,6 +408,38 @@ export default async function handler(req, res) {
     });
   }
 
+  if (isPlanUnlockWindow) {
+    for (const [userId, nextPlan] of unlockUsers.entries()) {
+      if (!premiumUserIds.has(userId)) continue;
+      const prefs = preferences.get(userId) ?? {};
+      if (prefs.plan_unlocks === false) continue;
+      const recipient = recipients.find((profile) => profile.id === userId);
+      const spanish = recipient?.preferred_language === 'es';
+      const dayNumber = planDayNumber(nextPlan);
+      const seriesTitle = nextPlan ? planSeriesTitle(nextPlan, spanish ? 'es' : 'en') : '';
+      const lessonTitle = String(spanish ? (nextPlan?.title_es || nextPlan?.title || '') : (nextPlan?.title || '')).trim();
+      const notification = {
+        id: `push-plan-unlock-${date}-${userId}`,
+        type: 'planUnlocks',
+        title: spanish
+          ? (dayNumber ? `El día ${dayNumber} está listo` : 'Tu próximo día del plan está listo')
+          : (dayNumber ? `Day ${dayNumber} is ready` : 'Your next plan day is ready'),
+        body: nextPlan
+          ? (spanish
+            ? `${seriesTitle}: ${lessonTitle} ya está disponible.`
+            : `${seriesTitle}: ${lessonTitle} is now available.`)
+          : (spanish
+            ? 'Sigue avanzando con el próximo paso de tu plan de rendimiento.'
+            : 'Keep the momentum going with the next step in your performance plan.'),
+        tone: 'info'
+      };
+      const device = newestDeviceByUser.get(userId);
+      sent.push(device
+        ? sendToDevice(device, notification)
+        : saveForUserWithoutPush(userId, notification));
+    }
+  }
+
   for (const device of devices) {
     const prefs = preferences.get(device.user_id) ?? {};
 
@@ -387,16 +460,6 @@ export default async function handler(req, res) {
 
     // Expired and inactive accounts retain only the Daily Deposit push.
     if (!premiumUserIds.has(device.user_id)) continue;
-
-    if (isMorningWindow && unlockUsers.has(device.user_id) && prefs.plan_unlocks !== false) {
-      sent.push(sendToDevice(device, {
-        id: `push-plan-unlock-${date}-${device.user_id}`,
-        type: 'planUnlocks',
-        title: 'Your next plan lesson is open',
-        body: 'Keep the momentum going with the next step in your performance plan.',
-        tone: 'info'
-      }));
-    }
 
     if (isEveningWindow && rescueUsers.has(device.user_id) && prefs.streaks !== false) {
       sent.push(sendToDevice(device, {
@@ -513,6 +576,7 @@ export default async function handler(req, res) {
     premiumRecipients: premiumUserIds.size,
     premiumLookupFailed: Boolean(premiumAccess.error),
     easternHour: hour,
+    planUnlockWindow: isPlanUnlockWindow,
     apnsConfigured: apnsConfigured(),
     sampleFailures: [...failures, ...rejected].slice(0, 8)
   });
@@ -534,6 +598,7 @@ export default async function handler(req, res) {
     premiumRecipients: premiumUserIds.size,
     premiumLookupFailed: Boolean(premiumAccess.error),
     easternHour: hour,
+    planUnlockWindow: isPlanUnlockWindow,
     apnsConfigured: apnsConfigured()
   });
 }
