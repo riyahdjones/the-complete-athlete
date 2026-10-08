@@ -3,8 +3,9 @@ import { canRequestNativeAppReview, recordParentAppOpen, requestAppReview } from
 import { syncGoalWidgets } from './goalWidget';
 import { planAudioPlayer } from './planAudioPlayer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { createRoot } from 'react-dom/client';
+import { createPortal } from 'react-dom';
 import {
   ArrowRight,
   BadgeCheck,
@@ -88,8 +89,23 @@ import {
   restoreRevenueCatSubscription,
   revenueCatConfig
 } from './revenueCat';
+
 import { isSupabaseConfigured, supabase, oauthSupabase } from './supabaseClient';
 import './styles.css';
+
+const nativePointsHaptics = registerPlugin('TCAHaptics');
+
+async function triggerPointsEarnedHaptic() {
+  if (Capacitor.getPlatform() === 'ios') {
+    try {
+      await nativePointsHaptics.pointsEarned();
+      return;
+    } catch {
+      // Fall through to the browser vibration API when native haptics are unavailable.
+    }
+  }
+  navigator.vibrate?.([45, 35, 70]);
+}
 
 const LEGAL_URLS = {
   privacy: 'https://the-complete-athlete.vercel.app/privacy.html',
@@ -3349,6 +3365,8 @@ function App() {
   const [athleteProfile, setAthleteProfile] = useState(loadAthleteProfile);
   const [supabaseAthleteDataReady, setSupabaseAthleteDataReady] = useState(false);
   const [celebration, setCelebration] = useState('');
+  const [pointsPopup, setPointsPopup] = useState(null);
+  const pointsPopupTimerRef = useRef(null);
   const [lessonLibrary, setLessonLibrary] = useState(loadLessons);
   const [selectedLessonId, setSelectedLessonId] = useState(() => dailyLessonId(loadLessons(), todayKey()));
   const [subscription, setSubscription] = useState({
@@ -5196,6 +5214,7 @@ function App() {
 
     persistPointEvent(pointEvent);
     if (notificationPreferences.points) playPointsEarnedSound(cleanPoints);
+    showPointsEarnedPopup(cleanPoints, label);
     trackAnalyticsEvent('points_awarded', {
       pointType: type,
       points: cleanPoints,
@@ -5209,6 +5228,20 @@ function App() {
     });
     return true;
   }
+
+  function showPointsEarnedPopup(points, label) {
+    window.clearTimeout(pointsPopupTimerRef.current);
+    setPointsPopup((current) => ({
+      points: (current?.points || 0) + points,
+      labels: current?.labels?.includes(label)
+        ? current.labels
+        : [...(current?.labels || []), label]
+    }));
+    triggerPointsEarnedHaptic();
+    pointsPopupTimerRef.current = window.setTimeout(() => setPointsPopup(null), 3200);
+  }
+
+  useEffect(() => () => window.clearTimeout(pointsPopupTimerRef.current), []);
 
   async function persistPointEvent(entry) {
     if (!isSupabaseConfigured || authSession?.role !== 'athlete' || !authSession.id) return;
@@ -6159,7 +6192,21 @@ function App() {
           <NotificationTray notifications={recentNotifications} onClose={() => setNotificationsOpen(false)} />
         )}
 
-        {celebration && <div className="celebration-banner">{celebration}</div>}
+        {pointsPopup && createPortal(
+          <div className="points-earned-overlay" role="status" aria-live="assertive">
+            <div className="points-earned-popup">
+              <span className="points-earned-icon" aria-hidden="true"><Trophy size={23} strokeWidth={2.4} /></span>
+              <span className="points-earned-copy">
+                <span>Performance Points</span>
+                <strong>+{pointsPopup.points} PP</strong>
+                <small>{pointsPopup.labels.join(' + ')}</small>
+              </span>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {celebration && !pointsPopup && <div className="celebration-banner">{celebration}</div>}
 
         <section className="content">{content}</section>
 

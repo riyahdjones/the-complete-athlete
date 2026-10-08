@@ -70,6 +70,25 @@ class TCAViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(TCAGoalWidgetPlugin())
         bridge?.registerPluginInstance(TCAVoiceCoachPlugin())
         bridge?.registerPluginInstance(TCAPlanAudioPlugin())
+        bridge?.registerPluginInstance(TCAHapticsPlugin())
+    }
+}
+
+@objc(TCAHapticsPlugin)
+public class TCAHapticsPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "TCAHapticsPlugin"
+    public let jsName = "TCAHaptics"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "pointsEarned", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func pointsEarned(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let generator = UINotificationFeedbackGenerator()
+            generator.prepare()
+            generator.notificationOccurred(.success)
+            call.resolve()
+        }
     }
 }
 
