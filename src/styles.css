@@ -13511,11 +13511,14 @@ select {
 .game-day-summary > section h3 { margin: 10px 0 7px; font-size: 1.25rem; line-height: 1.1; }
 .game-day-summary > section p { margin: 0; color: rgba(255,255,255,.72); font-size: .77rem; line-height: 1.45; }
 
-.game-day-visualization { position: fixed; z-index: 10060; inset: 0; display: grid; place-items: center; overflow: hidden; color: #fff; background: radial-gradient(circle at 50% 45%, #124a9a, #061631 54%, #020814); }
+.game-day-visualization { position: fixed; z-index: 2147483000; inset: 0; display: grid; place-items: center; box-sizing: border-box; width: 100vw; height: 100vh; min-height: 100dvh; margin: 0; overflow: hidden; isolation: isolate; color: #fff; background: radial-gradient(circle at 50% 45%, #1c70d1 0%, #0b3f8c 48%, #061e49 100%); }
+html.game-day-visualization-open,
+body.game-day-visualization-open { overflow: hidden !important; overscroll-behavior: none; }
 .visualization-orb { position: absolute; width: min(74vw, 420px); aspect-ratio: 1; border: 1px solid rgba(89,167,255,.22); border-radius: 50%; background: radial-gradient(circle, rgba(40,135,255,.24), rgba(20,80,180,.06) 60%, transparent 70%); box-shadow: 0 0 70px rgba(37,126,255,.2); animation: game-day-breathe 8s ease-in-out infinite; }
 .game-day-visualization.paused .visualization-orb { animation-play-state: paused; }
 @keyframes game-day-breathe { 0%,100% { transform: scale(.82); opacity: .58; } 50% { transform: scale(1.08); opacity: 1; } }
-.visualization-exit { position: absolute; top: max(18px, env(safe-area-inset-top)); right: 18px; display: grid; place-items: center; width: 44px; height: 44px; color: #fff; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; background: rgba(255,255,255,.08); }
+.visualization-exit { position: absolute; z-index: 5; top: max(18px, calc(env(safe-area-inset-top) + 8px)); right: max(18px, calc(env(safe-area-inset-right) + 12px)); display: grid; place-items: center; width: 48px; height: 48px; padding: 0; color: #0b3f8c; border: 2px solid rgba(255,255,255,.78); border-radius: 50%; background: #fff; box-shadow: 0 8px 24px rgba(0,19,55,.34); }
+.visualization-exit svg { width: 25px; height: 25px; stroke-width: 3; }
 .visualization-center { position: relative; z-index: 1; display: grid; justify-items: center; gap: 18px; padding: 24px; text-align: center; }
 .visualization-center > span { color: #79b7ff; font-size: .68rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase; }
 .visualization-time { font-size: clamp(4rem, 22vw, 7rem); font-variant-numeric: tabular-nums; line-height: .9; }

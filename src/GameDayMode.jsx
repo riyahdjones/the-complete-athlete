@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Check, Clock3, History, Pause, Play, RotateCcw, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { GAME_DAY_QUESTIONS, selectGameDayQuestions, toggleGameDayChoice } from './gameDayQuestions';
 import { gameDayCheckInPointKey } from './gameDayRewards';
@@ -119,6 +120,17 @@ function Visualization({ onComplete, onExit, track }) {
   const activeAudioRef = useRef(0);
   const crossfadingRef = useRef(false);
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.documentElement.classList.add('game-day-visualization-open');
+    document.body.classList.add('game-day-visualization-open');
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.classList.remove('game-day-visualization-open');
+      document.body.classList.remove('game-day-visualization-open');
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+  useEffect(() => {
     if (!playing) return undefined;
     const timer = window.setInterval(() => setSeconds((current) => Math.max(0, current - 1)), 1000);
     return () => window.clearInterval(timer);
@@ -183,7 +195,7 @@ function Visualization({ onComplete, onExit, track }) {
     setPlaying(true);
     if (soundOn && firstAudioRef.current) firstAudioRef.current.play().catch(() => {});
   }
-  return <div className={`game-day-visualization ${playing ? 'playing' : 'paused'}`} role="dialog" aria-modal="true" aria-label="Game Day visualization">
+  const visualization = <div className={`game-day-visualization ${playing ? 'playing' : 'paused'}`} role="dialog" aria-modal="true" aria-label="Game Day visualization">
     <audio ref={firstAudioRef} preload="auto" src="/audio/game-day-visualization.mp4" />
     <audio ref={secondAudioRef} preload="auto" src="/audio/game-day-visualization.mp4" />
     <div className="visualization-orb" aria-hidden="true" />
@@ -199,6 +211,7 @@ function Visualization({ onComplete, onExit, track }) {
       <button type="button" onClick={restart} aria-label="Restart"><RotateCcw /></button>
     </div>
   </div>;
+  return createPortal(visualization, document.body);
 }
 
 export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints = 15, notifyUser, userId, trackAnalyticsEvent }) {
