@@ -8861,7 +8861,6 @@ function useHorizontalPointerDrag() {
     axis: null,
     moved: false,
     pointerId: null,
-    touchId: null,
     startX: 0,
     startY: 0,
     startScrollLeft: 0
@@ -8898,7 +8897,6 @@ function useHorizontalPointerDrag() {
         axis: null,
         moved: false,
         pointerId: event.pointerId,
-        touchId: null,
         startX: event.clientX,
         startY: event.clientY,
         startScrollLeft: rail.scrollLeft
@@ -8920,42 +8918,7 @@ function useHorizontalPointerDrag() {
       event.preventDefault();
       rail.scrollLeft = drag.startScrollLeft - distanceX;
     },
-    onPointerUp: finishDrag,
-    onTouchStart(event) {
-      if (event.touches.length !== 1) return;
-      const rail = railRef.current;
-      const touch = event.touches[0];
-      if (!rail || !touch) return;
-      dragStateRef.current = {
-        active: true,
-        axis: null,
-        moved: false,
-        pointerId: null,
-        touchId: touch.identifier,
-        startX: touch.clientX,
-        startY: touch.clientY,
-        startScrollLeft: rail.scrollLeft
-      };
-    },
-    onTouchMove(event) {
-      const rail = railRef.current;
-      const drag = dragStateRef.current;
-      if (!rail || !drag.active) return;
-      const touch = Array.from(event.touches).find((item) => item.identifier === drag.touchId);
-      if (!touch) return;
-      const distanceX = touch.clientX - drag.startX;
-      const distanceY = touch.clientY - drag.startY;
-      if (!drag.axis && Math.max(Math.abs(distanceX), Math.abs(distanceY)) > 6) {
-        drag.axis = Math.abs(distanceX) > Math.abs(distanceY) ? 'horizontal' : 'vertical';
-      }
-      if (drag.axis !== 'horizontal') return;
-      drag.moved = true;
-      rail.classList.add('is-dragging');
-      event.preventDefault();
-      rail.scrollLeft = drag.startScrollLeft - distanceX;
-    },
-    onTouchCancel: finishDrag,
-    onTouchEnd: finishDrag
+    onPointerUp: finishDrag
   };
 
   return { dragHandlers, railRef };

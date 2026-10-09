@@ -17722,10 +17722,10 @@ body.game-day-visualization-open { overflow: hidden !important; overscroll-behav
 .plans-tab .training-category-rail,
 .plans-tab .recommended-plan-rail,
 .plans-tab .plan-day-strip {
-  scroll-snap-type: none;
+  scroll-snap-type: x proximity;
   scroll-behavior: auto;
   overscroll-behavior-x: contain;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
   will-change: scroll-position;
   transform: translateZ(0);
   cursor: grab;
@@ -17741,8 +17741,13 @@ body.game-day-visualization-open { overflow: hidden !important; overscroll-behav
   pointer-events: none;
 }
 
+.plans-tab .recommended-plan-rail {
+  scroll-snap-type: x mandatory;
+}
+
 .plans-tab .recommended-training-card {
-  scroll-snap-align: none;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   transform: translateZ(0);
   backface-visibility: hidden;
 }
