@@ -8968,7 +8968,7 @@ function NeedSelector({ activeNeed, onSelect }) {
       <header className="training-section-heading">
         <div><span>Find your training</span><h2>What do you need right now?</h2><p>Tell us what you’re dealing with. We’ll help you find the right training.</p></div>
       </header>
-      <div className="plan-need-rail" aria-label="Choose what you need help with" ref={railRef} {...dragHandlers}>
+      <div className="plan-need-rail" aria-label="Choose what you need help with" data-native-horizontal-scroll="true" ref={railRef} {...dragHandlers}>
         {performancePlanNeeds.map((need) => (
           <button aria-pressed={activeNeed === need.id} className={activeNeed === need.id ? 'active' : ''} key={need.id} onClick={() => onSelect(activeNeed === need.id ? '' : need.id)} type="button">{need.label}</button>
         ))}
@@ -8997,7 +8997,7 @@ function RecommendedPlans({ plans, onOpen, trialPlanMode }) {
           <button aria-label="Next recommended plan" onClick={() => moveRecommendedRail(1)} type="button"><ChevronRight size={16}/></button>
         </div>
       </header>
-      <div className="recommended-plan-rail" ref={railRef} {...dragHandlers}>
+      <div className="recommended-plan-rail" data-native-horizontal-scroll="true" ref={railRef} {...dragHandlers}>
         {plans.map((series) => (
           <button className={`recommended-training-card${series.completedCount >= series.plans.length ? ' completed' : ''}`} key={series.id} onClick={() => onOpen(series, 'recommended')} style={{ '--plan-cover': `url(${series.coverImage})`, '--plan-cover-position': series.coverPosition }} type="button">
             <span className="recommended-plan-cover" aria-hidden="true" />
@@ -9017,7 +9017,7 @@ function RecommendedPlans({ plans, onOpen, trialPlanMode }) {
 function PlanCategoryRail({ activeCategory, categories, onSelect }) {
   const { dragHandlers, railRef } = useHorizontalPointerDrag();
   return (
-    <div className="training-category-rail" aria-label="Plan categories" ref={railRef} {...dragHandlers}>
+    <div className="training-category-rail" aria-label="Plan categories" data-native-horizontal-scroll="true" ref={railRef} {...dragHandlers}>
       {categories.map((category) => <button className={category === activeCategory ? 'active' : ''} key={category} onClick={() => onSelect(category)} type="button">{category}</button>)}
     </div>
   );
@@ -9200,7 +9200,7 @@ function PlansScreen({ athleteProfile, language = 'en', plans, planProgress, tri
           <button className="primary-action full" type="button" onClick={() => setPlanDetailTab('lessons')}>Continue Plan <ArrowRight size={18}/></button>
         </section>
         {planDetailTab === 'lessons' && <div className="plan-reader-stack single-plan-reader">
-          <div className="plan-day-strip" aria-label="Plan days" ref={dayStripRef} {...dayStripDragHandlers}>
+          <div className="plan-day-strip" aria-label="Plan days" data-native-horizontal-scroll="true" ref={dayStripRef} {...dayStripDragHandlers}>
             {visiblePlans.map((plan, index) => <button className={String(plan.id) === String(selectedVisiblePlan?.id) ? 'active' : ''} disabled={!plan.unlocked} key={plan.id} onClick={() => setSelectedPlanId(String(plan.id))} type="button">{plan.completedAt ? <Check size={13}/> : plan.unlocked ? index + 1 : <LockKeyhole size={12}/>}</button>)}
           </div>
           {selectedVisiblePlan && (
