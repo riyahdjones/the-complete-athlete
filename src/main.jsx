@@ -3306,7 +3306,11 @@ function App() {
       ? 'parent'
       : 'athlete'
   ));
-  const [tab, setTab] = useState('home');
+  const [tab, setTab] = useState(() => {
+    if (!import.meta.env.DEV || typeof window === 'undefined') return 'home';
+    const requestedTab = new URLSearchParams(window.location.search).get('storeTab');
+    return ['home', 'journal', 'plans', 'coach', 'profile'].includes(requestedTab) ? requestedTab : 'home';
+  });
   const [profileView, setProfileView] = useState('overview');
   const [requestedPlanSeriesId, setRequestedPlanSeriesId] = useState('');
   const [requestedPlanId, setRequestedPlanId] = useState('');
@@ -3421,9 +3425,11 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const athletePreview = params.get('firstTime') === 'athlete'
       || params.get('startPreview') === 'athlete'
-      || params.get('todayPreview') === 'athlete';
+      || params.get('todayPreview') === 'athlete'
+      || params.get('storePreview') === '1';
     if (params.get('role') !== 'athlete' || !athletePreview) return null;
-    return { id: 'local-athlete-preview', role: 'athlete', name: 'Preview Athlete', email: 'preview-athlete@example.com' };
+    const isStorePreview = params.get('storePreview') === '1';
+    return { id: 'local-athlete-preview', role: 'athlete', name: isStorePreview ? 'Jordan' : 'Preview Athlete', email: 'preview-athlete@example.com' };
   }, []);
   const parentFirstTimePreview = Boolean(import.meta.env.DEV && typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('firstTime') === 'parent');
@@ -4787,14 +4793,12 @@ function App() {
     };
     const trialExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     saveTrialAccessWindow(reviewSession.id, trialExpiresAt);
-    saveTrialPromptDismissed(reviewSession.id);
     localStorage.setItem(onboardingStorageKey, 'true');
     localStorage.setItem(athleteStartStorageKey, 'true');
     setAuthSession(reviewSession);
     setOnboardingComplete(true);
     setAthleteStartComplete(true);
     setLocalTrialAccessActive(true);
-    setTrialPromptDismissed(true);
     setView(reviewRole === 'parent' ? 'parent' : 'athlete');
     setTab(reviewRole === 'parent' ? tab : 'plans');
     setParentTab('overview');
@@ -5702,8 +5706,6 @@ function App() {
           activeTrial: Boolean(status.activeTrial),
           expirationDate: status.expirationDate || ''
         }, { area: 'monetization' });
-        setTrialPromptDismissed(true);
-        saveTrialPromptDismissed(effectiveSession?.id);
         saveTrialAccessWindow(effectiveSession?.id, status.expirationDate);
         setLocalTrialAccessActive(true);
         if (effectiveSession?.role === 'athlete') setTab('home');
