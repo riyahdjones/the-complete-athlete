@@ -9,10 +9,34 @@ import AVFoundation
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
+    private let reviewShortcutType = "com.riyahdjones.thecompleteathlete.review"
+    private let reviewURL = URL(string: "itms-apps://itunes.apple.com/app/id6796498513?action=write-review")!
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem,
+           shortcutItem.type == reviewShortcutType {
+            let reviewURL = self.reviewURL
+            DispatchQueue.main.async {
+                application.open(reviewURL)
+            }
+            return false
+        }
         return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        performActionFor shortcutItem: UIApplicationShortcutItem,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        guard shortcutItem.type == reviewShortcutType else {
+            completionHandler(false)
+            return
+        }
+
+        application.open(reviewURL, options: [:]) { opened in
+            completionHandler(opened)
+        }
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

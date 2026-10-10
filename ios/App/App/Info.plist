@@ -43,6 +43,19 @@
 		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeFavorite</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Share your experience</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Review App</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.riyahdjones.thecompleteathlete.review</string>
+		</dict>
+	</array>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
