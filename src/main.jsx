@@ -11379,7 +11379,7 @@ function LegalLink({ href, children }) {
   </>;
 }
 
-function LegalAccountPanel({ deleteAccount, logoutUser, showAction = true, subscription }) {
+function LegalAccountPanel({ deleteAccount, logoutUser, subscription }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [accountMessage, setAccountMessage] = useState('');
   const canRestore = subscription?.configured && subscription?.native;
@@ -11402,7 +11402,7 @@ function LegalAccountPanel({ deleteAccount, logoutUser, showAction = true, subsc
 
   return (
     <section className="panel legal-account-panel">
-      <PanelTitle icon={<Shield size={18} />} title="Legal & Account" action={showAction ? 'Review' : undefined} />
+      <PanelTitle icon={<Shield size={18} />} title="Legal & Account" />
       <div className="legal-link-grid">
         <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
         <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
@@ -11422,6 +11422,31 @@ function LegalAccountPanel({ deleteAccount, logoutUser, showAction = true, subsc
           {confirmingDelete ? 'Confirm Delete Account' : 'Delete Account'}
         </button>
       </div>
+    </section>
+  );
+}
+
+function SettingsDropdown({ children, icon, status, title }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className={open ? 'settings-dropdown open' : 'settings-dropdown'}>
+      <button
+        className="settings-dropdown-trigger"
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="settings-dropdown-title">
+          {icon}
+          <strong>{title}</strong>
+        </span>
+        <span className="settings-dropdown-end">
+          {status && <em>{status}</em>}
+          <ChevronDown size={18} />
+        </span>
+      </button>
+      {open && <div className="settings-dropdown-content">{children}</div>}
     </section>
   );
 }
@@ -11755,6 +11780,9 @@ function AthleteSettingsScreen({
   const parentContactDigits = parentContact.replace(/\D/g, '');
   const emailInviteUrl = `mailto:${parentContactIsEmail ? parentContact : ''}?subject=${encodeURIComponent('The Complete Athlete parent access')}&body=${encodeURIComponent(inviteMessage)}`;
   const smsInviteUrl = `sms:${parentContactDigits || ''}?&body=${encodeURIComponent(inviteMessage)}`;
+  const hasLinkedParent = subscription?.accessSource === 'parent'
+    || Boolean(subscription?.sponsorUserId)
+    || athleteParentLinkFeedback.startsWith('Parent membership linked');
 
   async function copyParentInvite() {
     try {
@@ -11839,7 +11867,9 @@ function AthleteSettingsScreen({
         </button>
         {profileSaveFeedback && <p className="inline-note" role="status">{profileSaveFeedback}</p>}
       </section>
-      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
+      <SettingsDropdown icon={<Shield size={18} />} title="Legal & Account">
+        <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
+      </SettingsDropdown>
       <section className={openProfileSections.notifications ? 'panel notification-settings-panel collapsible-panel open' : 'panel notification-settings-panel collapsible-panel'}>
         <button
           className="collapsible-trigger"
@@ -11928,67 +11958,75 @@ function AthleteSettingsScreen({
           </div>
         )}
       </section>
-      <PremiumAccessPanel
-        restorePremiumSubscription={restorePremiumSubscription}
-        startPremiumSubscription={startPremiumSubscription}
-        subscription={subscription}
-      />
-      <section className="panel achievements-panel">
-        <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Share" />
-        <label className="journal-label" htmlFor="parent-contact">
-          Parent email or phone
-        </label>
-        <input
-          id="parent-contact"
-          className="text-field"
-          placeholder="Add parent email or phone"
-          value={athleteProfile.parentContact}
-          onChange={(event) => updateAthleteProfile('parentContact', event.target.value)}
-        />
-        <div className="access-code-box">
-          <span>Parent access code</span>
-          <strong>{athleteProfile.parentAccessCode}</strong>
-        </div>
-        <p className="privacy-note">Invite includes the parent access link and code.</p>
-        <div className="parent-share-actions">
-          <button className="primary-action full" onClick={copyParentInvite}>
-            <Copy size={18} />
-            Copy Invite
-          </button>
-          <button className="secondary-action inline" onClick={() => openInvite(emailInviteUrl)}>
-            <Send size={18} />
-            Email
-          </button>
-          <button className="secondary-action inline" onClick={() => openInvite(smsInviteUrl)}>
-            <MessageCircle size={18} />
-            Text
-          </button>
-        </div>
-        {shareFeedback && <p className="inline-note">{shareFeedback}</p>}
-        <div className="family-access-divider" aria-hidden="true">
-          <span>or</span>
-        </div>
-        <div className="family-access-option">
-          <span>Have a parent code?</span>
-          <p>Enter the Family Access Code from your parent to join their membership.</p>
-        </div>
-        <form className="standard-form athlete-parent-code-form" onSubmit={linkAthleteParentAccessCode}>
+      <SettingsDropdown icon={<Users size={18} />} status={hasLinkedParent ? 'Connected' : undefined} title="Parent Access">
+        <section className="panel achievements-panel">
+          <PanelTitle icon={<Users size={18} />} title="Parent Access" action="Share" />
+          <label className="journal-label" htmlFor="parent-contact">
+            Parent email or phone
+          </label>
           <input
-            aria-label="Family access code"
-            placeholder="Enter parent code"
-            value={athleteParentAccessDraft}
-            onChange={(event) => {
-              setAthleteParentAccessDraft(event.target.value);
-              setAthleteParentLinkFeedback('');
-            }}
+            id="parent-contact"
+            className="text-field"
+            placeholder="Add parent email or phone"
+            value={athleteProfile.parentContact}
+            onChange={(event) => updateAthleteProfile('parentContact', event.target.value)}
           />
-          <button className="primary-action" type="submit">
-            Link Parent
-          </button>
-        </form>
-        {athleteParentLinkFeedback && <p className="inline-note">{athleteParentLinkFeedback}</p>}
-      </section>
-      <section className={openProfileSections.privacy ? 'panel privacy-controls-panel collapsible-panel open' : 'panel privacy-controls-panel collapsible-panel'}>
+          <div className="access-code-box">
+            <span>Parent access code</span>
+            <strong>{athleteProfile.parentAccessCode}</strong>
+          </div>
+          <p className="privacy-note">Invite includes the parent access link and code.</p>
+          <div className="parent-share-actions">
+            <button className="primary-action full" onClick={copyParentInvite}>
+              <Copy size={18} />
+              Copy Invite
+            </button>
+            <button className="secondary-action inline" onClick={() => openInvite(emailInviteUrl)}>
+              <Send size={18} />
+              Email
+            </button>
+            <button className="secondary-action inline" onClick={() => openInvite(smsInviteUrl)}>
+              <MessageCircle size={18} />
+              Text
+            </button>
+          </div>
+          {shareFeedback && <p className="inline-note">{shareFeedback}</p>}
+          <div className="family-access-divider" aria-hidden="true">
+            <span>or</span>
+          </div>
+          <div className="family-access-option">
+            <span>Have a parent code?</span>
+            <p>Enter the Family Access Code from your parent to join their membership.</p>
+          </div>
+          <form className="standard-form athlete-parent-code-form" onSubmit={linkAthleteParentAccessCode}>
+            <input
+              aria-label="Family access code"
+              placeholder="Enter parent code"
+              value={athleteParentAccessDraft}
+              onChange={(event) => {
+                setAthleteParentAccessDraft(event.target.value);
+                setAthleteParentLinkFeedback('');
+              }}
+            />
+            <button className="primary-action" type="submit">
+              Link Parent
+            </button>
+          </form>
+          {athleteParentLinkFeedback && <p className="inline-note">{athleteParentLinkFeedback}</p>}
+        </section>
+      </SettingsDropdown>
+      <SettingsDropdown
+        icon={<Sparkles size={18} />}
+        status={subscription.active ? 'Active' : undefined}
+        title="Premium Access"
+      >
+        <PremiumAccessPanel
+          restorePremiumSubscription={restorePremiumSubscription}
+          startPremiumSubscription={startPremiumSubscription}
+          subscription={subscription}
+        />
+      </SettingsDropdown>
+      {hasLinkedParent && <section className={openProfileSections.privacy ? 'panel privacy-controls-panel collapsible-panel open' : 'panel privacy-controls-panel collapsible-panel'}>
         <button
           className="collapsible-trigger"
           type="button"
@@ -12038,7 +12076,7 @@ function AthleteSettingsScreen({
             </div>
           </div>
         )}
-      </section>
+      </section>}
     </>
   );
 }
@@ -12264,7 +12302,7 @@ function ParentSettingsScreen({
         )}
       </section>
 
-      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} showAction={false} subscription={subscription} />
+      <LegalAccountPanel deleteAccount={deleteAccount} logoutUser={logoutUser} subscription={subscription} />
     </>
   );
 }

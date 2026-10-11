@@ -3253,6 +3253,80 @@ textarea {
   padding: 0 14px 14px;
 }
 
+.settings-dropdown {
+  overflow: hidden;
+  border: 1px solid rgba(47, 109, 246, 0.16);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(47, 109, 246, 0.12), transparent 42%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(241, 246, 255, 0.96));
+  box-shadow: 0 10px 24px rgba(35, 88, 148, 0.08);
+}
+
+.settings-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 14px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.settings-dropdown-title,
+.settings-dropdown-end {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.settings-dropdown-title {
+  color: var(--muted);
+}
+
+.settings-dropdown-title strong {
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+}
+
+.settings-dropdown-end em {
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2f6df6 0%, #0f172a 90%);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.settings-dropdown-end > svg {
+  color: var(--muted);
+  transition: transform 180ms ease;
+}
+
+.settings-dropdown.open .settings-dropdown-end > svg {
+  transform: rotate(180deg);
+}
+
+.settings-dropdown-content {
+  padding: 0 10px 10px;
+}
+
+.settings-dropdown-content > .panel {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.settings-dropdown-content > .panel > .panel-title:first-child {
+  display: none;
+}
+
 .privacy-boundaries {
   display: grid;
   gap: 8px;
