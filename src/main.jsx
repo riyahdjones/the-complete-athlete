@@ -11882,7 +11882,6 @@ function AthleteSettingsScreen({
               <Bell size={18} />
               Notifications
             </span>
-            <em>iPhone alerts</em>
           </span>
           <ChevronDown size={18} />
         </button>
