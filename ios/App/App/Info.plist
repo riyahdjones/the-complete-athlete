@@ -49,9 +49,9 @@
 			<key>UIApplicationShortcutItemIconType</key>
 			<string>UIApplicationShortcutIconTypeFavorite</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>Share your experience</string>
+			<string>We’d love a 5-star rating from you.</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Review App</string>
+			<string>Getting Value From TCA? 🧠</string>
 			<key>UIApplicationShortcutItemType</key>
 			<string>com.riyahdjones.thecompleteathlete.review</string>
 		</dict>
