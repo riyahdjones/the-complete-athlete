@@ -419,7 +419,6 @@ export default async function handler(req, res) {
 
   if (isPlanUnlockWindow) {
     for (const [userId, nextPlan] of unlockUsers.entries()) {
-      if (!premiumUserIds.has(userId)) continue;
       const prefs = preferences.get(userId) ?? {};
       if (prefs.plan_unlocks === false) continue;
       const recipient = recipients.find((profile) => profile.id === userId);
@@ -467,9 +466,6 @@ export default async function handler(req, res) {
       }));
     }
 
-    // Expired and inactive accounts retain only the Daily Deposit push.
-    if (!premiumUserIds.has(device.user_id)) continue;
-
     if (isEveningWindow && rescueUsers.has(device.user_id) && prefs.streaks !== false) {
       sent.push(sendToDevice(device, {
         id: `push-streak-rescue-${date}-${device.user_id}`,
@@ -489,6 +485,10 @@ export default async function handler(req, res) {
         tone: 'success'
       }));
     }
+
+    // Re-engagement messages still require active premium access. Plan unlocks
+    // and streak notices are driven by verified recent activity above.
+    if (!premiumUserIds.has(device.user_id)) continue;
 
     const inactiveUser = inactiveUsers.get(device.user_id);
     if (isReengagementWindow && inactiveUser) {
