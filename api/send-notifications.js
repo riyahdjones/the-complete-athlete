@@ -254,12 +254,12 @@ async function recordNotificationEvent(eventType, severity, metadata) {
   });
 }
 
-async function sendToDevice(device, notification) {
-  if (await notificationExists(device.user_id, notification.id)) {
+async function sendToDevice(device, notification, { retryDuplicate = false } = {}) {
+  const duplicate = await notificationExists(device.user_id, notification.id);
+  if (duplicate && !retryDuplicate) {
     return { pushed: false, stored: true, duplicate: true };
   }
-
-  await saveNotification(device.user_id, notification);
+  const stored = duplicate ? true : await saveNotification(device.user_id, notification);
   if (!apnsConfigured()) return { pushed: false, stored: true };
 
   const primaryEnvironment = process.env.APNS_ENVIRONMENT || 'production';
@@ -272,7 +272,7 @@ async function sendToDevice(device, notification) {
       data: { notificationType: notification.type },
       environment: primaryEnvironment
     });
-    return { pushed: true, stored: true };
+    return { pushed: true, stored, duplicate };
   } catch (error) {
     const primaryError = safePushError(error);
     if (primaryError === 'BadDeviceToken' || primaryError === 'DeviceTokenNotForTopic') {
@@ -286,13 +286,15 @@ async function sendToDevice(device, notification) {
         });
         return {
           pushed: true,
-          stored: true,
+          stored,
+          duplicate,
           retriedEnvironment: secondaryEnvironment
         };
       } catch (retryError) {
         return {
           pushed: false,
-          stored: true,
+          stored,
+          duplicate,
           error: `${primaryError}; retry ${secondaryEnvironment}: ${safePushError(retryError)}`.slice(0, 180),
           platform: device.platform,
           userId: device.user_id,
@@ -302,7 +304,8 @@ async function sendToDevice(device, notification) {
     }
     return {
       pushed: false,
-      stored: true,
+      stored,
+      duplicate,
       error: primaryError,
       platform: device.platform,
       userId: device.user_id,
@@ -390,15 +393,21 @@ export default async function handler(req, res) {
         tone: 'info'
       };
       const device = newestDeviceByUser.get(recipient.id);
-      planDeliveries.push(device
-        ? sendToDevice(device, notification)
-        : saveForUserWithoutPush(recipient.id, notification));
+      planDeliveries.push({
+        requiresPush: Boolean(device),
+        promise: device
+          ? sendToDevice(device, notification, { retryDuplicate: true })
+          : saveForUserWithoutPush(recipient.id, notification)
+      });
     }
-    const deliveryResults = await Promise.allSettled(planDeliveries);
-    const planStored = deliveryResults.every((result) =>
-      result.status === 'fulfilled' && (result.value.stored || result.value.duplicate)
+    const deliveryResults = await Promise.allSettled(planDeliveries.map((delivery) => delivery.promise));
+    const planDelivered = planDeliveries.length > 0 && deliveryResults.every((result, index) =>
+      result.status === 'fulfilled'
+      && (planDeliveries[index].requiresPush
+        ? result.value.pushed
+        : (result.value.stored || result.value.duplicate))
     );
-    if (planStored || planDeliveries.length === 0) {
+    if (planDelivered) {
       await Promise.all(planGroup.plans.map((plan) => markPlanNotificationSent(plan.id)));
     }
     deliveryResults.forEach((result) => {
