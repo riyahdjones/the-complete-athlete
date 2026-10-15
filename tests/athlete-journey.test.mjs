@@ -36,3 +36,23 @@ test('rank progress uses major PP thresholds', () => {
   assert.equal(progress.next.name, 'Playmaker');
   assert.equal(progress.remaining, 1160);
 });
+
+test('rank progress measures only the current rank interval at boundaries', () => {
+  assert.equal(athleteRankProgress(499).percent, 99);
+  assert.equal(athleteRankProgress(500).percent, 0);
+  assert.equal(athleteRankProgress(1000).percent, 50);
+  assert.equal(athleteRankProgress(1499).remaining, 1);
+
+  const advanced = athleteRankProgress(1500);
+  assert.equal(advanced.current.name, 'Starter');
+  assert.equal(advanced.percent, 0);
+  assert.equal(advanced.remaining, 1500);
+});
+
+test('highest rank returns a complete max-rank state', () => {
+  const progress = athleteRankProgress(18000);
+  assert.equal(progress.current.name, 'Complete Athlete');
+  assert.equal(progress.next, null);
+  assert.equal(progress.remaining, 0);
+  assert.equal(progress.percent, 100);
+});

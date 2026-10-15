@@ -279,6 +279,8 @@ export function athleteRankProgress(points = 0) {
   const current = athleteRanks[currentIndex];
   const next = athleteRanks[currentIndex + 1] || null;
   const span = next ? next.minimum - current.minimum : 1;
-  const progress = next ? Math.round(((total - current.minimum) / span) * 100) : 100;
+  // Floor interval progress so an athlete never sees 100% until the next rank
+  // threshold has actually been reached.
+  const progress = next ? Math.floor(((total - current.minimum) / span) * 100) : 100;
   return { current, next, points: total, remaining: next ? Math.max(0, next.minimum - total) : 0, percent: Math.max(0, Math.min(100, progress)), currentIndex };
 }

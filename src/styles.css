@@ -13700,11 +13700,10 @@ body.game-day-visualization-open { overflow: hidden !important; overscroll-behav
 .game-day-finish p { color: #62728a; }
 .game-day-finish .game-day-primary { width: 100%; margin-top: 18px; }
 .game-day-history-card { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 14px; border: 1px solid #d7e3f1; border-radius: 15px; background: #fff; }
-.game-day-history-card > button:first-child { display: grid; gap: 3px; padding: 0; color: #17243a; text-align: left; border: 0; background: transparent; }
+.game-day-history-card > button:first-child { display: grid; gap: 3px; width: 100%; padding: 0; color: #17243a; text-align: left; border: 0; background: transparent; }
 .game-day-history-card span { color: #5077a5; font-size: .66rem; font-weight: 850; }
-.game-day-history-card strong { font-size: .92rem; }
+.game-day-history-card strong { color: #0b1d3d; font-size: .92rem; }
 .game-day-history-card em { color: #738198; font-size: .69rem; font-style: normal; }
-.game-day-history-card > button:last-child { align-self: center; min-height: 36px; padding: 0 12px; color: #fff; border: 0; border-radius: 10px; background: #1479f5; font-weight: 850; }
 .game-day-response { display: grid; gap: 7px; padding: 16px; border: 1px solid #d7e3f1; border-radius: 14px; background: #fff; }
 .game-day-response span { color: #3873ba; font-size: .62rem; font-weight: 900; letter-spacing: .09em; }
 .game-day-response strong { font-size: .8rem; }
@@ -17828,4 +17827,75 @@ body.game-day-visualization-open { overflow: hidden !important; overscroll-behav
 
 .mobile-native-frame:has(.persistent-plan-player) .content {
   padding-bottom: calc(160px + env(safe-area-inset-bottom));
+}
+
+/* Premium light Performance Points dashboard on Athlete Today. */
+.athlete-score-panel {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 14px;
+  color: #0b1d3d;
+  border: 1px solid rgba(47, 109, 246, .12);
+  border-radius: 20px;
+  background: radial-gradient(circle at 92% 0%, rgba(65,154,255,.13), transparent 30%), linear-gradient(145deg, #fff, #f5f9ff);
+  box-shadow: 0 18px 42px rgba(30, 79, 145, .12);
+}
+.athlete-score-panel::after { content: ''; position: absolute; z-index: 0; width: 150px; height: 150px; top: -92px; right: -76px; border: 25px solid rgba(47,109,246,.035); border-radius: 50%; pointer-events: none; }
+.athlete-score-panel > * { position: relative; z-index: 1; }
+.performance-points-heading, .performance-rank-summary, .performance-rank-progress-copy, .performance-thresholds, .performance-activity-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.performance-points-heading > div > span, .performance-rank-copy > span, .performance-rank-progress-copy span, .performance-activity-head > div > span { display: block; color: #3474e8; font-size: .61rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.performance-points-heading h2 { margin: 3px 0 0; color: #071b3e; font-size: 1.12rem; line-height: 1.08; letter-spacing: -.025em; }
+.today-points-pill { flex: 0 0 auto; padding: 7px 10px; color: #1559d7; border: 1px solid rgba(47,109,246,.16); border-radius: 999px; background: linear-gradient(135deg, rgba(47,109,246,.12), rgba(89,190,255,.08)); font-size: .68rem; font-weight: 900; animation: performance-points-feedback 420ms ease both; }
+.performance-rank-summary { justify-content: flex-start; padding: 14px; border: 1px solid rgba(47,109,246,.11); border-radius: 16px; background: rgba(255,255,255,.78); box-shadow: 0 8px 22px rgba(42,96,158,.07); }
+.performance-rank-badge { box-sizing: border-box; display: grid; flex: 0 0 54px; place-items: center; width: 54px; height: 54px; color: #fff; border: 1px solid rgba(255,255,255,.55); border-radius: 17px; background: linear-gradient(145deg, #4a8cff, #1f60dd 68%, #174aa8); box-shadow: 0 10px 24px rgba(39,103,222,.26), inset 0 1px 0 rgba(255,255,255,.35); animation: performance-badge-in 480ms cubic-bezier(.2,.9,.25,1.1) both; }
+.performance-rank-copy { min-width: 0; }
+.performance-rank-copy > strong { display: block; overflow: hidden; margin-top: 2px; color: #071b3e; font-size: 1.23rem; line-height: 1.05; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.performance-rank-copy p { margin: 3px 0 0; color: #65738a; font-size: .66rem; line-height: 1.3; }
+.performance-points-total { flex: 0 0 auto; margin-left: auto; text-align: right; animation: performance-points-feedback 420ms ease both; }
+.performance-points-total strong { display: block; color: #145edc; font-size: 1.55rem; line-height: 1; }
+.performance-points-total span { color: #65738a; font-size: .59rem; font-weight: 850; letter-spacing: .07em; text-transform: uppercase; }
+.performance-rank-progress { display: grid; gap: 8px; padding: 2px 1px 0; }
+.performance-rank-progress-copy strong { display: block; margin-top: 2px; color: #0a214b; font-size: .88rem; }
+.performance-rank-progress-copy em { color: #1e66dd; font-size: .72rem; font-style: normal; font-weight: 900; }
+.performance-progress-track { height: 9px; overflow: hidden; border: 1px solid rgba(47,109,246,.07); border-radius: 999px; background: #dce7f7; box-shadow: inset 0 1px 3px rgba(33,75,132,.1); }
+.performance-progress-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2f6df6, #3d96ff 68%, #62c3ff); box-shadow: 0 0 12px rgba(47,109,246,.34); transition: width 650ms cubic-bezier(.2,.8,.2,1); }
+.performance-rank-progress.max-rank .performance-progress-track i { background: linear-gradient(90deg, #1f65e2, #47a5ff, #7ad4ff); }
+.performance-thresholds { color: #738097; font-size: .59rem; font-weight: 800; }
+.performance-motivation { display: flex; align-items: center; gap: 8px; padding: 9px 11px; color: #214e91; border: 1px solid rgba(47,109,246,.1); border-radius: 11px; background: linear-gradient(90deg, rgba(225,239,255,.9), rgba(241,248,255,.7)); font-size: .69rem; font-weight: 800; }
+.performance-motivation svg { flex: 0 0 auto; color: #2f6df6; }
+.performance-activity-head > div > strong { display: block; margin-top: 2px; color: #152a4d; font-size: .75rem; }
+.performance-activity-head button { display: inline-flex; align-items: center; gap: 2px; padding: 0; color: #2366da; background: transparent; font-size: .68rem; font-weight: 900; }
+.athlete-score-panel .score-info-trigger { width: fit-content; min-height: 30px; color: #314c75; border-color: rgba(47,109,246,.16); background: rgba(239,245,255,.75); }
+.athlete-score-panel .point-event-list { gap: 6px; }
+.athlete-score-panel .point-event-list p { margin: 0; padding: 8px 0; color: #6b7890; font-size: .72rem; }
+.point-event-list.compact span { display: grid; grid-template-columns: 28px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 8px 9px; color: #41526d; border: 1px solid rgba(47,109,246,.08); border-radius: 10px; background: rgba(255,255,255,.72); font-size: .7rem; }
+.point-event-list.compact i { display: grid; place-items: center; width: 26px; height: 26px; color: #2468df; border-radius: 8px; background: #e8f1ff; font-style: normal; }
+.point-event-list.compact em { overflow: hidden; font-style: normal; font-weight: 780; text-overflow: ellipsis; white-space: nowrap; }
+.point-event-list.compact strong { color: #155ed8; font-size: .72rem; white-space: nowrap; }
+.points-history-sheet { color: #0b1d3d; }
+.points-history-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 12px; background: #edf5ff; }
+.points-history-total span { color: #58708f; font-size: .7rem; font-weight: 800; }
+.points-history-total strong { color: #155ed8; font-size: 1.1rem; }
+.points-history-list { display: grid; gap: 7px; max-height: min(52vh,440px); overflow-y: auto; margin-top: 12px; padding-right: 2px; }
+.points-history-list > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 11px; border: 1px solid rgba(47,109,246,.1); border-radius: 11px; background: #fff; }
+.points-history-list > div span { min-width: 0; }
+.points-history-list strong, .points-history-list em { display: block; }
+.points-history-list strong { overflow: hidden; color: #172b4d; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.points-history-list em { margin-top: 2px; color: #7b8799; font-size: .6rem; font-style: normal; }
+.points-history-list b { flex: 0 0 auto; color: #1761dc; font-size: .74rem; }
+.points-history-list > p { color: #6b7890; font-size: .75rem; }
+@keyframes performance-badge-in { from { opacity: 0; transform: translateY(5px) scale(.88); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes performance-points-feedback { 0% { transform: scale(.96); } 55% { transform: scale(1.045); } 100% { transform: scale(1); } }
+@media (max-width: 390px) {
+  .athlete-score-panel { gap: 12px; padding: 14px; }
+  .performance-rank-summary { padding: 12px; }
+  .performance-rank-badge { flex-basis: 48px; width: 48px; height: 48px; border-radius: 15px; }
+  .performance-rank-copy > strong { font-size: 1.08rem; }
+  .performance-rank-copy p { display: none; }
+  .performance-points-total strong { font-size: 1.35rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .performance-rank-badge, .performance-points-total, .today-points-pill { animation: none; }
+  .performance-progress-track i { transition: none; }
 }

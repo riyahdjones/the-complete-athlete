@@ -5831,6 +5831,7 @@ function App() {
           lesson={activeLesson}
           planProgress={planProgress}
           plans={localizedPlans}
+          pointsLedger={pointsLedger}
           recentPointEvents={recentPointEvents}
           standardsHistory={standardsHistory}
           streakCount={streakCount}
@@ -7959,6 +7960,7 @@ function HomeScreen({
   lesson,
   planProgress,
   plans,
+  pointsLedger,
   recentPointEvents,
   standardsHistory,
   streakCount,
@@ -7971,6 +7973,7 @@ function HomeScreen({
   const [standardsFeedback, setStandardsFeedback] = useState('');
   const [standardsHistoryOpen, setStandardsHistoryOpen] = useState(false);
   const [scoreInfoOpen, setScoreInfoOpen] = useState(false);
+  const [pointsHistoryOpen, setPointsHistoryOpen] = useState(false);
   const [editingStandardId, setEditingStandardId] = useState(null);
   const [editingStandardDraft, setEditingStandardDraft] = useState('');
   const [dayCompletion, setDayCompletion] = useState(null);
@@ -7987,6 +7990,17 @@ function HomeScreen({
     : 0;
   const planSeriesStats = planSeriesCompletion(plans, planProgress);
   const todaysFocus = lessonFocusQuestion(lesson);
+  const rank = athleteRankProgress(athleteScore);
+  const recentPointsPreview = recentPointEvents.slice(0, 2);
+  const pointHistory = [...pointsLedger]
+    .sort((first, second) => String(second.createdAt).localeCompare(String(first.createdAt)));
+  const rankMessage = !rank.next
+    ? 'You reached the highest rank. Keep building proof through your work.'
+    : rank.percent >= 75
+      ? 'Keep showing up. Your next rank is within reach.'
+      : rank.percent >= 35
+        ? 'Consistency is building your next level.'
+        : 'Every completed day moves you forward.';
 
   function openJourneyDay(day) {
     if (!day) {
@@ -8454,29 +8468,97 @@ function HomeScreen({
         </div>
       )}
 
-      <section className="panel athlete-score-panel">
-        <PanelTitle icon={<Star size={18} />} title="Performance Points" action={`Today +${todayPoints} PP`} />
-        <div className="score-hero">
-          <strong>{athleteScore}</strong>
-          <span>Evidence of work earned through daily activity, goals, plans, and reflection.</span>
-          <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
-            <CircleHelp size={15} />
-            How points work
-          </button>
+      <section className="panel athlete-score-panel" aria-labelledby="performance-points-title">
+        <div className="performance-points-heading">
+          <div>
+            <h2 id="performance-points-title">Performance Points</h2>
+          </div>
+          <strong key={todayPoints} className="today-points-pill">Today +{todayPoints.toLocaleString()} PP</strong>
         </div>
-        <div className="point-event-list">
-          {recentPointEvents.length === 0 ? (
+
+        <div className="performance-rank-summary">
+          <div className="performance-rank-badge" aria-hidden="true">
+            <Trophy size={29} />
+          </div>
+          <div className="performance-rank-copy">
+            <span>Current rank</span>
+            <strong>{rank.current.name}</strong>
+            <p>{rank.current.identity}</p>
+          </div>
+          <div className="performance-points-total" key={athleteScore}>
+            <strong>{athleteScore.toLocaleString()}</strong>
+            <span>Total PP</span>
+          </div>
+        </div>
+
+        <div className={rank.next ? 'performance-rank-progress' : 'performance-rank-progress max-rank'}>
+          <div className="performance-rank-progress-copy">
+            <div>
+              <span>{rank.next ? 'Next rank' : 'Rank achievement'}</span>
+              <strong>{rank.next ? rank.next.name : rank.current.name}</strong>
+            </div>
+            <em>{rank.next ? `${rank.remaining.toLocaleString()} PP to go` : 'Highest rank achieved'}</em>
+          </div>
+          <div
+            className="performance-progress-track"
+            role="progressbar"
+            aria-label={rank.next ? `Progress from ${rank.current.name} to ${rank.next.name}` : `${rank.current.name}, highest rank achieved`}
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={rank.percent}
+          >
+            <i style={{ width: `${rank.percent}%` }} />
+          </div>
+          <div className="performance-thresholds">
+            <span>{rank.current.minimum.toLocaleString()} PP</span>
+            <span>{rank.next ? `${rank.next.minimum.toLocaleString()} PP` : `${athleteScore.toLocaleString()} PP`}</span>
+          </div>
+        </div>
+
+        <div className="performance-motivation"><Sparkles size={15} /><span>{rankMessage}</span></div>
+
+        <div className="performance-activity-head">
+          <div><span>Recent activity</span><strong>Your latest earned points</strong></div>
+          <button type="button" onClick={() => setPointsHistoryOpen(true)}>View History <ChevronRight size={15} /></button>
+        </div>
+        <div className="point-event-list compact">
+          {recentPointsPreview.length === 0 ? (
             <p>No points yet. Complete today’s work to start building your score.</p>
           ) : (
-            recentPointEvents.map((entry) => (
+            recentPointsPreview.map((entry) => (
               <span key={entry.id}>
-                <strong>+{entry.points}</strong>
-                {entry.label}
+                <i aria-hidden="true"><Check size={14} /></i>
+                <em>{entry.label}</em>
+                <strong>+{Number(entry.points || 0).toLocaleString()} PP</strong>
               </span>
             ))
           )}
         </div>
+        <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
+          <CircleHelp size={15} /> How points work
+        </button>
       </section>
+
+      {pointsHistoryOpen && (
+        <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setPointsHistoryOpen(false)}>
+          <section className="bottom-sheet points-history-sheet" role="dialog" aria-modal="true" aria-label="Performance Points history" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-handle" aria-hidden="true" />
+            <div className="sheet-head">
+              <div><span>Performance Points</span><strong>Points history</strong></div>
+              <button className="icon-button sheet-close" onClick={() => setPointsHistoryOpen(false)} type="button" aria-label="Close points history"><X size={18} /></button>
+            </div>
+            <div className="points-history-total"><span>Total accumulated</span><strong>{athleteScore.toLocaleString()} PP</strong></div>
+            <div className="points-history-list">
+              {pointHistory.length === 0 ? <p>No point activity yet.</p> : pointHistory.map((entry) => (
+                <div key={entry.id}>
+                  <span><strong>{entry.label}</strong><em>{entry.date || 'Recent activity'}</em></span>
+                  <b>+{Number(entry.points || 0).toLocaleString()} PP</b>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {scoreInfoOpen && (
         <div className="bottom-sheet-backdrop" role="presentation" onClick={() => setScoreInfoOpen(false)}>
