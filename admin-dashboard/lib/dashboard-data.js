@@ -141,6 +141,7 @@ function topEventTypes(events) {
 
 export async function getDashboardData() {
   const supabase = supabaseAdmin();
+  const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
   const activityStart = daysAgoKey(13);
   const sevenDayStart = daysAgoKey(6);
   const thirtyDayStart = daysAgoKey(29);
@@ -409,6 +410,10 @@ export async function getDashboardData() {
       parentCount: parentCount.count ?? 0,
       totalUsers: (athleteCount.count ?? 0) + (parentCount.count ?? 0),
       newUsersToday: profileRows.filter((profile) => dateKeyFromDate(new Date(profile.created_at)) === todayKey()).length,
+      newUsers24Hours: profileRows.filter((profile) => {
+        const createdAt = new Date(profile.created_at).getTime();
+        return Number.isFinite(createdAt) && createdAt >= twentyFourHoursAgo;
+      }).length,
       newUsers7Days: profileRows.filter((profile) => dateKeyFromDate(new Date(profile.created_at)) >= sevenDayStart).length,
       activeAthletes7Days: activeAthletes.size,
       checkInsToday: checkInsToday.count ?? 0,

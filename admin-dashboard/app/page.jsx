@@ -51,12 +51,13 @@ export default async function Page() {
         <SectionHeader eyebrow="01 / Platform Scale" title="Executive Overview" description="The fastest read on company scale, weekly adoption, and product activity." action="Live production data" />
         <div className="executive-grid">
           <MetricCard label="Total Accounts" value={formatNumber(analytics.totalUsers)} detail={`${analytics.newUsers7Days} new / 7 days`} values={growthValues} />
+          <MetricCard label="New Users" value={formatNumber(analytics.newUsers24Hours)} detail="Created in the past 24 hours" values={newUserValues} tone="green" />
+          <MetricCard label="Onboarding Completed" value={formatNumber(analytics.onboardingCompletions7Days)} detail="Tracked completions / 7 days" values={newUserValues} tone="green" />
           <MetricCard label="Active Users" value={formatNumber(analytics.activeEventUsers7Days)} detail="Unique event users / 7 days" values={activityValues} tone="cyan" />
           <MetricCard label="Athletes" value={formatNumber(analytics.athleteCount)} detail={`${analytics.activeAthletes7Days} active / 7 days`} values={analytics.userGrowth.map((point) => point.athletes)} href="/users?role=athlete" />
           <MetricCard label="Parents" value={formatNumber(analytics.parentCount)} detail={`${analytics.parentLinks} linked accounts`} values={analytics.userGrowth.map((point) => point.parents)} tone="cyan" href="/users?role=parent" />
           <MetricCard label="Trial Starts" value={formatNumber(analytics.trialStarts7Days)} detail="Tracked starts / 7 days" values={newUserValues} tone="green" />
           <MetricCard label="Purchases" value={formatNumber(analytics.purchases7Days)} detail="Purchases + restores / 7 days" tone="green" />
-          <MetricCard label="Weekly App Opens" value={analytics.appOpens7Days || '—'} detail={analytics.appOpens7Days ? 'Tracked opens / 7 days' : 'Explicit open event unavailable'} />
           <MetricCard label="AI Coach Messages" value={formatNumber(analytics.coachMessages7Days)} detail={`${analytics.coachUniqueUsers7Days} unique athletes / 7 days`} values={activityValues} tone="cyan" />
         </div>
       </section>
