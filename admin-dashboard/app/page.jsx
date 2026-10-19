@@ -51,7 +51,7 @@ export default async function Page() {
         <SectionHeader eyebrow="01 / Platform Scale" title="Executive Overview" description="The fastest read on company scale, weekly adoption, and product activity." action="Live production data" />
         <div className="executive-grid">
           <MetricCard label="Total Accounts" value={formatNumber(analytics.totalUsers)} detail={`${analytics.newUsers7Days} new / 7 days`} values={growthValues} />
-          <MetricCard label="New Users" value={formatNumber(analytics.newUsers24Hours)} detail="Created in the past 24 hours" values={newUserValues} tone="green" />
+          <MetricCard label="New Users Past 24H" value={formatNumber(analytics.newUsers24Hours)} detail="Created in the past 24 hours" values={newUserValues} tone="green" />
           <MetricCard label="Onboarding Completed" value={formatNumber(analytics.onboardingCompletions7Days)} detail="Tracked completions / 7 days" values={newUserValues} tone="green" />
           <MetricCard label="Trial Starts" value={formatNumber(analytics.trialStarts7Days)} detail="Tracked starts / 7 days" values={newUserValues} tone="green" />
           <MetricCard label="Athletes" value={formatNumber(analytics.athleteCount)} detail={`${analytics.activeAthletes7Days} active / 7 days`} values={analytics.userGrowth.map((point) => point.athletes)} href="/users?role=athlete" />
