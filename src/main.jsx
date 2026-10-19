@@ -89,6 +89,7 @@ import {
   restoreRevenueCatSubscription,
   revenueCatConfig
 } from './revenueCat';
+import { derivePostTrialActivity, selectPostTrialVariant } from './postTrialPaywall';
 
 import { isSupabaseConfigured, supabase, oauthSupabase } from './supabaseClient';
 import './styles.css';
@@ -1461,10 +1462,12 @@ function mergeParentGuidesWithSeeds(guides) {
   const merged = new Map();
   createParentGuideSeeds().forEach((guide) => merged.set(parentGuideMergeKey(guide), guide));
   (Array.isArray(guides) ? guides : []).forEach((guide) => merged.set(parentGuideMergeKey(guide), guide));
-  return Array.from(merged.values()).sort((first, second) =>
-    String(first.releaseDate || '').localeCompare(String(second.releaseDate || '')) ||
-    String(first.id).localeCompare(String(second.id))
-  );
+  return Array.from(merged.values())
+    .filter((guide) => parentGuideMergeKey(guide) !== 'series:college-recruiting-101')
+    .sort((first, second) =>
+      String(first.releaseDate || '').localeCompare(String(second.releaseDate || '')) ||
+      String(first.id).localeCompare(String(second.id))
+    );
 }
 
 function parentGuideCoverImage(seriesTitle) {
@@ -1496,7 +1499,7 @@ function parentGuideCoverImage(seriesTitle) {
 function parentGuideThumbnailImage(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
   if (normalized.includes('borrowed confidence')) {
-    return '/parent-guides/borrowed-confidence-thumbnail.png';
+    return '/parent-guides/borrowed-confidence-banner.jpg';
   }
   if (normalized.includes('comparison trap')) {
     return '/parent-guides/comparison-trap-thumbnail.png';
@@ -1522,7 +1525,7 @@ function parentGuideThumbnailImage(seriesTitle) {
 function parentGuideCoverPosition(seriesTitle) {
   const normalized = String(seriesTitle ?? '').toLowerCase();
   if (normalized.includes('borrowed confidence')) {
-    return '50% 50%';
+    return '50% 58%';
   }
   if (normalized.includes('comparison trap')) {
     return '50% 48%';
@@ -2183,31 +2186,241 @@ Do not pray for a life with less pressure for your athlete. Help them become the
       guideDay: '3-Day Plan',
       guideLength: 3,
       steps: [
-        `Day 1: Build the Person
+        `Day 1: Build the Person Before the Player
 
 Story
 
-The athlete your child is becoming matters, but the person they are becoming matters more. Sports can shape discipline, humility, courage, patience, and leadership when parents keep the bigger picture in view.
+For more than 25 years, a massive block of white marble sat abandoned in Florence, Italy.
+
+Rain beat against it.
+
+The hot Italian sun baked it.
+
+People walked past it every day without giving it a second thought.
+
+It wasn't just any block of marble—it was considered damaged.
+
+Two different sculptors had attempted to work with it years earlier. Both gave up. One had cut into it incorrectly. The other believed too much of the stone had already been ruined.
+
+The verdict seemed final.
+
+It was flawed.
+
+Useless.
+
+A mistake.
+
+Most people looked at the marble and saw what was wrong with it.
+
+Then, in 1501, a 26-year-old artist named Michelangelo looked at that same block of stone.
+
+He saw something entirely different.
+
+Where everyone else saw a ruined piece of marble...
+
+He saw David.
+
+Not the finished statue.
+
+Not the masterpiece the world would one day admire.
+
+He saw the potential hidden beneath everything that didn't belong.
+
+For the next three years, Michelangelo worked patiently.
+
+One strike of the hammer.
+
+One careful cut with the chisel.
+
+Day after day.
+
+He wasn't trying to force David into the stone.
+
+He believed David was already there.
+
+Years later, when asked how he created one of history's greatest sculptures, Michelangelo famously said,
+
+"I saw the angel in the marble and carved until I set him free."
+
+That single sentence reveals something powerful.
+
+The masterpiece wasn't created overnight.
+
+It was revealed...
+
+One piece at a time.
 
 Deeper Look
 
-It is easy to make the game the whole story. Complete Athlete parenting keeps character at the center, especially when the performance is loud.
+Parenting can feel a lot like sculpting.
+
+When your child is young, it's easy to focus on what everyone else can see.
+
+The swing.
+
+The jump shot.
+
+The speed.
+
+The batting average.
+
+The rankings.
+
+The trophies.
+
+Those things are visible.
+
+They're measurable.
+
+They're celebrated.
+
+But underneath every athlete is something far more important.
+
+A person.
+
+And just like Michelangelo, your job isn't simply to improve what people can see.
+
+Your job is to shape what they can't.
+
+Every conversation after a tough game...
+
+Every lesson about honesty...
+
+Every moment you choose encouragement over criticism...
+
+Every time you teach them to own a mistake instead of making an excuse...
+
+You're taking another swing with the chisel.
+
+You're helping remove fear.
+
+Entitlement.
+
+Comparison.
+
+Pride.
+
+Performance-based identity.
+
+You're revealing the person God created them to become.
+
+The truth is, sports don't build character nearly as much as they reveal it.
+
+Pressure simply exposes what's already inside.
+
+That's why your greatest responsibility isn't preparing your child for the next game.
+
+It's preparing them for the next stage of life.
+
+Because one day...
+
+The cleats come off.
+
+The jersey gets folded.
+
+The crowd goes home.
+
+The scoreboard turns off.
+
+When that day comes, nobody will care how many home runs they hit at twelve years old.
+
+But everyone will experience the person they became.
+
+That's the masterpiece you're really building.
+
+Parents often ask,
+
+"How do I raise a great athlete?"
+
+The better question is,
+
+"What kind of person do I want my athlete to become?"
+
+Because when you build the person first...
+
+The player almost always follows.
 
 The Living Room
 
-What character trait is sports developing in your child right now? What trait is being tested?
+Take a few moments to reflect on these questions.
+
+1. When my child has a great game, what do I praise first—who they are or what they did?
+
+2. If someone watched me after one of my child's games, what would they believe matters most in our family?
+
+3. Am I spending as much time developing character as I am developing talent?
+
+4. Twenty years from now, what do I hope people say about my son or daughter?
+
+Not as an athlete...
+
+But as a person.
 
 This Week at Home
 
-Praise one character choice before you discuss one performance detail.
+This week, become intentional about what you celebrate.
+
+Every day, look for one opportunity to praise something that has nothing to do with performance.
+
+Instead of saying,
+
+"Great hit."
+
+Try saying,
+
+"I loved how you encouraged your teammate after they struck out."
+
+Instead of,
+
+"You played great today."
+
+Try,
+
+"I'm proud of how you kept competing when things weren't going your way."
+
+The goal isn't to ignore athletic success.
+
+The goal is to make sure your child knows that character will always be more valuable than statistics.
+
+Over time, they'll stop chasing approval...
+
+And start pursuing growth.
 
 Today's Challenge
 
-Tell your athlete one trait you see growing in them because of sports.
+Tonight, ask your athlete this question:
+
+"When you think about the kind of person you want to become, what qualities do you hope people remember about you?"
+
+Then do something that may feel unnatural.
+
+Don't teach.
+
+Don't correct.
+
+Don't interrupt.
+
+Just listen.
+
+You might be surprised by what's already in their heart.
+
+And before they go to bed, tell them three things you genuinely admire about them that have absolutely nothing to do with sports.
+
+Let them leave the conversation knowing this:
+
+Your love isn't earned by performance.
+
+It's unconditional.
+
+That kind of security becomes the foundation for genuine confidence.
 
 Key Takeaway
 
-The goal is not just a better athlete. The goal is a stronger person.`,
+Great parents don't spend their lives trying to create better athletes. They spend their lives revealing better people. And when the person grows, the athlete usually does too.
+
+Complete Athlete Parenting Principle
+
+Build the person before the player. The player has a season. The person has a lifetime.`,
         `Day 2: Build the Mind
 
 Story
@@ -6122,11 +6335,15 @@ function App() {
     return (
       <TrialPaywallScreen
         athleteProfile={athleteProfile}
+        athleteJourney={athleteJourney}
+        linkedAthleteSummary={linkedAthleteSummary}
         plans={localizedPlans}
         planProgress={planProgress}
+        pointsLedger={pointsLedger}
         role={effectiveSession.role}
         restorePremiumSubscription={restorePremiumSubscription}
         startPremiumSubscription={startPremiumSubscription}
+        standardsHistory={standardsHistory}
         subscription={effectiveSubscription}
         trackAnalyticsEvent={trackAnalyticsEvent}
       />
@@ -6180,7 +6397,9 @@ function App() {
           <div>
             {(isAthleteHome || isParentOverview) && (
               <div className="home-greeting-block">
-                <p className={`top-greeting${isAthleteHome ? ' athlete-home-greeting' : ' parent-home-greeting'}`}>{firstNameGreeting(effectiveSession.name)}</p>
+                <p className={`top-greeting${isAthleteHome ? ' athlete-home-greeting' : ' parent-home-greeting'}`}>
+                  {firstNameGreeting(effectiveSession.name)}{(isAthleteHome || isParentOverview) ? ' 👋' : ''}
+                </p>
               </div>
             )}
             {!isAthleteHome && !isParentOverview && (
@@ -7142,7 +7361,11 @@ function OnboardingScreen({
     return data.publicUrl || setup.photo;
   }
 
-  function challengeIdForAnswer(answer) {
+  function challengeIdForAnswer(answer, primaryFocus = '') {
+    if (primaryFocus === 'confidence') return 'confidence';
+    if (['discipline', 'consistency', 'focus', 'goal-setting', 'habits'].includes(primaryFocus)) return 'discipline';
+    if (['pressure', 'emotional-control', 'resilience'].includes(primaryFocus)) return 'pressure';
+    if (primaryFocus === 'coachability') return 'coach';
     const normalized = String(answer || '').toLowerCase();
     if (normalized.includes('confidence')) return 'confidence';
     if (normalized.includes('discipline') || normalized.includes('consistency') || normalized.includes('focus')) return 'discipline';
@@ -7171,8 +7394,21 @@ function OnboardingScreen({
 
   function answerQuestion(answer) {
     const question = journeyQuestions[questionIndex];
+    if (question.maxSelections) {
+      const currentAnswers = Array.isArray(journeyAnswers[question.id]) ? journeyAnswers[question.id] : [];
+      const alreadySelected = currentAnswers.includes(answer);
+      const nextAnswers = alreadySelected
+        ? currentAnswers.filter((item) => item !== answer)
+        : currentAnswers.length < question.maxSelections ? [...currentAnswers, answer] : currentAnswers;
+      setJourneyAnswers((current) => ({ ...current, [question.id]: nextAnswers }));
+      return;
+    }
     const nextAnswers = { ...journeyAnswers, [question.id]: answer };
     setJourneyAnswers(nextAnswers);
+    advanceQuestion();
+  }
+
+  function advanceQuestion() {
     if (questionIndex < journeyQuestions.length - 1) {
       window.setTimeout(() => setQuestionIndex((current) => current + 1), 120);
     } else {
@@ -7188,7 +7424,7 @@ function OnboardingScreen({
       standards: setup.standards.map((standard) => standard.trim()).filter(Boolean)
     };
 
-    const challengeId = challengeIdForAnswer(journeyAnswers.primaryGoal);
+    const challengeId = challengeIdForAnswer(journeyAnswers.primaryGoal, developmentProfile.primaryFocus);
     cleanSetup.currentChallenge = challengeId;
     cleanSetup.currentChallenges = [challengeId];
     cleanSetup.journeyAnswers = journeyAnswers;
@@ -7251,7 +7487,7 @@ function OnboardingScreen({
           <>
             <h1 className="journey-intro-heading"><span>Let’s build</span><span>your journey</span></h1>
             <strong className="journey-intro-promise">21 days. Built around you.</strong>
-            <p>Answer 8 quick questions and we’ll build a personalized mental-performance journey around your goals, strengths, and what you want to improve most.</p>
+            <p>Answer 9 quick questions and we’ll build a personalized mental-performance journey around your goals, strengths, and what you want to improve most.</p>
           </>
         ) : (
           <>
@@ -7275,7 +7511,7 @@ function OnboardingScreen({
             </div>
             <small>BUILT FOR YOU</small>
           </div>
-          <p className="journey-intro-duration">8 QUESTIONS <i>•</i> ABOUT 60 SECONDS</p>
+          <p className="journey-intro-duration">9 QUESTIONS <i>•</i> ABOUT 75 SECONDS</p>
           <button className="primary-action full onboarding-start" type="button" aria-label="Build my personalized 21-day journey" onClick={() => setStage('profile')}>Build My Journey <ArrowRight size={18}/></button>
         </section>
       )}
@@ -7285,8 +7521,8 @@ function OnboardingScreen({
           <p className="eyebrow">THE COMPLETE ATHLETE</p>
           <h1><span>Let’s start</span><span>with you.</span></h1>
           <p>Give us a few basics so we can make your experience feel more personal.</p>
-          <div className="journey-profile-progress" aria-label="Onboarding step 1 of 9">
-            <span>01 / 09</span>
+          <div className="journey-profile-progress" aria-label="Onboarding step 1 of 10">
+            <span>01 / 10</span>
             <div><i /></div>
           </div>
         </header>
@@ -7403,6 +7639,9 @@ function OnboardingScreen({
 
       {stage === 'questions' && (() => {
         const question = journeyQuestions[questionIndex];
+        const selectedAnswers = question.maxSelections
+          ? (Array.isArray(journeyAnswers[question.id]) ? journeyAnswers[question.id] : [])
+          : [];
         return (
           <section className="journey-question-stage">
             <div className="journey-question-progress">
@@ -7416,15 +7655,31 @@ function OnboardingScreen({
             <div className="journey-answer-grid">
               {question.options.map((option) => (
                 <button
-                  className={journeyAnswers[question.id] === option ? 'active' : ''}
+                  aria-pressed={question.maxSelections ? selectedAnswers.includes(option) : journeyAnswers[question.id] === option}
+                  className={(question.maxSelections ? selectedAnswers.includes(option) : journeyAnswers[question.id] === option) ? 'active' : ''}
+                  disabled={Boolean(question.maxSelections && selectedAnswers.length >= question.maxSelections && !selectedAnswers.includes(option))}
                   key={option}
                   onClick={() => answerQuestion(option)}
                   type="button"
                 >
-                  <span>{option}</span><ChevronRight size={18}/>
+                  <span>{option}</span>
+                  {question.maxSelections
+                    ? (selectedAnswers.includes(option) ? <Check size={18}/> : <Plus size={18}/>)
+                    : <ChevronRight size={18}/>
+                  }
                 </button>
               ))}
             </div>
+            {question.maxSelections && (
+              <button
+                className="primary-action full onboarding-start journey-question-continue"
+                disabled={selectedAnswers.length === 0}
+                onClick={advanceQuestion}
+                type="button"
+              >
+                Continue <ArrowRight size={18}/>
+              </button>
+            )}
             {question.affirmation && journeyAnswers[question.id] && <p className="journey-affirmation">{question.affirmation}</p>}
             {questionIndex > 0 && <button className="journey-back-link" type="button" onClick={() => setQuestionIndex((current) => current - 1)}>← Back</button>}
           </section>
@@ -7991,7 +8246,6 @@ function HomeScreen({
   const planSeriesStats = planSeriesCompletion(plans, planProgress);
   const todaysFocus = lessonFocusQuestion(lesson);
   const rank = athleteRankProgress(athleteScore);
-  const recentPointsPreview = recentPointEvents.slice(0, 2);
   const pointHistory = [...pointsLedger]
     .sort((first, second) => String(second.createdAt).localeCompare(String(first.createdAt)));
   const rankMessage = !rank.next
@@ -8298,7 +8552,7 @@ function HomeScreen({
               <p>Another deposit toward {dayCompletion.goalDeposits[0]}.</p>
             </div>
           )}
-          <blockquote>“You showed up. That’s who you are becoming.”</blockquote>
+          <blockquote>“Stay locked in on the activity that leads to the goals!”</blockquote>
           <button
             className="secondary-action full day-complete-secondary"
             onClick={() => {
@@ -8319,28 +8573,25 @@ function HomeScreen({
         <div className="today-hero-copy">
           <p>{lesson.body}</p>
         </div>
-        <div className="today-focus-callout">
-          <span>Today’s focus</span>
-          <strong>{todaysFocus}</strong>
-        </div>
-        <div className="today-command-grid" aria-label="Today’s snapshot">
-          <span>
-            <i><Check size={17} /></i>
-            <strong>{completedStandards.length}/{standards.length}</strong>
-            <em>Productivity</em>
-          </span>
-          <span>
-            <i><Star size={17} /></i>
-            <strong>{athleteScore}</strong>
-            <em>Points</em>
-          </span>
-          <span>
-            <i><Flame size={17} /></i>
-            <strong>{streakCount}</strong>
-            <em>Streak</em>
-          </span>
-        </div>
       </section>
+
+      <div className="today-command-grid today-snapshot-row" aria-label="Today’s snapshot">
+        <span>
+          <i><Check size={17} /></i>
+          <strong>{completedStandards.length}/{standards.length}</strong>
+          <em>Productivity</em>
+        </span>
+        <span>
+          <i><Star size={17} /></i>
+          <strong>{athleteScore}</strong>
+          <em>Points</em>
+        </span>
+        <span>
+          <i><Flame size={17} /></i>
+          <strong>{streakCount}</strong>
+          <em>Streak</em>
+        </span>
+      </div>
 
       <AthleteJourneyCard journey={athleteJourney} onContinue={openJourneyDay} />
 
@@ -8470,8 +8721,11 @@ function HomeScreen({
 
       <section className="panel athlete-score-panel" aria-labelledby="performance-points-title">
         <div className="performance-points-heading">
-          <div>
+          <div className="performance-points-title-row">
             <h2 id="performance-points-title">Performance Points</h2>
+            <button aria-label="How Performance Points work" onClick={() => setScoreInfoOpen(true)} type="button">
+              <CircleHelp size={16} />
+            </button>
           </div>
           <strong key={todayPoints} className="today-points-pill">Today +{todayPoints.toLocaleString()} PP</strong>
         </div>
@@ -8515,28 +8769,7 @@ function HomeScreen({
           </div>
         </div>
 
-        <div className="performance-motivation"><Sparkles size={15} /><span>{rankMessage}</span></div>
-
-        <div className="performance-activity-head">
-          <div><span>Recent activity</span><strong>Your latest earned points</strong></div>
-          <button type="button" onClick={() => setPointsHistoryOpen(true)}>View History <ChevronRight size={15} /></button>
-        </div>
-        <div className="point-event-list compact">
-          {recentPointsPreview.length === 0 ? (
-            <p>No points yet. Complete today’s work to start building your score.</p>
-          ) : (
-            recentPointsPreview.map((entry) => (
-              <span key={entry.id}>
-                <i aria-hidden="true"><Check size={14} /></i>
-                <em>{entry.label}</em>
-                <strong>+{Number(entry.points || 0).toLocaleString()} PP</strong>
-              </span>
-            ))
-          )}
-        </div>
-        <button className="score-info-trigger" onClick={() => setScoreInfoOpen(true)} type="button">
-          <CircleHelp size={15} /> How points work
-        </button>
+        <div className="performance-motivation"><LineChart size={15} /><span>{rankMessage}</span></div>
       </section>
 
       {pointsHistoryOpen && (
@@ -8613,6 +8846,16 @@ function HomeScreen({
                 Full plan series completed
               </span>
             </div>
+            <button
+              className="secondary-action full score-history-trigger"
+              onClick={() => {
+                setScoreInfoOpen(false);
+                setPointsHistoryOpen(true);
+              }}
+              type="button"
+            >
+              View Points History <ChevronRight size={16} />
+            </button>
             <p className="score-info-note">Your score is the total proof you have stacked through daily action, reflection, Game Day preparation, goals, and performance plans.</p>
           </section>
         </div>
@@ -11225,13 +11468,106 @@ function MembershipCheckScreen() {
   );
 }
 
+function subscriptionPeriodLabel(period = 'P1M') {
+  const match = String(period).match(/^P(\d+)([DWMY])$/i);
+  if (!match) return 'billing period';
+  const amount = Number(match[1]);
+  const units = { D: 'day', W: 'week', M: 'month', Y: 'year' };
+  const unit = units[match[2].toUpperCase()] || 'period';
+  return amount === 1 ? unit : `${amount} ${unit}s`;
+}
+
+function trialPeriodDetails(period) {
+  const match = String(period || '').match(/^P(\d+)([DWMY])$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unit = match[2].toUpperCase();
+  const totalDays = unit === 'D' ? amount : unit === 'W' ? amount * 7 : null;
+  const display = totalDays
+    ? `${totalDays} ${totalDays === 1 ? 'Day' : 'Days'}`
+    : `${amount} ${unit === 'M' ? (amount === 1 ? 'Month' : 'Months') : (amount === 1 ? 'Year' : 'Years')}`;
+  return {
+    display,
+    ctaDisplay: totalDays ? `${totalDays}-Day` : display.replace(/s$/, ''),
+    headline: amount === 1 && !totalDays ? `Your First ${display.replace(/^1\s+/, '')} Is On Us.` : `Your First ${display} Are On Us.`,
+    totalDays,
+    progressLabel: totalDays ? `Day ${Math.max(2, totalDays - 2)}` : 'Before Trial Ends',
+    billingLabel: totalDays ? `Day ${totalDays}` : 'Trial End'
+  };
+}
+
+function athletePlanPaywallDetails({ athleteJourney, athleteProfile, recommendedPlan }) {
+  const answers = athleteProfile?.journeyAnswers || athleteJourney?.answers || {};
+  const profile = athleteProfile?.developmentProfile
+    || athleteJourney?.developmentProfile
+    || deriveDevelopmentProfile(answers);
+  const currentFocus = profile?.primaryFocusLabel || 'Mental Performance';
+  const sport = String(athleteProfile?.sport || '').trim();
+  const strength = String(answers.strength || '').trim();
+  const strengthCopy = strength && !/still discovering/i.test(strength)
+    ? ` while building on ${strength.replace(/^I\s+/i, '').toLowerCase()}`
+    : '';
+  const personalizedSentence = sport
+    ? `Built for a ${sport} athlete ready to strengthen ${currentFocus.toLowerCase()}${strengthCopy}.`
+    : `Built around your goal to strengthen ${currentFocus.toLowerCase()}${strengthCopy}.`;
+  const firstJourneyDay = athleteJourney?.days?.find((day) => !day.completedAt) || athleteJourney?.days?.[0];
+
+  return {
+    currentFocus,
+    dailyCommitment: '10 focused minutes',
+    firstMilestone: firstJourneyDay?.title || recommendedPlan?.title || 'Complete your first performance lesson',
+    personalizedSentence
+  };
+}
+
+function TrialOfferTimeline({ billingPeriod, price, role, trial }) {
+  const isParent = role === 'parent';
+  const audienceCopy = isParent
+    ? 'Get parent guidance, practical tools, and access to your linked athlete’s progress.'
+    : 'Start your personalized 21-Day Journey and unlock performance plans, goals, the activity tracker, and your AI Coach.';
+  return (
+    <section className="trial-offer-timeline" aria-labelledby="trial-offer-title">
+      <header>
+        <span>{isParent ? 'Your parent access trial' : 'How your free trial works'}</span>
+        <h2 id="trial-offer-title">{isParent ? `${trial.display} of Parent Access—Free.` : trial.headline}</h2>
+        <p>{isParent ? 'Support their growth today. Decide what works for your family before billing begins.' : 'Here’s exactly how your free trial works.'}</p>
+      </header>
+      <div className="trial-offer-steps">
+        <div>
+          <span className="trial-offer-icon"><LockKeyhole size={17} /></span>
+          <div><strong>{isParent ? 'Today — Unlock Parent Access' : 'Today — Unlock Everything'}</strong><p>{audienceCopy}</p></div>
+        </div>
+        <div>
+          <span className="trial-offer-icon"><LineChart size={17} /></span>
+          <div>
+            <strong>{trial.progressLabel} — {isParent ? 'See How You Can Support Them' : 'Check Your Progress'}</strong>
+            <p>{isParent ? 'Explore the guidance and progress tools available to help your athlete grow.' : 'See what you’ve started and decide whether you’d like to continue.'}</p>
+          </div>
+        </div>
+        <div>
+          <span className="trial-offer-icon"><CalendarDays size={17} /></span>
+          <div><strong>{trial.billingLabel} — {isParent ? 'Parent Membership Begins' : 'Your Membership Begins'}</strong><p>Your paid subscription begins when the free trial ends unless you cancel beforehand.</p></div>
+        </div>
+      </div>
+      <div className="trial-offer-price">
+        <span>{trial.display.toUpperCase()} FREE</span>
+        <strong>Then {price} / {subscriptionPeriodLabel(billingPeriod)}</strong>
+        <em>Renews automatically. Cancel before your trial ends to avoid being charged.</em>
+      </div>
+    </section>
+  );
+}
+
 function TrialPaywallScreen({
   athleteProfile,
+  athleteJourney,
   plans,
   planProgress,
+  pointsLedger,
   restorePremiumSubscription,
   role,
   startPremiumSubscription,
+  standardsHistory,
   subscription,
   trackAnalyticsEvent
 }) {
@@ -11240,9 +11576,7 @@ function TrialPaywallScreen({
   const canRestore = subscription.configured && subscription.native;
   const expirationTime = new Date(subscription.expirationDate || '').getTime();
   const trialEnded = Number.isFinite(expirationTime) && expirationTime <= Date.now();
-  const priceLine = product?.price
-    ? `${product.price}/month${trialEnded ? '' : ' after trial'}`
-    : `$5.99/month${trialEnded ? '' : ' after trial'}`;
+  const productIdentifier = product?.productIdentifier || product?.identifier || '';
   const challenges = athleteChallengesByIds(athleteProfile?.currentChallenges, athleteProfile?.currentChallenge);
   const planLibrary = buildPlanLibrary(sequencedPlanAccess(plans || [], planProgress || {}, todayKey()));
   const primaryChallenge = challenges[0];
@@ -11252,126 +11586,243 @@ function TrialPaywallScreen({
       return primaryChallenge.planKeywords.some((keyword) => text.includes(keyword));
     })
     ?? planLibrary[0];
-  const personalizedAthletePaywall = role === 'athlete' && !trialEnded;
-  const personalizedParentPaywall = role === 'parent' && !trialEnded;
-  const athleteFirstName = String(athleteProfile?.name || '').trim().split(/\s+/)[0];
-  const displayAthleteFirstName = athleteFirstName
-    ? `${athleteFirstName.charAt(0).toLocaleUpperCase()}${athleteFirstName.slice(1)}`
-    : '';
+  const verifiedActivity = useMemo(() => derivePostTrialActivity({
+    expirationDate: subscription.expirationDate,
+    planProgress,
+    pointsLedger,
+    standardsHistory
+  }), [planProgress, pointsLedger, standardsHistory, subscription.expirationDate]);
+  const previewParams = import.meta.env.DEV && typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search)
+    : null;
+  const previewVariant = previewParams?.get('paywallActivity') || '';
+  const usesActivePreviewFixture = previewVariant === 'active-athlete' && previewParams?.get('previewMetrics') === '1';
+  const usesTrialPreviewFixture = previewParams?.get('trialPreview') === '1';
+  const trialDetails = trialPeriodDetails(product?.trialPeriod || (usesTrialPreviewFixture ? 'P1W' : ''));
+  const trialOfferEligible = !trialEnded && Boolean(trialDetails) && (product?.trialEligible || usesTrialPreviewFixture);
+  const billingPeriod = product?.subscriptionPeriod || 'P1M';
+  const billingUnit = subscriptionPeriodLabel(billingPeriod);
+  const localizedPrice = product?.price || (usesTrialPreviewFixture ? '$5.99' : 'Price available in the App Store');
+  const activity = usesActivePreviewFixture ? {
+    ...verifiedActivity,
+    active: true,
+    hasVerifiedActivity: true,
+    meaningfulDays: 5,
+    completedLessons: 3,
+    pointsEarned: 120
+  } : verifiedActivity;
+  const variant = selectPostTrialVariant({ role, activity, previewVariant });
+  const isActiveAthlete = variant === 'active-athlete';
+  const isParent = variant === 'parent';
+  const athletePlanDetails = !isParent
+    ? athletePlanPaywallDetails({ athleteJourney, athleteProfile, recommendedPlan })
+    : null;
+  const verifiedJourneyProgress = journeyProgress(athleteJourney);
+  const activeJourneyProgress = usesActivePreviewFixture
+    ? { completed: 6, total: 21, percent: 29, complete: false }
+    : verifiedJourneyProgress;
+  const showJourneyProgress = isActiveAthlete
+    && activeJourneyProgress.total > 0
+    && activeJourneyProgress.completed > 0;
+  const startedIncompleteSeries = planLibrary.find((series) => (
+    series.plans?.some((plan) => Boolean(plan.completedAt))
+    && series.plans?.some((plan) => plan.unlocked && !plan.completedAt)
+  ));
+  const nextLesson = startedIncompleteSeries?.plans?.find((plan) => plan.unlocked && !plan.completedAt) ?? null;
+  const activeMetrics = [
+    activity.meaningfulDays > 0 ? { value: activity.meaningfulDays, label: 'Days active' } : null,
+    activity.completedLessons > 0 ? { value: activity.completedLessons, label: 'Lessons completed' } : null,
+    activity.pointsEarned > 0 ? { value: activity.pointsEarned, label: 'PP earned' } : null
+  ].filter(Boolean);
+  const content = isParent ? {
+    eyebrow: 'Raising the Complete Athlete',
+    headline: 'Great athletes are developed beyond the game.',
+    supporting: 'Get the tools and guidance to help your athlete build the mindset, habits, and discipline to reach their full potential.',
+    closing: 'Help them grow as athletes. Help them grow as people.',
+    cta: 'Help Them Become a Complete Athlete'
+  } : isActiveAthlete ? {
+    eyebrow: 'Your Journey Continues',
+    headline: "Look what you've started.",
+    supporting: "Every day you show up, you're building the athlete you're becoming.",
+    supportingLine: 'The best is still ahead.',
+    closing: "You've built momentum. Keep going.",
+    cta: 'Continue My Training'
+  } : {
+    eyebrow: 'Your Next Chapter',
+    headline: 'The athlete you want to become starts with what you do next.',
+    supporting: "You don't have to have it all figured out. Start with 10 focused minutes a day.",
+    closing: activity.hasVerifiedActivity
+      ? "You've taken the first step. Now build on it."
+      : 'Your next chapter is still yours to write.',
+    cta: 'Start Building My Game'
+  };
+  const showPersonalizedOnboardingPlan = trialOfferEligible && !isParent;
+  if (showPersonalizedOnboardingPlan) {
+    content.eyebrow = 'Personalized for you';
+    content.headline = 'Your 21-Day Journey Is Ready';
+    content.supporting = athletePlanDetails.personalizedSentence;
+  }
+  const subscriptionCtaLabel = trialOfferEligible
+    ? (isParent ? `Start My ${trialDetails.ctaDisplay} Parent Trial` : `Start My ${trialDetails.ctaDisplay} Free Trial`)
+    : content.cta;
 
   useEffect(() => {
     if (paywallViewed.current) return;
     paywallViewed.current = true;
     trackAnalyticsEvent?.('paywall_viewed', {
-      context: personalizedAthletePaywall ? 'after_first_rep' : personalizedParentPaywall ? 'after_first_parent_rep' : trialEnded ? 'trial_expired' : 'membership_required',
+      context: trialEnded ? 'trial_expired' : 'membership_required',
+      variant,
+      productIdentifier,
       challengeIds: challenges.map((challenge) => challenge.id),
       recommendedPlan: recommendedPlan?.title || ''
     }, { area: 'monetization' });
     if (role === 'parent') {
       trackAnalyticsEvent?.('parent_paywall_viewed', {
-        context: personalizedParentPaywall ? 'after_parent_recommendations' : trialEnded ? 'trial_expired' : 'membership_required'
+        context: trialEnded ? 'trial_expired' : 'membership_required',
+        variant,
+        productIdentifier
       }, { area: 'monetization' });
     }
-  }, [personalizedAthletePaywall, personalizedParentPaywall, role, trialEnded]);
-
-  const title = trialEnded
-    ? 'Your free trial has ended'
-    : personalizedAthletePaywall
-      ? 'Keep building the athlete you started becoming today.'
-      : personalizedParentPaywall
-        ? 'Keep building the athlete they’re becoming.'
-      : 'Unlock The Complete Athlete';
-  const roleLine = role === 'parent'
-    ? personalizedParentPaywall
-      ? 'Give your athlete daily mindset training and structure, with clear progress and parent guidance for you.'
-      : 'Support your athlete with clear progress, parent guidance, and the full plan library.'
-    : personalizedAthletePaywall
-      ? `Your first rep is complete${displayAthleteFirstName ? `, ${displayAthleteFirstName}` : ''}. Now keep building the habits, mindset, and support system that move you forward.`
-      : 'Keep your mindset training, daily discipline, and personalized plan moving forward.';
+  }, [productIdentifier, role, trialEnded, variant]);
 
   function beginTrial() {
+    trackAnalyticsEvent?.('subscription_cta_tapped', {
+      variant,
+      productIdentifier
+    }, { area: 'monetization' });
     trackAnalyticsEvent?.('trial_cta_tapped', {
-      context: personalizedAthletePaywall ? 'after_first_rep' : personalizedParentPaywall ? 'after_first_parent_rep' : trialEnded ? 'trial_expired' : 'membership_required',
+      context: trialEnded ? 'trial_expired' : 'membership_required',
+      variant,
+      productIdentifier,
       recommendedPlan: recommendedPlan?.title || '',
-      cta: trialEnded ? 'subscribe_to_continue' : 'start_7_day_trial'
+      cta: subscriptionCtaLabel
     }, { area: 'monetization' });
     startPremiumSubscription();
   }
 
-  return (
-    <main className="trial-gate-shell">
-      <section className="trial-gate-card">
-        <span className="trial-kicker">{trialEnded ? 'Membership required' : personalizedAthletePaywall ? 'Your personalized path is ready' : personalizedParentPaywall ? 'Your parent support system is ready' : '7-day free trial'}</span>
-        <h1>{title}</h1>
-        <p>{roleLine}</p>
+  function restorePurchase() {
+    trackAnalyticsEvent?.('restore_purchase_tapped', { variant, productIdentifier }, { area: 'monetization' });
+    restorePremiumSubscription();
+  }
 
-        {personalizedAthletePaywall && (
-          <div className="paywall-plan-result">
-            {recommendedPlan?.thumbnailImage && (
-              <div
-                className="paywall-plan-cover"
-                style={{ backgroundImage: `linear-gradient(90deg, rgba(5, 12, 28, 0.1), rgba(5, 12, 28, 0.72)), url(${recommendedPlan.thumbnailImage})`, backgroundPosition: recommendedPlan.coverPosition }}
-                aria-hidden="true"
-              />
-            )}
+  return (
+    <main className={`trial-gate-shell post-trial-paywall ${variant}`}>
+      <section className="trial-gate-card post-trial-card" aria-labelledby="post-trial-title">
+        <header className="post-trial-hero">
+          <span className="post-trial-grid-texture" aria-hidden="true" />
+          <span className="trial-kicker">{content.eyebrow}</span>
+          <h1 id="post-trial-title">{content.headline}</h1>
+          <p>{content.supporting}</p>
+          {content.supportingLine && <small>{content.supportingLine}</small>}
+        </header>
+
+        {showPersonalizedOnboardingPlan && (
+          <section className="onboarding-plan-preview" aria-label="Your personalized 21-day plan preview">
             <div>
-              <span>Your next recommended plan</span>
-              <strong>{recommendedPlan?.title || primaryChallenge.recommendedPlanTitle}</strong>
-              <em>10 focused minutes a day</em>
+              <span>Current focus</span>
+              <strong>{athletePlanDetails.currentFocus}</strong>
+            </div>
+            <div>
+              <span>Daily commitment</span>
+              <strong>{athletePlanDetails.dailyCommitment}</strong>
+            </div>
+            <div>
+              <span>First plan</span>
+              <strong>{athletePlanDetails.firstMilestone}</strong>
+            </div>
+          </section>
+        )}
+
+        {isActiveAthlete && activeMetrics.length > 0 && (
+          <div className="post-trial-stat-wrap">
+            {usesActivePreviewFixture && <small className="post-trial-preview-label">Preview data</small>}
+            <div className="post-trial-stat-grid" aria-label="Your trial progress">
+            {activeMetrics.map((metric) => (
+              <span key={metric.label}><strong>{metric.value}</strong><em>{metric.label}</em></span>
+            ))}
             </div>
           </div>
         )}
 
-        {role === 'parent' ? (
-          <div className="trial-benefit-list outcome-list">
-            <span><Brain size={18} />Build confidence, discipline, and resilience</span>
-            <span><Target size={18} />Turn goals into consistent daily work</span>
-            <span><LineChart size={18} />See progress without hovering</span>
-            <span><BookOpen size={18} />Get simple parent guidance when needed</span>
-          </div>
-        ) : (
-          <div className="trial-benefit-list outcome-list athlete-development-list" aria-label="Your athlete development progression">
-            <span><BadgeCheck size={18} /><b>Build confidence through daily evidence</b></span>
-            <span><RotateCcw size={18} /><b>Reset faster after mistakes and tough performances</b></span>
-            <span><Target size={18} /><b>Stay disciplined when motivation fades</b></span>
-            <span><Goal size={18} /><b>Set meaningful goals and turn them into daily action</b></span>
-            <span><BookOpen size={18} /><b>Follow focused performance plans built around what you need most</b></span>
-            <span><MessageCircle size={18} /><b>Get personal guidance from your AI performance coach</b></span>
-            <span><Users size={18} /><b>Give your family a clear way to support your progress</b></span>
+        {showJourneyProgress && (
+          <div className="post-trial-journey-progress" aria-label={`${activeJourneyProgress.completed} of ${activeJourneyProgress.total} journey days complete`}>
+            <div>
+              <span>Your 21-day journey</span>
+              <strong>{activeJourneyProgress.complete ? 'Journey complete' : `Day ${Math.min(activeJourneyProgress.completed + 1, activeJourneyProgress.total)} of ${activeJourneyProgress.total}`}</strong>
+            </div>
+            <div className="post-trial-journey-track" aria-hidden="true">
+              <i style={{ width: `${activeJourneyProgress.percent}%` }} />
+            </div>
+            <small>{activeJourneyProgress.completed} days complete <em>{activeJourneyProgress.percent}%</em></small>
           </div>
         )}
-        {!trialEnded && (
-          <div className="trial-timeline" aria-label="Free trial timeline">
-            <div><b>Today</b><span>{role === 'parent' ? 'Unlock parent guidance and every linked athlete dashboard' : 'Unlock your complete personalized plan'}</span></div>
-            <div><b>Day 7</b><span>{priceLine.replace(' after trial', '')} begins unless canceled</span></div>
-          </div>
-        )}
-        <div className="trial-price-card">
-          <span>{trialEnded ? 'Keep building' : 'Start free today'}</span>
-          <strong>{trialEnded ? priceLine : `7 days free, then ${priceLine.replace(' after trial', '')}`}</strong>
-          <em>Cancel anytime through your Apple subscription settings.</em>
+
+        <div className="post-trial-value-list">
+            {(isParent ? [
+              [<Brain size={19} />, 'Develop the whole athlete', 'Build confidence, resilience, and mental strength beyond physical skills.'],
+              [<BookOpen size={19} />, 'Get tools to guide their growth', 'Access parent-focused performance plans and practical guidance to support their development.'],
+              [<LineChart size={19} />, 'Stay connected to their progress', 'Encourage accountability and celebrate consistent effort through the Parent Portal.'],
+              [<Users size={19} />, 'Support up to two athletes', 'Add and follow up to two athletes from one parent account.']
+            ] : isActiveAthlete ? [
+              [<BadgeCheck size={19} />, 'Build unshakable confidence', 'Train your mindset to handle setbacks, pressure, and tough performances.'],
+              [<Target size={19} />, 'Turn goals into daily action', 'Build discipline and accountability through consistent habits.'],
+              [<Brain size={19} />, 'Get guidance when you need it', 'Access performance plans, Game Day preparation, and your AI Coach.'],
+              [<Trophy size={19} />, 'Become a Complete Athlete', 'Build the mindset, habits, and discipline to grow on and off the field.']
+            ] : [
+              [<BadgeCheck size={19} />, 'Build real confidence', "Develop confidence that isn't controlled by your last performance."],
+              [<Target size={19} />, 'Create better habits', 'Turn small daily actions into lasting discipline.'],
+              [<Brain size={19} />, 'Train your mental game', 'Learn to handle pressure, setbacks, and the challenges of competing.'],
+              [<Trophy size={19} />, 'Become a Complete Athlete', 'Build the mindset, habits, and discipline to grow on and off the field.']
+            ]).map(([icon, title, description]) => (
+              <div className="post-trial-value" key={title}>
+                <span>{icon}</span>
+                <div><strong>{title}</strong><p>{description}</p></div>
+              </div>
+            ))}
         </div>
+
+        {isActiveAthlete && nextLesson && (
+          <div className="post-trial-next-lesson">
+            <BookOpen size={18} />
+            <div><span>Pick up where you left off</span><strong>{nextLesson.title}</strong><em>Your next performance lesson is waiting.</em></div>
+          </div>
+        )}
+
+        {!trialOfferEligible && <p className="post-trial-closing"><strong>{content.closing}</strong></p>}
+
+        {trialOfferEligible && (
+          <TrialOfferTimeline billingPeriod={billingPeriod} price={localizedPrice} role={role} trial={trialDetails} />
+        )}
+
+        {!trialOfferEligible && (
+          <div className="trial-price-card post-trial-offer">
+            <span>Continue your membership</span>
+            <strong>{product?.price ? `${localizedPrice} / ${billingUnit}` : localizedPrice}</strong>
+            <em>Subscription renews automatically each {billingUnit}. Cancel anytime through Apple subscription settings.</em>
+          </div>
+        )}
         {subscription.message && <p className="inline-note">{subscription.message}</p>}
         <div className="trial-actions">
           <button
-            className="primary-action full"
+            className="primary-action full post-trial-cta"
             disabled={subscription.loading}
             onClick={beginTrial}
             type="button"
           >
-            <Sparkles size={18} />
-            {subscription.loading ? 'Checking...' : trialEnded ? 'Subscribe to Continue' : 'Start My 7-Day Free Trial'}
+            {subscription.loading ? 'Opening App Store...' : subscriptionCtaLabel}
+            {!subscription.loading && <ArrowRight size={18} />}
           </button>
+          {trialOfferEligible && <p className="trial-charge-note">Cancel before your trial ends to avoid being charged.</p>}
           <button
-            className="secondary-action inline"
+            className="post-trial-restore"
             disabled={!canRestore || subscription.loading}
-            onClick={restorePremiumSubscription}
+            onClick={restorePurchase}
             type="button"
           >
-            Restore Purchase
+            Restore Purchases
           </button>
         </div>
-        <div className="trial-legal-links">
+        <div className="trial-legal-links" aria-label="Subscription policies">
           <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
           <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
         </div>
@@ -12516,7 +12967,7 @@ function ParentDashboard({
               <strong>{linkedAthleteId ? athleteFirstName : 'No athlete linked'}</strong>
               {linkedAthleteId && athleteMeta && <p>{athleteMeta}</p>}
             </div>
-            <div className={`parent-athlete-status${linkedAthleteId ? ' connected' : ''}`}><i />{linkedAthleteId ? 'Connected' : 'Link needed'}</div>
+            <div className={`parent-athlete-status${linkedAthleteId ? ' connected' : ''}`}><i />{linkedAthleteId ? 'Connected' : 'No connected athlete'}</div>
           </section>
 
           {!linkedAthleteId && (
@@ -12550,7 +13001,7 @@ function ParentDashboard({
           <section className="parent-score-hero" aria-labelledby="parent-score-title">
             <div className="parent-score-heading">
               <div>
-                <span id="parent-score-title">Performance Points</span>
+                <span id="parent-score-title">Your Athlete’s Performance Points</span>
                 <small>Overall development signal</small>
               </div>
               <BarChart3 size={20} aria-hidden="true" />
@@ -12561,7 +13012,6 @@ function ParentDashboard({
                 {[0, 1, 2, 3, 4].map((segment) => <i className={segment < scoreSignalSegments ? 'active' : ''} key={segment} />)}
               </div>
             </div>
-            <p>{linkedAthleteId ? parentProgressTone(weeklySnapshot, selectedAthleteStreak) : 'Link your athlete to see their progress.'}</p>
           </section>
 
           <section className="parent-dashboard-metrics" aria-label="Athlete progress metrics">
@@ -12593,13 +13043,13 @@ function ParentDashboard({
             </div>
             <div className="parent-support-nudges">
               <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('effort')} type="button">
-                <i><BadgeCheck size={17} /></i><span><strong>Encourage effort</strong><small>Reinforce the work, not just the result.</small></span><ChevronRight size={17} />
+                <i><BadgeCheck size={17} /></i><span><strong>Home Court Advantage</strong><small>Create a home environment that supports growth.</small></span><ChevronRight size={17} />
               </button>
               <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('plan')} type="button">
-                <i><BookOpen size={17} /></i><span><strong>Talk through the plan</strong><small>Use today’s lesson as the bridge.</small></span><ChevronRight size={17} />
+                <i><BookOpen size={17} /></i><span><strong>Pressure Isn’t the Enemy</strong><small>Help your athlete meet pressure with confidence.</small></span><ChevronRight size={17} />
               </button>
               <button disabled={!linkedAthleteId} onClick={() => sendParentEncouragement('goals')} type="button">
-                <i><Goal size={17} /></i><span><strong>Reconnect the goal</strong><small>Ask which action supports the goal they chose.</small></span><ChevronRight size={17} />
+                <i><Goal size={17} /></i><span><strong>Raising a Complete Athlete</strong><small>Develop the person behind the performance.</small></span><ChevronRight size={17} />
               </button>
             </div>
             {actionFeedback && <p className="parent-action-feedback">{actionFeedback}</p>}
@@ -12804,15 +13254,6 @@ function ParentCornerSection({ language = 'en', parentGuides = [], parentMessage
 
   return (
     <>
-      <section className="panel parent-corner-hero">
-        <PanelTitle icon={<Users size={18} />} title="Parent Corner" action={`${parentContent.length} ${parentContent.length === 1 ? 'guide' : 'guides'}`} />
-        <h2>Lead the home environment with purpose.</h2>
-        <div className="goal-reminder">
-          <strong>How to use this</strong>
-          <span>Open a parent guide when you want a clear framework for supporting your athlete without crowding their process.</span>
-        </div>
-      </section>
-
       <section className="panel parent-corner-library">
         <PanelTitle icon={<Sparkles size={18} />} title="Continue Parent Guide" action={latestGuide.date} />
         <button

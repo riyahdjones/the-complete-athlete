@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowRight, Check, Clock3, History, Pause, Play, RotateCcw, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Clock3, History, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { GAME_DAY_QUESTIONS, selectGameDayQuestions, toggleGameDayChoice } from './gameDayQuestions';
 import { gameDayCheckInPointKey } from './gameDayRewards';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
@@ -324,7 +324,6 @@ export default function GameDayMode({ athleteProfile, awardPoints, checkInPoints
   const detail = sessions.find((session) => session.id === detailId);
   return <>
     <section className="game-day-entry">
-      <div className="game-day-entry-icon"><Sparkles /></div>
       <div><span>Game today?</span><h2>Prepare your mind before you compete.</h2><p>Three quick questions. One focused visualization. Walk in ready.</p></div>
       <button className="game-day-start" type="button" onClick={() => begin(false)}>{draft ? 'Continue Game Day' : 'Start Game Day'} <ArrowRight size={18} /></button>
       {draft && draft.stage !== 'complete' && <button className="game-day-restart-link" type="button" onClick={() => begin(true)}><RotateCcw size={15} /> Start Over</button>}

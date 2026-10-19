@@ -62,15 +62,20 @@ function selectPackage(offerings) {
   return current?.monthly ?? current?.availablePackages?.[0] ?? null;
 }
 
-function packageSummary(selectedPackage) {
+function packageSummary(selectedPackage, introEligibility = null) {
   if (!selectedPackage) return null;
   const product = selectedPackage.product ?? {};
+  const introPrice = product.introPrice ?? null;
+  const freeTrialConfigured = Boolean(introPrice && Number(introPrice.price) === 0 && introPrice.period);
   return {
     identifier: selectedPackage.identifier,
     productIdentifier: product.identifier || '',
     title: product.title || 'The Complete Athlete Premium',
-    price: product.priceString || '$5.99',
-    description: product.description || 'Full access to The Complete Athlete.'
+    price: product.priceString || '',
+    description: product.description || 'Full access to The Complete Athlete.',
+    subscriptionPeriod: product.subscriptionPeriod || 'P1M',
+    trialPeriod: freeTrialConfigured ? introPrice.period : '',
+    trialEligible: freeTrialConfigured && Number(introEligibility?.status) === 2
   };
 }
 
@@ -94,8 +99,11 @@ export async function loadRevenueCatSubscription({ userId, email, name }) {
         identifier: 'monthly',
         productIdentifier: 'The_complete_athlete_monthly',
         title: 'The Complete Athlete Premium',
-        price: '$5.99',
-        description: 'Full access to The Complete Athlete.'
+        price: '',
+        description: 'Full access to The Complete Athlete.',
+        subscriptionPeriod: 'P1M',
+        trialPeriod: '',
+        trialEligible: false
       },
       message: 'Purchases are handled by Apple inside the iPhone app.'
     };
@@ -107,13 +115,25 @@ export async function loadRevenueCatSubscription({ userId, email, name }) {
     Purchases.getOfferings()
   ]);
   cachedMonthlyPackage = selectPackage(offerings);
+  const productIdentifier = cachedMonthlyPackage?.product?.identifier || '';
+  let introEligibility = null;
+  if (productIdentifier && cachedMonthlyPackage?.product?.introPrice) {
+    try {
+      const eligibility = await Purchases.checkTrialOrIntroductoryPriceEligibility({
+        productIdentifiers: [productIdentifier]
+      });
+      introEligibility = eligibility?.[productIdentifier] ?? null;
+    } catch {
+      introEligibility = null;
+    }
+  }
   const status = simplifyCustomerInfo(customerInfo);
 
   return {
     configured: true,
     native: true,
     ...status,
-    package: packageSummary(cachedMonthlyPackage),
+    package: packageSummary(cachedMonthlyPackage, introEligibility),
     message: cachedMonthlyPackage
       ? status.active
         ? 'Premium access is active.'

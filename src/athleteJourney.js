@@ -3,69 +3,134 @@ export const JOURNEY_LENGTH = 21;
 export const journeyQuestions = [
   {
     id: 'primaryGoal',
-    question: 'What do you want to improve most right now?',
-    helper: 'Choose the one that feels most important to you right now.',
-    options: ['Confidence', 'Discipline', 'Focus', 'Consistency', 'Handling pressure', 'Emotional control', 'Goal-setting', 'Coachability']
+    question: 'What would help you most right now?',
+    helper: 'Choose up to two.',
+    maxSelections: 2,
+    options: ['Believe in myself more', 'Stay focused', 'Be more consistent', 'Handle pressure better', 'Bounce back after mistakes', 'Stay calm when I get emotional', 'Set goals and follow them', 'Use coaching and feedback better']
   },
   {
     id: 'obstacle',
     question: 'What gets in your way most often?',
     helper: 'Choose the one that most closely matches your experience.',
-    options: ['I lose confidence after mistakes', 'I procrastinate', 'I get distracted', 'I overthink', 'I get too emotional', 'I struggle to stay consistent', 'I don’t always know what to work on', 'I have trouble taking coaching']
+    options: ['I doubt myself', 'I get distracted', 'I overthink', 'I put things off', 'I get frustrated or emotional', 'I start strong but stop being consistent', 'I don’t know what to work on', 'I have trouble using feedback']
   },
   {
-    id: 'mistakeResponse',
-    question: 'After a bad play, mistake, or performance, what usually happens?',
-    helper: 'Choose the response that sounds most like you most often.',
-    options: ['I move on quickly', 'I stay frustrated', 'I start doubting myself', 'I overthink what happened', 'I try too hard to make up for it', 'It depends on the situation']
+    id: 'resetSpeed',
+    question: 'After a mistake, how long does it usually take you to reset?',
+    helper: 'Choose what happens most often.',
+    options: ['I’m ready by the next play', 'It takes me a few plays', 'It affects the rest of the game or practice', 'I think about it for the rest of the day', 'I sometimes carry it into the next day']
   },
   {
-    id: 'gameDayMindset',
-    question: 'Before competition, which sounds most like you?',
-    helper: 'Pick the one that best describes how you usually feel.',
-    options: ['Calm and ready', 'Excited but sometimes unfocused', 'Nervous', 'I overthink', 'Confident', 'It changes depending on the game']
+    id: 'gameDayState',
+    question: 'Before a game or competition, how do you usually feel?',
+    helper: 'Choose what sounds most like you.',
+    options: ['Calm and ready', 'Excited and focused', 'Nervous, but I can still focus', 'I overthink', 'I feel pressure to perform', 'It changes from game to game']
+  },
+  {
+    id: 'pressureSignals',
+    question: 'When pressure shows up, what do you notice first?',
+    helper: 'Choose up to two.',
+    maxSelections: 2,
+    options: ['My thoughts start racing', 'My body feels tight', 'My breathing changes', 'I rush', 'I hesitate or freeze', 'I lose focus', 'I stay steady', 'I’m not sure yet']
+  },
+  {
+    id: 'resetResponse',
+    question: 'When you get pulled off track, what do you usually do?',
+    helper: 'Choose what happens most often.',
+    options: ['Take a breath or use a reset routine', 'Focus on the next play or job', 'Try harder and sometimes rush', 'Get down on myself', 'Wait for the feeling to pass', 'Look to a coach or teammate', 'I’m not sure what to do']
   },
   {
     id: 'followThrough',
-    question: 'When you know what you need to do, how often do you actually follow through?',
-    helper: 'Choose the answer that best reflects you right now.',
-    options: ['Almost always', 'Most of the time', 'About half the time', 'I start strong but fall off', 'I struggle unless someone pushes me']
+    question: 'When no one is reminding you, how often do you do what you said you would do?',
+    helper: 'Choose the answer that sounds most like you right now.',
+    options: ['Almost always', 'Most of the time', 'About half the time', 'I start strong but fall off', 'I usually need someone to push me']
+  },
+  {
+    id: 'mentalSideInterest',
+    question: 'How important is it to you to understand the mental side of sports better?',
+    helper: 'There’s no wrong answer. Choose what feels true right now.',
+    options: ['Very important', 'Important', 'A little important', 'I’m curious, but not sure yet', 'Not important to me right now']
   },
   {
     id: 'strength',
-    question: 'What’s one thing you already do really well as an athlete?',
-    helper: 'Choose the strength you’re most proud of.',
+    question: 'What is already one of your strengths?',
+    helper: 'Choose the strength that feels most true to you.',
     affirmation: 'That matters. Great athletes build from their strengths.',
-    options: ['I work hard', 'I compete', 'I listen to coaching', 'I prepare', 'I encourage teammates', 'I bounce back', 'I stay disciplined', 'I believe in myself']
-  },
-  {
-    id: 'pride',
-    question: 'What are you most proud of about yourself as an athlete?',
-    helper: 'Pick the one that feels most true to you.',
-    affirmation: 'Remember that. You’ve already built evidence that you can grow.',
-    options: ['How far I’ve come', 'My work ethic', 'My toughness', 'My attitude', 'My improvement', 'Being a good teammate', 'My commitment', 'I’m still figuring that out']
-  },
-  {
-    id: 'identity',
-    question: 'Which sounds most like you right now?',
-    helper: 'Choose the statement that most strongly aligns with where you are today.',
-    options: ['I know what I want, but I need more consistency', 'I work hard, but sometimes doubt myself', 'I’m confident, but I want better focus', 'I’m talented, but my emotions can affect my performance', 'I’m disciplined, but I want a stronger mental game', 'I’m still figuring out the athlete I want to become']
+    options: ['I work hard', 'I compete', 'I prepare', 'I listen and use coaching', 'I encourage teammates', 'I bounce back', 'I stay disciplined', 'I believe in myself', 'I’m still discovering my strengths']
   }
 ];
 
 const signalRules = [
-  [/confidence|doubt|believe in myself/i, 'confidence', 3],
-  [/discipline|procrastinate|pushes me|start strong but fall off/i, 'discipline', 3],
-  [/focus|distracted|unfocused/i, 'focus', 3],
-  [/consistent|consistency|commitment/i, 'consistency', 3],
-  [/pressure|nervous|overthink/i, 'pressure', 3],
-  [/emotional|frustrated|make up for it/i, 'emotional-control', 3],
+  [/confidence|doubt|believe in myself|get down on myself|hesitate|freeze/i, 'confidence', 3],
+  [/discipline|procrastinate|put things off|pushes me|push me|start strong but fall off/i, 'discipline', 3],
+  [/focus|distracted|unfocused|thoughts start racing/i, 'focus', 3],
+  [/consistent|consistency|commitment|stop being consistent/i, 'consistency', 3],
+  [/pressure|nervous|overthink|body feels tight|breathing changes/i, 'pressure', 3],
+  [/emotional|frustrated|make up for it|rush|feeling to pass/i, 'emotional-control', 3],
   [/goal|what to work on/i, 'goal-setting', 3],
-  [/coach/i, 'coachability', 3],
-  [/bounce back|toughness|how far/i, 'resilience', 1],
+  [/coach|feedback/i, 'coachability', 3],
+  [/bounce back|toughness|how far|few plays|rest of the game|rest of the day|next day/i, 'resilience', 2],
   [/identity|athlete i want|figuring/i, 'identity', 2],
   [/prepare/i, 'habits', 1]
 ];
+
+const optionSignals = new Map(Object.entries({
+  'Believe in myself more': [['confidence', 4]],
+  'Stay focused': [['focus', 4]],
+  'Be more consistent': [['consistency', 4]],
+  'Handle pressure better': [['pressure', 4]],
+  'Bounce back after mistakes': [['resilience', 4]],
+  'Stay calm when I get emotional': [['emotional-control', 4]],
+  'Set goals and follow them': [['goal-setting', 4]],
+  'Use coaching and feedback better': [['coachability', 4]],
+  'I doubt myself': [['confidence', 3]],
+  'I get distracted': [['focus', 3]],
+  'I overthink': [['pressure', 3]],
+  'I put things off': [['discipline', 3]],
+  'I get frustrated or emotional': [['emotional-control', 3]],
+  'I start strong but stop being consistent': [['consistency', 3], ['discipline', 1]],
+  'I don’t know what to work on': [['goal-setting', 3]],
+  'I have trouble using feedback': [['coachability', 3]],
+  'I’m ready by the next play': [],
+  'It takes me a few plays': [['resilience', 1]],
+  'It affects the rest of the game or practice': [['resilience', 3], ['emotional-control', 1]],
+  'I think about it for the rest of the day': [['resilience', 4], ['confidence', 1]],
+  'I sometimes carry it into the next day': [['resilience', 5], ['confidence', 1]],
+  'Calm and ready': [],
+  'Excited and focused': [],
+  'Nervous, but I can still focus': [['pressure', 1]],
+  'I feel pressure to perform': [['pressure', 3]],
+  'It changes from game to game': [['pressure', 1]],
+  'My thoughts start racing': [['pressure', 2], ['focus', 2]],
+  'My body feels tight': [['pressure', 3]],
+  'My breathing changes': [['pressure', 3]],
+  'I rush': [['emotional-control', 3], ['focus', 1]],
+  'I hesitate or freeze': [['confidence', 3], ['pressure', 2]],
+  'I lose focus': [['focus', 3]],
+  'I stay steady': [],
+  'I’m not sure yet': [['pressure', 1]],
+  'Take a breath or use a reset routine': [],
+  'Focus on the next play or job': [],
+  'Try harder and sometimes rush': [['emotional-control', 3], ['pressure', 1]],
+  'Get down on myself': [['confidence', 3]],
+  'Wait for the feeling to pass': [['emotional-control', 2]],
+  'Look to a coach or teammate': [],
+  'I’m not sure what to do': [['pressure', 1], ['habits', 1]],
+  'Almost always': [],
+  'Most of the time': [['consistency', 1]],
+  'About half the time': [['consistency', 2], ['discipline', 2]],
+  'I start strong but fall off': [['consistency', 3], ['discipline', 2]],
+  'I usually need someone to push me': [['discipline', 4]],
+  'I work hard': [],
+  'I compete': [],
+  'I prepare': [],
+  'I listen and use coaching': [],
+  'I encourage teammates': [],
+  'I bounce back': [],
+  'I stay disciplined': [],
+  'I believe in myself': [],
+  'I’m still discovering my strengths': []
+}));
 
 const positiveOffsets = [
   [/listen to coaching/i, 'coachability', -2],
@@ -114,7 +179,12 @@ function planDay(plan) {
 
 export function deriveDevelopmentProfile(answers = {}) {
   const scores = {};
-  Object.values(answers).forEach((answer) => {
+  Object.values(answers).flatMap((answer) => Array.isArray(answer) ? answer : [answer]).forEach((answer) => {
+    const exactSignals = optionSignals.get(String(answer));
+    if (exactSignals) {
+      exactSignals.forEach(([tag, weight]) => { scores[tag] = (scores[tag] || 0) + weight; });
+      return;
+    }
     signalRules.forEach(([pattern, tag, weight]) => {
       if (pattern.test(String(answer))) scores[tag] = (scores[tag] || 0) + weight;
     });

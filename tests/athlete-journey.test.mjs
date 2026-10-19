@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { athleteRankProgress, deriveDevelopmentProfile, generateJourney, reconcileJourney } from '../src/athleteJourney.js';
+import { athleteRankProgress, deriveDevelopmentProfile, generateJourney, journeyQuestions, reconcileJourney } from '../src/athleteJourney.js';
 
 const plans = [
   ...Array.from({ length: 5 }, (_, index) => ({ id: `confidence-${index + 1}`, title: `Confidence ${index + 1}`, challengeDay: `Day ${index + 1}`, subject: 'Series: The Confidence Code. Build confidence.' })),
@@ -8,9 +8,30 @@ const plans = [
   ...Array.from({ length: 5 }, (_, index) => ({ id: `habits-${index + 1}`, title: `Habits ${index + 1}`, challengeDay: `Day ${index + 1}`, subject: 'Series: Champion Habits. Build discipline.' }))
 ];
 
+test('athlete onboarding contains nine questions with two multi-select questions', () => {
+  assert.equal(journeyQuestions.length, 9);
+  assert.deepEqual(journeyQuestions.filter((question) => question.maxSelections).map((question) => question.id), ['primaryGoal', 'pressureSignals']);
+  assert.equal(journeyQuestions.at(-1).id, 'strength');
+});
+
 test('development answers produce a clear primary focus', () => {
   const profile = deriveDevelopmentProfile({ primaryGoal: 'Confidence', obstacle: 'I lose confidence after mistakes', identity: 'I work hard, but sometimes doubt myself' });
   assert.equal(profile.primaryFocus, 'confidence');
+});
+
+test('multi-select onboarding answers contribute independent recommendation signals', () => {
+  const profile = deriveDevelopmentProfile({
+    primaryGoal: ['Stay focused', 'Handle pressure better'],
+    pressureSignals: ['My thoughts start racing', 'My body feels tight'],
+    resetResponse: 'Take a breath or use a reset routine',
+    followThrough: 'Almost always',
+    strength: 'I believe in myself'
+  });
+
+  assert.equal(profile.primaryFocus, 'pressure');
+  assert.ok(profile.tags.includes('focus'));
+  assert.ok(profile.scores.pressure > profile.scores.focus);
+  assert.equal(profile.scores.confidence, 0);
 });
 
 test('journeys always contain exactly 21 days and preserve full selected plans', () => {

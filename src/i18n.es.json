@@ -19,7 +19,7 @@
   "!lesson.sendDate || lesson.sendDate": "!leccion.enviarFecha || lección.enviarFecha",
   "!String(athlete.athlete_user_id).startsWith('local-')) && (": "!String(atleta.atleta_user_id).startsWith('local-')) && (",
   "\"I do not know what happened. I just could not get out of my head.\"": "\"No sé qué pasó. Simplemente no podía salir de mi cabeza\".",
-  "“You showed up. That’s who you are becoming.”": "\"Tú apareciste. En eso te estás convirtiendo\".",
+  "“Stay locked in on the activity that leads to the goals!”": "\"¡Mantente enfocado en la actividad que te acerca a tus metas!\"",
   "(all days in each plan)": "(todos los días en cada plan)",
   "(max-width: 720px)": "(ancho máximo: 720 px)",
   "(prefers-reduced-motion: reduce)": "(prefiere-movimiento-reducido: reducir)",
