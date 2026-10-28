@@ -111,7 +111,8 @@ async function triggerPointsEarnedHaptic() {
 const LEGAL_URLS = {
   privacy: 'https://the-complete-athlete.vercel.app/privacy.html',
   support: 'https://the-complete-athlete.vercel.app/support.html',
-  terms: 'https://the-complete-athlete.vercel.app/terms.html'
+  terms: 'https://the-complete-athlete.vercel.app/terms.html',
+  appleEula: 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
 };
 
 const PASSWORD_RESET_REDIRECT_URL = 'https://the-complete-athlete.vercel.app/?passwordRecovery=1';
@@ -11823,7 +11824,8 @@ function TrialPaywallScreen({
           </button>
         </div>
         <div className="trial-legal-links" aria-label="Subscription policies">
-          <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
+          <LegalLink href={LEGAL_URLS.terms}>App Terms</LegalLink>
+          <LegalLink href={LEGAL_URLS.appleEula} external>Terms of Use (EULA)</LegalLink>
           <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
         </div>
       </section>
@@ -11857,7 +11859,8 @@ function PremiumAccessPanel({
         The Complete Athlete is $5.99/month after the 7-day free trial. Payment is charged to your Apple ID, renews monthly unless canceled at least 24 hours before renewal, and can be managed in Apple subscription settings.
       </p>
       <div className="premium-legal-links" aria-label="Subscription legal links">
-        <LegalLink href={LEGAL_URLS.terms}>Terms of Use</LegalLink>
+        <LegalLink href={LEGAL_URLS.terms}>App Terms</LegalLink>
+        <LegalLink href={LEGAL_URLS.appleEula} external>Terms of Use (EULA)</LegalLink>
         <LegalLink href={LEGAL_URLS.privacy}>Privacy Policy</LegalLink>
       </div>
       {subscription.message && <p className="inline-note">{subscription.message}</p>}
@@ -11889,18 +11892,25 @@ function PremiumAccessPanel({
   );
 }
 
-function LegalLink({ href, children }) {
+function LegalLink({ href, children, external = false }) {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef(null);
   useEffect(() => {
     if (open && dialogRef.current && !dialogRef.current.open) dialogRef.current.showModal();
   }, [open]);
   return <>
-    <a href={href} onClick={(event) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      event.preventDefault();
-      setOpen(true);
-    }}>{children}</a>
+    <a
+      href={href}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noopener noreferrer' : undefined}
+      onClick={external ? undefined : (event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        setOpen(true);
+      }}
+    >
+      {children}
+    </a>
     {open && <dialog ref={dialogRef} className="legal-document-dialog" aria-label={children}
       onCancel={() => setOpen(false)} onClose={() => setOpen(false)}>
       <header>

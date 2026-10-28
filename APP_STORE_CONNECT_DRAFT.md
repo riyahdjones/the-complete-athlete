@@ -36,6 +36,8 @@ Athletes can read Daily Deposits, track daily activity, set goals, complete perf
 
 Parents can create a connected experience to follow their athlete's progress, view performance plans, and support the growth process without crowding the athlete's personal reflection space.
 
+Terms of Use (Apple Standard EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+
 Inside the app:
 - Daily Deposits for mindset, faith, character, and performance growth.
 - Performance Plans built as guided reading experiences.
