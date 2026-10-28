@@ -3107,7 +3107,12 @@ textarea {
 .post-trial-hero {
   position: relative;
   display: grid;
+  grid-column: 1 / -1;
   gap: 9px;
+  box-sizing: border-box;
+  width: calc(100% + 32px);
+  max-width: none;
+  justify-self: stretch;
   margin: 0 -16px;
   padding: 22px 20px 24px;
   overflow: hidden;
@@ -3447,7 +3452,7 @@ textarea {
 @media (max-width: 380px), (max-height: 700px) {
   .post-trial-paywall { padding-top: max(10px, env(safe-area-inset-top)); }
   .post-trial-card { gap: 8px; padding: 0 13px 11px; border-radius: 20px; }
-  .post-trial-hero { gap: 7px; margin: 0 -13px; padding: 16px 17px 18px; }
+  .post-trial-hero { gap: 7px; width: calc(100% + 26px); margin: 0 -13px; padding: 16px 17px 18px; }
   .post-trial-card .post-trial-hero h1 { font-size: clamp(1.72rem, 8vw, 2.1rem); }
   .post-trial-card .post-trial-hero p { font-size: .8rem; }
   .post-trial-value { padding: 7px 9px; }
